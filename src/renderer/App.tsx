@@ -16,26 +16,26 @@ declare global {
   interface Window {
     electronAPI: {
       callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
-      onPTTStart: (cb: () => void) => void
-      onPTTStop: (cb: () => void) => void
-      onMuteChanged: (cb: (muted: boolean) => void) => void
-      onOpenSettings: (cb: () => void) => void
+      onPTTStart: (cb: () => void) => () => void
+      onPTTStop: (cb: () => void) => () => void
+      onMuteChanged: (cb: (muted: boolean) => void) => () => void
+      onOpenSettings: (cb: () => void) => () => void
       sendRobotState: (state: string, processor?: RobotProcessor) => void
       sendChatMessages: (messages: ChatMessage[]) => void
-      onChatMessages: (cb: (messages: ChatMessage[]) => void) => void
-      onRobotState: (cb: (state: string, processor?: RobotProcessor) => void) => void
+      onChatMessages: (cb: (messages: ChatMessage[]) => void) => () => void
+      onRobotState: (cb: (state: string, processor?: RobotProcessor) => void) => () => void
       setClickThrough: (enabled: boolean) => void
       setChatInteractive: (enabled: boolean) => void
       setLanguage: (lang: string) => void
-      onLanguageChange: (cb: (lang: string) => void) => void
+      onLanguageChange: (cb: (lang: string) => void) => () => void
       memoryGetInjection: () => Promise<string>
       memoryRecordTranscript: (role: 'user' | 'assistant', text: string) => void
-      onDisplayData: (cb: (payload: PanelPayload) => void) => void
+      onDisplayData: (cb: (payload: PanelPayload) => void) => () => void
       displayClose: () => void
       displayRefresh: (type: string) => Promise<unknown>
       openEmailDetail: (account: string, id: string) => void
       closeEmailDetail: () => void
-      onEmailDetailArgs: (cb: (args: { account: string; id: string }) => void) => void
+      onEmailDetailArgs: (cb: (args: { account: string; id: string }) => void) => () => void
     }
   }
 }
@@ -73,18 +73,24 @@ function RobotWindowApp() {
   })
 
   useEffect(() => {
-    window.electronAPI?.onMuteChanged((muted) => setIsMuted(muted))
-    window.electronAPI?.onOpenSettings(() => setShowSettings(true))
-    window.electronAPI?.onLanguageChange((lang) => {
+    const offMute = window.electronAPI?.onMuteChanged((muted) => setIsMuted(muted))
+    const offSettings = window.electronAPI?.onOpenSettings(() => setShowSettings(true))
+    const offLang = window.electronAPI?.onLanguageChange((lang) => {
       localStorage.setItem('LANGUAGE_CODE', lang)
       setLanguageCode(lang)
     })
+    return () => {
+      offMute?.()
+      offSettings?.()
+      offLang?.()
+    }
   }, [])
 
   // 起動時にGemini Live セッションを接続（PTTで発話制御）
   useEffect(() => {
-    connect()
-  }, [])
+    const autoConnect = localStorage.getItem('AUTO_CONNECT_ON_STARTUP') !== 'false'
+    if (autoConnect) connect()
+  }, [connect])
 
   // チャットウィンドウへメッセージを転送
   useEffect(() => {

@@ -1,6 +1,8 @@
 import type { Memory } from './store'
 
-const MODEL = 'gemini-2.5-flash-lite'
+import { MODELS } from '../../config/models'
+
+const MODEL = MODELS.geminiMemorySummarizer
 
 const CURATOR_PROMPT = `あなたはAI秘書「ベガ」のメモリキュレーターだ。
 既存メモリ + 直近の会話転写から、3か月後でも役に立つ情報だけを残した最新メモリをJSONで返せ。

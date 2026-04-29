@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { toolSchemas, executeTool } from '../tools/dispatcher'
 import { captureScreen } from '../screenshot'
+import { LIMITS, MODELS } from '../../config/models'
 
 const SYSTEM_PROMPT = `お前は秘書ロボット「ベガ」の作業実行エージェントだ。
 音声側のベガから委任された作業を、提供されたツールで実行する。
@@ -40,8 +41,9 @@ const SYSTEM_PROMPT = `お前は秘書ロボット「ベガ」の作業実行エ
 - id は省略でいい（最新が返る）。特定日を聞かれたときだけ id: YYYY-MM-DD を指定。
 - data の中の items / nowPlaying / categories などの配列は全部読み上げず、上位 2〜3 件を要約して伝える。金額・本数・日付などの数値は丸めず正確に。`
 
-const MAX_ITERATIONS = 10
-const MODEL = 'claude-sonnet-4-6'
+
+const MAX_ITERATIONS = LIMITS.claudeMaxIterations
+const MODEL = MODELS.claudeDelegate
 
 export async function runClaudeTask(opts: {
   task: string
@@ -78,7 +80,7 @@ export async function runClaudeTask(opts: {
     try {
       res = await client.messages.create({
         model: MODEL,
-        max_tokens: 4096,
+        max_tokens: LIMITS.claudeMaxTokens,
         thinking: { type: 'adaptive' },
         output_config: { effort: 'high' },
         system: [

@@ -80,7 +80,7 @@ function PlaceholderRobot({ state }: { state: RobotState }) {
 
 function GLBRobot({ state, onReady }: { state: RobotState; onReady?: () => void }) {
   const group = useRef<THREE.Group>(null)
-  const { scene, animations } = useGLTF('/assets/robot.glb')
+  const { scene, animations } = useGLTF('./assets/robot.glb')
   const { actions, mixer } = useAnimations(animations, group)
 
   useEffect(() => {

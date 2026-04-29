@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { optString, reqString } from './validation'
 
 export const toolSchemas: Anthropic.Tool[] = [
   {
@@ -159,19 +160,19 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     }
     case 'send_slack_message': {
       const { sendMessage } = await import('./slack')
-      return await sendMessage(args.channel as string, args.text as string)
+      return await sendMessage(reqString(args, 'channel'), reqString(args, 'text'))
     }
     case 'get_gmail_inbox': {
       const { getInboxEmails } = await import('./gmail')
-      return await getInboxEmails(args.maxResults as number | undefined, args.account as string | undefined)
+      return await getInboxEmails(args.maxResults as number | undefined, optString(args, 'account'))
     }
     case 'trash_gmail': {
       const { trashEmails } = await import('./gmail')
-      return await trashEmails(args.account as string, args.ids as string[])
+      return await trashEmails(reqString(args, 'account'), args.ids as string[])
     }
     case 'archive_gmail': {
       const { archiveEmails } = await import('./gmail')
-      return await archiveEmails(args.account as string, args.ids as string[])
+      return await archiveEmails(reqString(args, 'account'), args.ids as string[])
     }
     case 'get_calendar_events': {
       const { getTodayEvents, getTomorrowEvents, getUpcomingEvents } = await import('./calendar')
@@ -187,7 +188,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case 'create_task': {
       const { createTask } = await import('./ticktick')
       return await createTask({
-        title: args.title as string,
+        title: reqString(args, 'title'),
         due: args.due as string | undefined,
         priority: args.priority as 'low' | 'medium' | 'high' | undefined,
         projectId: args.projectId as string | undefined,
@@ -196,21 +197,21 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case 'complete_task': {
       const { completeTask } = await import('./ticktick')
       return await completeTask({
-        taskId: args.taskId as string,
-        projectId: args.projectId as string,
+        taskId: reqString(args, 'taskId'),
+        projectId: reqString(args, 'projectId'),
       })
     }
     case 'complete_subtask': {
       const { completeSubtask } = await import('./ticktick')
       return await completeSubtask({
-        taskId: args.taskId as string,
-        projectId: args.projectId as string,
-        subtaskId: args.subtaskId as string,
+        taskId: reqString(args, 'taskId'),
+        projectId: reqString(args, 'projectId'),
+        subtaskId: reqString(args, 'subtaskId'),
       })
     }
     case 'get_email_detail': {
       const { getEmailDetail } = await import('./gmail')
-      return await getEmailDetail(args.account as string, args.id as string)
+      return await getEmailDetail(reqString(args, 'account'), reqString(args, 'id'))
     }
     case 'get_dashboard_entry': {
       const { getDashboardEntry } = await import('./dashboard')

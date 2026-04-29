@@ -1,12 +1,26 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, screen, systemPreferences } from 'electron'
 import * as path from 'path'
+import * as os from 'os'
 import * as dotenv from 'dotenv'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
+import { registerCoreIpc } from './ipc/registerCoreIpc'
 
-// .env と .env.local の両方をロード（__dirname は out/main/ なので ../../ でプロジェクトルート）
-dotenv.config({ path: path.join(__dirname, '../../.env') })
-dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true })
+// .env / .env.local の探索パス。
+// - dev: プロジェクトルート（__dirname = out/main/ なので ../../）
+// - prod: パッケージ外なので ~/.config/robot-secretary/ と userData を探す
+const envSearchDirs = app.isPackaged
+  ? [
+      path.join(os.homedir(), '.config', 'robot-secretary'),
+      app.getPath('userData'),
+    ]
+  : [path.join(__dirname, '../..')]
+
+for (const dir of envSearchDirs) {
+  dotenv.config({ path: path.join(dir, '.env') })
+  dotenv.config({ path: path.join(dir, '.env.local'), override: true })
+}
+console.log('[env] searched:', envSearchDirs.join(', '), 'has GEMINI_API_KEY:', !!process.env.GEMINI_API_KEY)
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -377,44 +391,34 @@ async function triggerDebugPanel(type: string) {
   await showPanel(type, { getOrCreateWindow: getOrCreateDisplayWindow })
 }
 
-// ========== IPC: 秘書ツール ==========
 
-ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
-  try {
-    if (toolName === 'delegate_task') {
-      const { runClaudeTask } = await import('./agent/claude')
-      const result = await runClaudeTask({
-        task: args.task as string,
-        includeScreenshot: args.includeScreenshot as boolean | undefined,
-      })
-      return { result }
-    }
-    // Gemini / UI が直接呼べるツール (Claude を介さない)
-    if (
-      toolName === 'get_tasks' ||
-      toolName === 'create_task' ||
-      toolName === 'complete_task' ||
-      toolName === 'complete_subtask' ||
-      toolName === 'get_email_detail'
-    ) {
-      const { executeTool } = await import('./tools/dispatcher')
-      const result = await executeTool(toolName, args)
-      return { result }
-    }
-    if (toolName === 'show_panel') {
-      const { showPanel, isPanelType } = await import('./display/show-panel')
-      const t = args.type
-      if (!isPanelType(t)) return { error: `invalid type: ${String(t)}` }
-      return await showPanel(t, { getOrCreateWindow: getOrCreateDisplayWindow })
-    }
-    return { error: `Unknown tool: ${toolName}` }
-  } catch (err) {
-    return { error: String(err) }
-  }
-})
+// ========== IPC ==========
 
-ipcMain.on('display:close', () => {
-  if (displayWin && !displayWin.isDestroyed()) displayWin.hide()
+registerCoreIpc({
+  getDisplayWindow: () => displayWin,
+  isDisplayReady: () => displayReady,
+  getMainWindow: () => win,
+  getChatWindow: () => chatWin,
+  getOrCreateDisplayWindow,
+  setWanderingByState: (state: string) => {
+    isWandering = state !== 'listening' && state !== 'speaking' && state !== 'thinking'
+  },
+  onClickthroughChanged: (enabled: boolean) => {
+    if (!win) return
+    if (enabled) {
+      win.setIgnoreMouseEvents(true, { forward: true })
+      if (isInteracting) {
+        const [x, y] = win.getPosition()
+        currentX = x
+        currentY = y
+        pickNewTarget()
+      }
+      isInteracting = false
+    } else {
+      win.setIgnoreMouseEvents(false)
+      isInteracting = true
+    }
+  },
 })
 
 // ========== Email Detail Window ==========
@@ -495,63 +499,14 @@ ipcMain.on('email:close-detail', () => {
   if (emailDetailWin && !emailDetailWin.isDestroyed()) emailDetailWin.hide()
 })
 
-ipcMain.handle('display:refresh', async (_event, type: unknown) => {
-  const { fetchPanelData, isPanelType, pushPayload } = await import('./display/show-panel')
-  if (!isPanelType(type)) return { error: `invalid type: ${String(type)}` }
-  const payload = await fetchPanelData(type)
-  if (displayWin && !displayWin.isDestroyed()) {
-    pushPayload(displayWin, payload, displayReady)
-  }
-  return { ok: !payload.error }
-})
 
-ipcMain.on('chat-messages', (_event, messages: unknown) => {
-  chatWin?.webContents.send('chat-messages', messages)
-})
 
-ipcMain.on('set-clickthrough', (_event, enabled: boolean) => {
-  if (!win) return
-  if (enabled) {
-    win.setIgnoreMouseEvents(true, { forward: true })
-    if (isInteracting) {
-      // ユーザーがドラッグした位置を放浪ロジックに反映
-      const [x, y] = win.getPosition()
-      currentX = x
-      currentY = y
-      pickNewTarget()
-    }
-    isInteracting = false
-  } else {
-    win.setIgnoreMouseEvents(false)
-    isInteracting = true
-  }
-})
 
-ipcMain.on('robot-state', (_event, state: string, processor?: string) => {
-  if (state === 'listening' || state === 'speaking' || state === 'thinking') {
-    isWandering = false
-  } else {
-    isWandering = true
-  }
-  chatWin?.webContents.send('robot-state', state, processor)
-})
 
 // チャットウィンドウは通常クリックスルー。言語セレクター上にカーソルが来たときだけ
 // 一時的に操作可能にする
-ipcMain.on('chat-set-interactive', (_event, enabled: boolean) => {
-  if (!chatWin) return
-  if (enabled) {
-    chatWin.setIgnoreMouseEvents(false)
-  } else {
-    chatWin.setIgnoreMouseEvents(true, { forward: true })
-  }
-})
 
 // チャットウィンドウからの言語変更をロボットウィンドウへ転送して再接続させる
-ipcMain.on('set-language', (_event, lang: string) => {
-  win?.webContents.send('language-change', lang)
-  chatWin?.webContents.send('language-change', lang)
-})
 
 // ========== App lifecycle ==========
 

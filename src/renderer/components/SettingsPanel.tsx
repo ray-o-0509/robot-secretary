@@ -7,10 +7,12 @@ interface Props {
 export function SettingsPanel({ onClose }: Props) {
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
   const [slackToken, setSlackToken] = useState(localStorage.getItem('SLACK_BOT_TOKEN') ?? '')
+  const [autoConnect, setAutoConnect] = useState(localStorage.getItem('AUTO_CONNECT_ON_STARTUP') !== 'false')
 
   function save() {
     localStorage.setItem('GEMINI_API_KEY', geminiKey)
     localStorage.setItem('SLACK_BOT_TOKEN', slackToken)
+    localStorage.setItem('AUTO_CONNECT_ON_STARTUP', String(autoConnect))
     onClose()
   }
 
@@ -52,6 +54,11 @@ export function SettingsPanel({ onClose }: Props) {
           />
         </div>
       ))}
+
+      <label style={{ fontSize: 12, color: '#bbb', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input type="checkbox" checked={autoConnect} onChange={(e)=>setAutoConnect(e.target.checked)} />
+        起動時に自動でGemini Liveへ接続する
+      </label>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button onClick={save} style={btnStyle('#4af')}>保存</button>
