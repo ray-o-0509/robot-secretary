@@ -7,14 +7,10 @@ interface Props {
 export function SettingsPanel({ onClose }: Props) {
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
   const [slackToken, setSlackToken] = useState(localStorage.getItem('SLACK_BOT_TOKEN') ?? '')
-  const [notionKey, setNotionKey] = useState(localStorage.getItem('NOTION_API_KEY') ?? '')
-  const [notionDb, setNotionDb] = useState(localStorage.getItem('NOTION_DATABASE_ID') ?? '')
 
   function save() {
     localStorage.setItem('GEMINI_API_KEY', geminiKey)
     localStorage.setItem('SLACK_BOT_TOKEN', slackToken)
-    localStorage.setItem('NOTION_API_KEY', notionKey)
-    localStorage.setItem('NOTION_DATABASE_ID', notionDb)
     onClose()
   }
 
@@ -37,8 +33,6 @@ export function SettingsPanel({ onClose }: Props) {
       {[
         { label: 'Gemini API Key', value: geminiKey, set: setGeminiKey },
         { label: 'Slack Bot Token', value: slackToken, set: setSlackToken },
-        { label: 'Notion API Key', value: notionKey, set: setNotionKey },
-        { label: 'Notion Database ID', value: notionDb, set: setNotionDb },
       ].map(({ label, value, set }) => (
         <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ fontSize: 11, color: '#999' }}>{label}</label>

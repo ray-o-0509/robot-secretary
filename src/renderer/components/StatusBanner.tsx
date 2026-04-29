@@ -28,8 +28,7 @@ const BANNER_STYLES = `
 .banner-root {
   position: absolute;
   top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
   font-family: ${FONT_MONO};
   font-size: 11px;
   font-weight: 700;

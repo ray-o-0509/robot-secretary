@@ -4,6 +4,8 @@ import { StatusRing } from './components/StatusRing'
 import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
+import { DisplayApp } from './display/DisplayApp'
+import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
 export type RobotState = 'idle' | 'listening' | 'speaking' | 'thinking'
@@ -21,14 +23,27 @@ declare global {
       onChatMessages: (cb: (messages: ChatMessage[]) => void) => void
       onRobotState: (cb: (state: string) => void) => void
       setClickThrough: (enabled: boolean) => void
+      setChatInteractive: (enabled: boolean) => void
+      setLanguage: (lang: string) => void
+      onLanguageChange: (cb: (lang: string) => void) => void
+      memoryGetInjection: () => Promise<string>
+      memoryRecordTranscript: (role: 'user' | 'assistant', text: string) => void
+      onDisplayData: (cb: (payload: PanelPayload) => void) => void
+      displayClose: () => void
+      displayRefresh: (type: string) => Promise<unknown>
     }
   }
 }
 
-const isChatWindow = typeof window !== 'undefined' && window.location.hash === '#chat'
+const DEFAULT_LANGUAGE = 'ja-JP'
+
+const hash = typeof window !== 'undefined' ? window.location.hash : ''
+const isChatWindow = hash === '#chat'
+const isDisplayWindow = hash === '#display'
 
 export default function App() {
   if (isChatWindow) return <ChatWindowApp />
+  if (isDisplayWindow) return <DisplayApp />
   return <RobotWindowApp />
 }
 
@@ -37,6 +52,9 @@ function RobotWindowApp() {
   const [showSettings, setShowSettings] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [interactive, setInteractive] = useState(false)
+  const [languageCode, setLanguageCode] = useState<string>(
+    () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
+  )
 
   const { connect, isConnected, messages } = useGeminiLive({
     onStateChange: (state) => {
@@ -44,11 +62,16 @@ function RobotWindowApp() {
       window.electronAPI?.sendRobotState(state)
     },
     isMuted,
+    languageCode,
   })
 
   useEffect(() => {
     window.electronAPI?.onMuteChanged((muted) => setIsMuted(muted))
     window.electronAPI?.onOpenSettings(() => setShowSettings(true))
+    window.electronAPI?.onLanguageChange((lang) => {
+      localStorage.setItem('LANGUAGE_CODE', lang)
+      setLanguageCode(lang)
+    })
   }, [])
 
   // 起動時にGemini Live セッションを接続（PTTで発話制御）
@@ -104,16 +127,34 @@ function RobotWindowApp() {
 function ChatWindowApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [robotState, setRobotState] = useState<RobotState>('idle')
+  const [languageCode, setLanguageCode] = useState<string>(
+    () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
+  )
 
   useEffect(() => {
     window.electronAPI?.onChatMessages((msgs) => setMessages(msgs))
     window.electronAPI?.onRobotState((s) => setRobotState(s as RobotState))
+    window.electronAPI?.onLanguageChange((lang) => {
+      localStorage.setItem('LANGUAGE_CODE', lang)
+      setLanguageCode(lang)
+    })
   }, [])
+
+  const handleLanguageChange = (lang: string) => {
+    if (lang === languageCode) return
+    localStorage.setItem('LANGUAGE_CODE', lang)
+    setLanguageCode(lang)
+    window.electronAPI?.setLanguage(lang)
+  }
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <StatusBanner state={robotState} />
-      <ChatPanel messages={messages} />
+      <ChatPanel
+        messages={messages}
+        languageCode={languageCode}
+        onLanguageChange={handleLanguageChange}
+      />
     </div>
   )
 }

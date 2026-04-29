@@ -1,11 +1,12 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, systemPreferences } from 'electron'
+import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, screen, systemPreferences } from 'electron'
 import * as path from 'path'
 import * as dotenv from 'dotenv'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
+import { initMemory, shutdownMemory } from './memory'
 
-// .env と .env.local の両方をロード
-dotenv.config({ path: path.join(__dirname, '../.env') })
-dotenv.config({ path: path.join(__dirname, '../.env.local'), override: true })
+// .env と .env.local の両方をロード（__dirname は out/main/ なので ../../ でプロジェクトルート）
+dotenv.config({ path: path.join(__dirname, '../../.env') })
+dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true })
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -13,6 +14,8 @@ const iconPath = path.join(__dirname, '../../assets/icon.png')
 
 let win: BrowserWindow | null = null
 let chatWin: BrowserWindow | null = null
+let displayWin: BrowserWindow | null = null
+let displayReady = false
 let wanderInterval: NodeJS.Timeout | null = null
 let targetX = 0
 let targetY = 0
@@ -22,6 +25,7 @@ let isWandering = true
 let isInteracting = false
 let isMuted = false
 let pttActive = false
+let shuttingDown = false
 
 // ========== Window ==========
 
@@ -64,6 +68,7 @@ function createWindow() {
   startWandering()
   setupPTT()
   requestMicPermission()
+  requestScreenPermission()
   createChatWindow()
 
   // dev中はDevToolsを開く
@@ -103,6 +108,69 @@ function createChatWindow() {
   } else {
     chatWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'chat' })
   }
+}
+
+// ========== Display Window (右側のメール/カレンダー/タスク表示用) ==========
+
+const DISPLAY_WIDTH = 440
+const DISPLAY_RIGHT_MARGIN = 24
+
+function getOrCreateDisplayWindow(): Promise<{ win: BrowserWindow; ready: boolean }> {
+  if (displayWin && !displayWin.isDestroyed()) {
+    return Promise.resolve({ win: displayWin, ready: displayReady })
+  }
+
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const w = DISPLAY_WIDTH
+  const h = Math.min(680, height - 80)
+
+  displayReady = false
+  const created = new BrowserWindow({
+    width: w,
+    height: h,
+    x: width - w - DISPLAY_RIGHT_MARGIN,
+    y: 40,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: false,
+    hasShadow: false,
+    skipTaskbar: false,
+    resizable: true,
+    focusable: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  displayWin = created
+
+  created.on('closed', () => {
+    if (displayWin === created) {
+      displayWin = null
+      displayReady = false
+    }
+  })
+
+  const ready = new Promise<void>((resolve) => {
+    created.webContents.once('did-finish-load', () => {
+      displayReady = true
+      // 起動中にキューされていた payload があれば吐き出す
+      import('./display/show-panel').then(({ flushPending }) => {
+        if (displayWin && !displayWin.isDestroyed()) flushPending(displayWin)
+      })
+      resolve()
+    })
+  })
+
+  if (isDev) {
+    created.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#display')
+  } else {
+    created.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'display' })
+  }
+
+  return ready.then(() => ({ win: created, ready: true }))
 }
 
 // ========== Push-to-Talk (左 Option キー = keycode 56) ==========
@@ -147,6 +215,35 @@ async function requestMicPermission() {
   }
 }
 
+// ========== 画面収録権限リクエスト ==========
+//
+// macOS には askForMediaAccess('screen') が無い。
+// desktopCapturer.getSources を 1 度呼ぶと TCC のダイアログが上がり、
+// 許可後に System Settings の「画面収録」一覧に App が登録される。
+// 許可は次回起動から有効なので、ユーザは設定後にアプリを再起動する必要がある。
+async function requestScreenPermission() {
+  if (process.platform !== 'darwin') return
+  const status = systemPreferences.getMediaAccessStatus('screen')
+  console.log('[Permission] 画面収録 status:', status)
+  if (status === 'granted') return
+  console.warn('[Permission] 画面収録未許可。プロンプトを上げる')
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1, height: 1 },
+    })
+    const after = systemPreferences.getMediaAccessStatus('screen')
+    console.log('[Permission] getSources 後 status:', after, 'sources:', sources.length)
+    if (status === 'denied' || after === 'denied') {
+      console.warn(
+        '[Permission] 過去に拒否済みでプロンプトが抑制されてる。ターミナルで `tccutil reset ScreenCapture` を実行してから再起動してくれ',
+      )
+    }
+  } catch (err) {
+    console.error('[Permission] 画面収録プロンプト失敗:', err)
+  }
+}
+
 // ========== 画面内ふわふわ移動 ==========
 
 function pickNewTarget() {
@@ -155,7 +252,13 @@ function pickNewTarget() {
   // チャットウィンドウ（左上）と被らないよう、ロボットの可動域を右側に制限
   const chatRight = 24 + 360 + 24
   const minX = Math.max(margin, chatRight)
-  targetX = minX + Math.random() * Math.max(1, width - 300 - minX - margin)
+  // 表示ウィンドウ（右上）が出ているときは右側も避ける
+  const displayVisible = displayWin && !displayWin.isDestroyed() && displayWin.isVisible()
+  const maxX = displayVisible
+    ? width - DISPLAY_WIDTH - DISPLAY_RIGHT_MARGIN - 300 - margin
+    : width - 300 - margin
+  const span = Math.max(1, maxX - minX)
+  targetX = minX + Math.random() * span
   targetY = margin + Math.random() * (height - 300 - margin * 2)
 }
 
@@ -239,6 +342,25 @@ function setupContextMenu() {
       },
       { type: 'separator' },
       { label: '設定', click: () => win?.webContents.send('open-settings') },
+      ...(isDev
+        ? [
+            { type: 'separator' as const },
+            {
+              label: 'デバッグ: パネル表示',
+              submenu: [
+                { label: 'メール', click: () => triggerDebugPanel('email') },
+                { label: 'カレンダー (今日)', click: () => triggerDebugPanel('calendar_today') },
+                { label: 'カレンダー (明日)', click: () => triggerDebugPanel('calendar_tomorrow') },
+                { label: 'カレンダー (今週)', click: () => triggerDebugPanel('calendar_week') },
+                { label: 'タスク', click: () => triggerDebugPanel('tasks') },
+                { label: 'Slack', click: () => triggerDebugPanel('slack') },
+                { label: 'AIニュース', click: () => triggerDebugPanel('news') },
+                { label: 'ツール', click: () => triggerDebugPanel('tools') },
+                { label: '映画', click: () => triggerDebugPanel('movies') },
+              ],
+            },
+          ]
+        : []),
       { type: 'separator' },
       { label: '終了', click: () => app.quit() },
     ])
@@ -246,37 +368,54 @@ function setupContextMenu() {
   })
 }
 
+async function triggerDebugPanel(type: string) {
+  const { showPanel, isPanelType } = await import('./display/show-panel')
+  if (!isPanelType(type)) return
+  await showPanel(type, { getOrCreateWindow: getOrCreateDisplayWindow })
+}
+
 // ========== IPC: 秘書ツール ==========
 
 ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
   try {
-    switch (toolName) {
-      case 'get_slack_unread': {
-        const { getUnreadMessages } = await import('./tools/slack')
-        return await getUnreadMessages(args.channel as string | undefined)
-      }
-      case 'send_slack_message': {
-        const { sendMessage } = await import('./tools/slack')
-        return await sendMessage(args.channel as string, args.text as string)
-      }
-      case 'get_gmail_unread': {
-        const { getUnreadEmails } = await import('./tools/gmail')
-        return await getUnreadEmails(args.maxResults as number | undefined)
-      }
-      case 'get_calendar_events': {
-        const { getTodayEvents } = await import('./tools/calendar')
-        return await getTodayEvents()
-      }
-      case 'get_notion_tasks': {
-        const { getMyTasks } = await import('./tools/notion')
-        return await getMyTasks(args.status as string | undefined)
-      }
-      default:
-        return { error: `Unknown tool: ${toolName}` }
+    if (toolName === 'delegate_task') {
+      const { runClaudeTask } = await import('./agent/claude')
+      const result = await runClaudeTask({
+        task: args.task as string,
+        includeScreenshot: args.includeScreenshot as boolean | undefined,
+      })
+      return { result }
     }
+    // Gemini が直接呼べるツール (Claude を介さない)
+    if (toolName === 'get_tasks' || toolName === 'create_task' || toolName === 'complete_task') {
+      const { executeTool } = await import('./tools/dispatcher')
+      const result = await executeTool(toolName, args)
+      return { result }
+    }
+    if (toolName === 'show_panel') {
+      const { showPanel, isPanelType } = await import('./display/show-panel')
+      const t = args.type
+      if (!isPanelType(t)) return { error: `invalid type: ${String(t)}` }
+      return await showPanel(t, { getOrCreateWindow: getOrCreateDisplayWindow })
+    }
+    return { error: `Unknown tool: ${toolName}` }
   } catch (err) {
     return { error: String(err) }
   }
+})
+
+ipcMain.on('display:close', () => {
+  if (displayWin && !displayWin.isDestroyed()) displayWin.hide()
+})
+
+ipcMain.handle('display:refresh', async (_event, type: unknown) => {
+  const { fetchPanelData, isPanelType, pushPayload } = await import('./display/show-panel')
+  if (!isPanelType(type)) return { error: `invalid type: ${String(type)}` }
+  const payload = await fetchPanelData(type)
+  if (displayWin && !displayWin.isDestroyed()) {
+    pushPayload(displayWin, payload, displayReady)
+  }
+  return { ok: !payload.error }
 })
 
 ipcMain.on('chat-messages', (_event, messages: unknown) => {
@@ -310,14 +449,44 @@ ipcMain.on('robot-state', (_event, state: string) => {
   chatWin?.webContents.send('robot-state', state)
 })
 
+// チャットウィンドウは通常クリックスルー。言語セレクター上にカーソルが来たときだけ
+// 一時的に操作可能にする
+ipcMain.on('chat-set-interactive', (_event, enabled: boolean) => {
+  if (!chatWin) return
+  if (enabled) {
+    chatWin.setIgnoreMouseEvents(false)
+  } else {
+    chatWin.setIgnoreMouseEvents(true, { forward: true })
+  }
+})
+
+// チャットウィンドウからの言語変更をロボットウィンドウへ転送して再接続させる
+ipcMain.on('set-language', (_event, lang: string) => {
+  win?.webContents.send('language-change', lang)
+  chatWin?.webContents.send('language-change', lang)
+})
+
 // ========== App lifecycle ==========
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (process.platform === 'darwin' && app.dock) {
     const img = nativeImage.createFromPath(iconPath)
     if (!img.isEmpty()) app.dock.setIcon(img)
   }
+  await initMemory(() => process.env.GEMINI_API_KEY)
   createWindow()
+})
+
+app.on('before-quit', async (e) => {
+  // shutdown を待ってから quit する。Electron は before-quit で event.preventDefault() + 後で再度 quit するパターンが必要
+  if (shuttingDown) return
+  shuttingDown = true
+  e.preventDefault()
+  try {
+    await shutdownMemory()
+  } finally {
+    app.quit()
+  }
 })
 
 app.on('window-all-closed', () => {

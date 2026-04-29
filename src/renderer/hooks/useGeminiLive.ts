@@ -4,46 +4,80 @@ import type { ChatMessage } from '../components/ChatPanel'
 
 const secretaryTools = [
   {
-    name: 'get_slack_unread',
-    description: 'Slackの未読メッセージを取得する',
+    name: 'delegate_task',
+    description:
+      'Slack・Gmail・Googleカレンダー・画面の確認、複雑な要約・横断調査などをClaudeエージェントに委任する。タスク管理(get_tasks/create_task/complete_task)以外の作業はこれを使う。',
     parameters: {
       type: 'object',
       properties: {
-        channel: { type: 'string', description: 'チャンネルID（省略時は全チャンネル）' },
+        task: {
+          type: 'string',
+          description: 'やってほしい作業の詳細な指示（必要な情報を漏れなく日本語で）',
+        },
+        includeScreenshot: {
+          type: 'boolean',
+          description: '画面の内容を見て判断する必要があるとき true',
+        },
       },
+      required: ['task'],
     },
   },
   {
-    name: 'send_slack_message',
-    description: 'Slackにメッセージを送信する',
-    parameters: {
-      type: 'object',
-      properties: {
-        channel: { type: 'string' },
-        text: { type: 'string' },
-      },
-      required: ['channel', 'text'],
-    },
-  },
-  {
-    name: 'get_gmail_unread',
-    description: 'Gmailの未読メールを取得する',
-    parameters: {
-      type: 'object',
-      properties: { maxResults: { type: 'number' } },
-    },
-  },
-  {
-    name: 'get_calendar_events',
-    description: '今日のGoogleカレンダーの予定を取得する',
+    name: 'get_tasks',
+    description: 'TickTickの未完了タスクを全プロジェクト横断で取得する。「やること」「ToDo」「タスク」と聞かれたら直接これを呼ぶ。',
     parameters: { type: 'object', properties: {} },
   },
   {
-    name: 'get_notion_tasks',
-    description: 'Notionのタスクを取得する',
+    name: 'create_task',
+    description: 'TickTickに新しいタスクを作成する。projectId 未指定で inbox に入る。',
     parameters: {
       type: 'object',
-      properties: { status: { type: 'string' } },
+      properties: {
+        title: { type: 'string', description: 'タスクのタイトル' },
+        due: { type: 'string', description: '期限（YYYY-MM-DD、任意）' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high'], description: '優先度（任意。「重要」「急ぎ」と言われたら high）' },
+        projectId: { type: 'string', description: 'プロジェクトID（任意、未指定で inbox）' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'complete_task',
+    description: 'TickTickのタスクを完了にする。事前に get_tasks で taskId と projectId を取得しておく必要がある。',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'タスクID（get_tasks の返り値の taskId）' },
+        projectId: { type: 'string', description: 'プロジェクトID（get_tasks の返り値の projectId）' },
+      },
+      required: ['taskId', 'projectId'],
+    },
+  },
+  {
+    name: 'show_panel',
+    description:
+      'メール・カレンダー・タスク・Slack・AIニュース・ツール・映画の内容を専用パネルで画面表示する。ユーザーが「見せて」「表示して」「出して」「一覧」「画面に」など明示的に表示を求めた時のみ呼ぶ。「メールチェックして」「届いてる?」のような確認は delegate_task を使う。返り値の data に生データが入っているので、普段通り音声で内容を要約しつつ「画面にも出した」と添えろ。',
+    parameters: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: [
+            'email',
+            'calendar_today',
+            'calendar_tomorrow',
+            'calendar_week',
+            'tasks',
+            'slack',
+            'news',
+            'tools',
+            'movies',
+          ],
+          description:
+            'email=Gmailインボックス, calendar_today=今日の予定, calendar_tomorrow=明日, calendar_week=今後7日, tasks=TickTick未完了, slack=Slack未読, news=AIニュース日次まとめ, tools=おすすめツール, movies=今月公開/来月注目映画',
+        },
+      },
+      required: ['type'],
     },
   },
 ]
@@ -59,12 +93,32 @@ const SYSTEM_PROMPT = `お前はちょっと生意気な秘書ロボット「ベ
 - 流行語・ネットスラング（〜ンゴ等）・絵文字・顔文字は使わない
 
 【役割】
-Slack・Gmail・Googleカレンダー・Notionのツールで情報を取得・操作する秘書。
-不明な点は推測せず聞き返す（「で、どれの話だ？」みたいに生意気に聞き返してOK）。
+お前は窓口だ。基本は delegate_task に丸投げしろ。
+ただしタスク管理(TickTick)だけは直接呼べる:
+- 「やること」「ToDo」「タスク見せて」 → get_tasks
+- 「○○ってタスク追加して」「○○をToDoに入れて」 → create_task。期限が言われたら due (YYYY-MM-DD)、「重要」「急ぎ」なら priority: high。
+- 「○○終わった」「○○完了」 → 直前の get_tasks の結果に該当タスクがあれば complete_task。無ければ先に get_tasks。
+それ以外（メール・Slack・カレンダー・画面の確認・横断要約など）は全部 delegate_task に渡す。画面を見る必要があるなら includeScreenshot: true。
+
+【パネル表示ルール】
+ユーザーが「見せて」「表示して」「出して」「一覧」と明示的に画面表示を求めたら show_panel を呼ぶ。
+- 「メール見せて」「メール表示」 → show_panel(email)
+- 「今日の予定見せて」「予定出して」 → show_panel(calendar_today)
+- 「明日の予定」「明日表示」 → show_panel(calendar_tomorrow)
+- 「今週の予定」「予定一覧」 → show_panel(calendar_week)
+- 「タスク見せて」「ToDo表示」 → show_panel(tasks)。get_tasks ではなく show_panel を使う。
+- 「Slack見せて」「Slack表示」 → show_panel(slack)
+- 「AIニュース見せて」「ニュース出して」「今日のニュース」 → show_panel(news)
+- 「ツール見せて」「おすすめツール表示」「ベストツール」 → show_panel(tools)
+- 「映画見せて」「映画一覧」「今月の映画」「来月の映画」 → show_panel(movies)
+show_panel は data に生データを返すので、普段通り内容を要約してベガ口調で読み上げつつ、最後に「画面にも出したぜ」と添えろ。
+
+ツール結果はベガ口調に直して読み上げ。事実は変えるな。不明な点はツール呼ぶ前に聞き返していい（「で、どのチャンネルの話だ？」みたいに生意気でOK）。
 
 口調の例:
-- 「未読は3件だな。Slackは田中からだぜ」
+- 「インボックスに3件来てるぜ。Slackは田中からだ」
 - 「今日の予定か？ 14時に会議が入ってる」
+- 「タスク3つだな。買い物が今日締め切りだぜ」
 - 「お前、それさっきも聞いたろ。さっさと決めろよ」`
 
 type LiveSession = {
@@ -76,9 +130,16 @@ type LiveSession = {
 interface Options {
   onStateChange: (state: RobotState) => void
   isMuted: boolean
+  languageCode: string
 }
 
-export function useGeminiLive({ onStateChange, isMuted }: Options) {
+// 連続して再接続に失敗したら諦める閾値。長文プロンプトを永久に再送し続けるのを防ぐ
+const MAX_RECONNECT_ATTEMPTS = 10
+// resumption handle 付きで何回失敗したら handle を捨てて素のセッションで再開するか。
+// handle は 2 時間で失効するので長時間スリープ復帰時にここで救う
+const HANDLE_RETRY_THRESHOLD = 3
+
+export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options) {
   const [isConnected, setIsConnected] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const sessionRef = useRef<LiveSession | null>(null)
@@ -86,6 +147,8 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
   const nextPlayTimeRef = useRef(0)
   const isPTTActiveRef = useRef(false)
   const isMutedRef = useRef(isMuted)
+  const languageCodeRef = useRef(languageCode)
+  const isFirstLanguageRunRef = useRef(true)
   const onStateChangeRef = useRef(onStateChange)
   const connectingRef = useRef(false)
   const userMsgIdRef = useRef<string | null>(null)
@@ -94,6 +157,7 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
   const reconnectAttemptsRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const intentionalCloseRef = useRef(false)
+  const sessionHandleRef = useRef<string | null>(null)
   const connectRef = useRef<() => Promise<void>>(async () => {})
 
   const appendTranscript = useCallback((role: 'user' | 'assistant', delta: string) => {
@@ -114,6 +178,23 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
 
   useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
   useEffect(() => { onStateChangeRef.current = onStateChange }, [onStateChange])
+
+  // 言語が変わったら既存セッションを閉じて再接続。onclose 経由で scheduleReconnect が走る
+  useEffect(() => {
+    languageCodeRef.current = languageCode
+    if (isFirstLanguageRunRef.current) {
+      isFirstLanguageRunRef.current = false
+      return
+    }
+    if (!sessionRef.current) return
+    console.log('[Gemini] 言語変更', languageCode, '→ 再接続')
+    sessionHandleRef.current = null // 旧言語のコンテキストを引き継がない
+    try {
+      sessionRef.current.close?.()
+    } catch {
+      // すでに閉じている場合は無視
+    }
+  }, [languageCode])
 
   // ========== マイク初期化（プロセス内で1度きり） ==========
 
@@ -166,7 +247,19 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
     if (reconnectTimerRef.current) return // 二重スケジュール防止
 
     const attempt = reconnectAttemptsRef.current
-    // 1s, 2s, 4s, 8s, 16s, 30s, 30s, ... (30sで上限固定。無限リトライ)
+    if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+      console.error(
+        `[Gemini] 再接続を ${MAX_RECONNECT_ATTEMPTS} 回試して失敗。諦める。設定や接続を確認してくれ。`,
+      )
+      intentionalCloseRef.current = true
+      return
+    }
+    // resumption handle で連続失敗したら handle を破棄してフレッシュなセッションを試す
+    if (attempt >= HANDLE_RETRY_THRESHOLD && sessionHandleRef.current) {
+      console.warn('[Gemini] resumption handle を破棄して新規セッションで再接続する')
+      sessionHandleRef.current = null
+    }
+    // 1s, 2s, 4s, 8s, 16s, 30s, 30s, ... (30sで上限固定)
     const delay = Math.min(1000 * 2 ** attempt, 30000)
     console.log(`[Gemini] ${delay / 1000}秒後に再接続を試みます (attempt ${attempt + 1})`)
 
@@ -189,16 +282,33 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
         turnComplete?: boolean
       }
       toolCall?: { functionCalls: { name: string; args: Record<string, unknown>; id: string }[] }
+      sessionResumptionUpdate?: { newHandle?: string; resumable?: boolean }
+      goAway?: { timeLeft?: string }
+    }
+
+    // resumption handle を保存。次回再接続時にこれを渡せばコンテキストごと resume されるので
+    // 長文システムプロンプトの再送と過去 turn の再課金が抑えられる
+    if (m.sessionResumptionUpdate?.resumable && m.sessionResumptionUpdate.newHandle) {
+      sessionHandleRef.current = m.sessionResumptionUpdate.newHandle
+    }
+
+    // サーバが切断予告を出したらログだけ。実際の再接続は onclose 経由で動く
+    if (m.goAway) {
+      console.log('[Gemini] サーバ切断予告 timeLeft:', m.goAway.timeLeft)
     }
 
     // 音声トランスクリプト
     const inputT = m.serverContent?.inputTranscription?.text
-    if (inputT) appendTranscript('user', inputT)
+    if (inputT) {
+      appendTranscript('user', inputT)
+      window.electronAPI?.memoryRecordTranscript('user', inputT)
+    }
     const outputT = m.serverContent?.outputTranscription?.text
     if (outputT) {
       // モデルが応答を始めたらユーザー側のターンを締める
       userMsgIdRef.current = null
       appendTranscript('assistant', outputT)
+      window.electronAPI?.memoryRecordTranscript('assistant', outputT)
     }
 
     // ツール呼び出し
@@ -266,24 +376,39 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
 
       if (!playbackCtxRef.current) playbackCtxRef.current = new AudioContext()
 
+      // 過去の会話メモリをシステムプロンプトに注入。失敗しても接続は続行
+      let memoryInjection = ''
+      try {
+        memoryInjection = (await window.electronAPI?.memoryGetInjection?.()) ?? ''
+      } catch (err) {
+        console.warn('[Gemini] メモリ注入の取得失敗:', err)
+      }
+      const systemText = SYSTEM_PROMPT + memoryInjection
+
+      const handle = sessionHandleRef.current
       const session = await (ai.live as {
         connect: (opts: unknown) => Promise<LiveSession>
       }).connect({
         model: 'gemini-3.1-flash-live-preview',
         config: {
           responseModalities: ['AUDIO'],
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: systemText }] },
           tools: [{ functionDeclarations: secretaryTools }],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } },
-            languageCode: 'ja-JP',
+            languageCode: languageCodeRef.current,
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          // 過去 turn の累積トークンが毎ターン再課金されるのを抑える
+          contextWindowCompression: { slidingWindow: {} },
+          // 切断時にコンテキストを引き継いで再開できるようにする。
+          // handle があればそれで resume、なければ新規セッション
+          sessionResumption: handle ? { handle } : {},
         },
         callbacks: {
           onopen: () => {
-            console.log('[Gemini] 接続完了 ✓')
+            console.log('[Gemini] 接続完了 ✓', handle ? '(resumed)' : '(fresh)')
             reconnectAttemptsRef.current = 0
             setIsConnected(true)
             onStateChangeRef.current('idle')
@@ -298,11 +423,20 @@ export function useGeminiLive({ onStateChange, isMuted }: Options) {
             // onclose も大抵続いて呼ばれるが、scheduleReconnect 側で二重スケジュールガード済
             scheduleReconnect()
           },
-          onclose: () => {
-            console.log('[Gemini] 接続終了')
+          onclose: (e?: { code?: number; reason?: string }) => {
+            const code = e?.code
+            const reason = e?.reason
+            console.log('[Gemini] 接続終了 code:', code, 'reason:', reason)
             sessionRef.current = null
             setIsConnected(false)
             onStateChangeRef.current('idle')
+            // 認証/ポリシー違反は再試行しても同じ結果なので即停止。
+            // 1008=policy violation, 4401/4403=auth 系のアプリ定義
+            if (code === 1008 || code === 4401 || code === 4403) {
+              console.error('[Gemini] 恒久エラー、再接続中止:', code, reason)
+              intentionalCloseRef.current = true
+              return
+            }
             scheduleReconnect()
           },
         },

@@ -30,4 +30,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   setClickThrough: (enabled: boolean) =>
     ipcRenderer.send('set-clickthrough', enabled),
+
+  setChatInteractive: (enabled: boolean) =>
+    ipcRenderer.send('chat-set-interactive', enabled),
+
+  setLanguage: (lang: string) =>
+    ipcRenderer.send('set-language', lang),
+
+  onLanguageChange: (cb: (lang: string) => void) =>
+    ipcRenderer.on('language-change', (_e, lang: string) => cb(lang)),
+
+  memoryGetInjection: (): Promise<string> =>
+    ipcRenderer.invoke('memory:get-injection'),
+
+  memoryRecordTranscript: (role: 'user' | 'assistant', text: string) =>
+    ipcRenderer.send('memory:transcript', { role, text }),
+
+  onDisplayData: (cb: (payload: unknown) => void) =>
+    ipcRenderer.on('display:data', (_e, payload) => cb(payload)),
+
+  displayClose: () => ipcRenderer.send('display:close'),
+
+  displayRefresh: (type: string) => ipcRenderer.invoke('display:refresh', type),
 })

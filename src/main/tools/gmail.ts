@@ -1,46 +1,42 @@
 import { google } from 'googleapis'
-import * as fs from 'fs'
-import * as path from 'path'
+import { getGoogleAuth, listAccounts } from './googleAuth'
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']
-const TOKEN_PATH = path.join(process.env.HOME ?? '', '.robot-secretary-gmail-token.json')
-
-function getAuth() {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-
-  if (!clientId || !clientSecret) throw new Error('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が未設定です')
-
-  const oAuth2Client = new google.auth.OAuth2(clientId, clientSecret, 'urn:ietf:wg:oauth:2.0:oob')
-
-  if (fs.existsSync(TOKEN_PATH)) {
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'))
-    oAuth2Client.setCredentials(token)
-  }
-
-  return oAuth2Client
+type InboxEmail = {
+  id: string
+  account: string
+  from: string
+  subject: string
+  date: string
+  snippet: string | null | undefined
 }
 
-export async function getUnreadEmails(maxResults = 5) {
-  const auth = getAuth()
+async function getInboxFor(account: string, maxResults: number): Promise<InboxEmail[]> {
+  const auth = getGoogleAuth(account)
   const gmail = google.gmail({ version: 'v1', auth })
 
   const list = await gmail.users.messages.list({
     userId: 'me',
-    q: 'is:unread',
+    q: 'in:inbox -in:spam -in:trash',
     maxResults,
   })
 
   const messages = list.data.messages ?? []
-  const results = []
+  const results: InboxEmail[] = []
 
   for (const msg of messages) {
     if (!msg.id) continue
-    const detail = await gmail.users.messages.get({ userId: 'me', id: msg.id, format: 'metadata', metadataHeaders: ['From', 'Subject', 'Date'] })
+    const detail = await gmail.users.messages.get({
+      userId: 'me',
+      id: msg.id,
+      format: 'metadata',
+      metadataHeaders: ['From', 'Subject', 'Date'],
+    })
     const headers = detail.data.payload?.headers ?? []
     const get = (name: string) => headers.find((h) => h.name === name)?.value ?? ''
 
     results.push({
+      id: msg.id,
+      account,
       from: get('From'),
       subject: get('Subject'),
       date: get('Date'),
@@ -49,4 +45,50 @@ export async function getUnreadEmails(maxResults = 5) {
   }
 
   return results
+}
+
+export async function getInboxEmails(maxResults = 100, account?: string) {
+  const accounts = account ? [account] : listAccounts()
+  const perAccount = await Promise.all(
+    accounts.map(async (a) => {
+      try {
+        return { account: a, messages: await getInboxFor(a, maxResults), error: null as string | null }
+      } catch (err) {
+        return { account: a, messages: [] as InboxEmail[], error: String(err instanceof Error ? err.message : err) }
+      }
+    }),
+  )
+  return {
+    accounts: perAccount.map(({ account, messages, error }) => ({ account, error, count: messages.length })),
+    messages: perAccount.flatMap((p) => p.messages),
+  }
+}
+
+// メッセージをゴミ箱に送る (30日後にGoogle側で自動削除、それまでは復元可)
+export async function trashEmails(account: string, ids: string[]) {
+  const auth = getGoogleAuth(account)
+  const gmail = google.gmail({ version: 'v1', auth })
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        await gmail.users.messages.trash({ userId: 'me', id })
+        return { id, ok: true as const }
+      } catch (err) {
+        return { id, ok: false as const, error: String(err instanceof Error ? err.message : err) }
+      }
+    }),
+  )
+  return { account, results }
+}
+
+// INBOX ラベルを外す (アーカイブ。メール自体は残る)
+export async function archiveEmails(account: string, ids: string[]) {
+  if (ids.length === 0) return { account, modified: 0 }
+  const auth = getGoogleAuth(account)
+  const gmail = google.gmail({ version: 'v1', auth })
+  await gmail.users.messages.batchModify({
+    userId: 'me',
+    requestBody: { ids, removeLabelIds: ['INBOX'] },
+  })
+  return { account, modified: ids.length }
 }
