@@ -166,6 +166,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const intentionalCloseRef = useRef(false)
   const sessionHandleRef = useRef<string | null>(null)
   const connectRef = useRef<() => Promise<void>>(async () => {})
+  const sessionEpochRef = useRef(0)
 
   const appendTranscript = useCallback((role: 'user' | 'assistant', delta: string) => {
     const idRef = role === 'user' ? userMsgIdRef : assistantMsgIdRef
@@ -186,6 +187,17 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
   useEffect(() => { onStateChangeRef.current = onStateChange }, [onStateChange])
 
+  const invalidateSession = useCallback(() => {
+    sessionEpochRef.current += 1
+    sessionRef.current = null
+    setIsConnected(false)
+    isPTTActiveRef.current = false
+    pttPendingChunksRef.current = []
+    userMsgIdRef.current = null
+    assistantMsgIdRef.current = null
+    onStateChangeRef.current('idle')
+  }, [])
+
   // 言語が変わったら既存セッションを閉じて再接続。onclose 経由で scheduleReconnect が走る
   useEffect(() => {
     languageCodeRef.current = languageCode
@@ -196,12 +208,15 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     if (!sessionRef.current) return
     console.log('[Gemini] 言語変更', languageCode, '→ 再接続')
     sessionHandleRef.current = null // 旧言語のコンテキストを引き継がない
+    const session = sessionRef.current
+    invalidateSession()
     try {
-      sessionRef.current.close?.()
+      session?.close?.()
     } catch {
       // すでに閉じている場合は無視
     }
-  }, [languageCode])
+    void connectRef.current()
+  }, [invalidateSession, languageCode])
 
   // ========== マイク初期化（プロセス内で1度きり） ==========
 
@@ -383,6 +398,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const connect = useCallback(async () => {
     if (connectingRef.current || sessionRef.current) return
     connectingRef.current = true
+    const sessionEpoch = sessionEpochRef.current + 1
+    sessionEpochRef.current = sessionEpoch
 
     const apiKey = localStorage.getItem('GEMINI_API_KEY') ?? import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
@@ -432,18 +449,20 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         },
         callbacks: {
           onopen: () => {
+            if (sessionEpochRef.current !== sessionEpoch) return
             console.log('[Gemini] 接続完了 ✓', handle ? '(resumed)' : '(fresh)')
             reconnectAttemptsRef.current = 0
             setIsConnected(true)
             onStateChangeRef.current('idle')
           },
           onmessage: (msg: unknown) => {
+            if (sessionEpochRef.current !== sessionEpoch) return
             handleMessage(msg)
           },
           onerror: (e: unknown) => {
+            if (sessionEpochRef.current !== sessionEpoch) return
             console.error('[Gemini] エラー:', e)
-            setIsConnected(false)
-            onStateChangeRef.current('idle')
+            invalidateSession()
             // onclose も大抵続いて呼ばれるが、scheduleReconnect 側で二重スケジュールガード済
             scheduleReconnect()
           },
@@ -451,9 +470,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             const code = e?.code
             const reason = e?.reason
             console.log('[Gemini] 接続終了 code:', code, 'reason:', reason)
-            sessionRef.current = null
-            setIsConnected(false)
-            onStateChangeRef.current('idle')
+            if (sessionEpochRef.current !== sessionEpoch) return
+            invalidateSession()
             // 認証/ポリシー違反は再試行しても同じ結果なので即停止。
             // 1008=policy violation, 4401/4403=auth 系のアプリ定義
             if (code === 1008 || code === 4401 || code === 4403) {
@@ -466,17 +484,24 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         },
       })
 
+      if (sessionEpochRef.current !== sessionEpoch) {
+        try {
+          session.close?.()
+        } catch {
+          // close できないなら捨てる
+        }
+        return
+      }
       sessionRef.current = session
       await setupMic()
     } catch (err) {
       console.error('[Gemini] 接続エラー:', err)
-      setIsConnected(false)
-      onStateChangeRef.current('idle')
+      invalidateSession()
       scheduleReconnect()
     } finally {
       connectingRef.current = false
     }
-  }, [handleMessage, setupMic, scheduleReconnect])
+  }, [handleMessage, invalidateSession, setupMic, scheduleReconnect])
 
   useEffect(() => { connectRef.current = connect }, [connect])
 
@@ -488,14 +513,15 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
       }
+      const session = sessionRef.current
+      invalidateSession()
       try {
-        sessionRef.current?.close?.()
+        session?.close?.()
       } catch {
         // 既に閉じている場合は無視
       }
-      sessionRef.current = null
     }
-  }, [])
+  }, [invalidateSession])
 
   // ========== PTT イベント登録 ==========
 
@@ -503,7 +529,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const api = window.electronAPI
     if (!api) return
 
-    api.onPTTStart(() => {
+    const offStart = api.onPTTStart(() => {
       console.log('[PTT] Start — session:', !!sessionRef.current, 'muted:', isMutedRef.current)
       if (isMutedRef.current || !sessionRef.current) return
       isPTTActiveRef.current = true
@@ -512,7 +538,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       onStateChangeRef.current('listening')
     })
 
-    api.onPTTStop(() => {
+    const offStop = api.onPTTStop(() => {
       console.log('[PTT] Stop — wasActive:', isPTTActiveRef.current)
       if (!isPTTActiveRef.current) return
       isPTTActiveRef.current = false
@@ -539,6 +565,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         }
       }
     })
+    return () => {
+      offStart?.()
+      offStop?.()
+    }
   }, [])
 
   return { connect, isConnected, messages }
