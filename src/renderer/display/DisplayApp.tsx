@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { DisplayShell } from './DisplayShell'
+import { TopButtons } from './TopButtons'
 import { EmailView } from './views/EmailView'
 import { CalendarView } from './views/CalendarView'
 import { TasksView } from './views/TasksView'
@@ -45,6 +46,7 @@ export function DisplayApp() {
         >
           ◢ STANDBY
         </div>
+        <TopButtons onClose={() => window.electronAPI?.displayClose()} />
       </>
     )
   }
