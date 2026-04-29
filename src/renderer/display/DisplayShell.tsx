@@ -21,7 +21,7 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
       <div
         style={{
           position: 'absolute',
-          top: 16,
+          top: 56,
           left: 16,
           right: 16,
           bottom: 16,
@@ -43,7 +43,7 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
       <div
         style={{
           position: 'absolute',
-          top: 16,
+          top: 56,
           left: 16,
           right: 16,
           bottom: 16,
@@ -74,7 +74,7 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
       <div
         style={{
           position: 'absolute',
-          top: 26,
+          top: 66,
           left: 30,
           fontFamily: FONT_MONO,
           fontSize: 10.5,
@@ -93,13 +93,14 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
       <div
         style={{
           position: 'absolute',
-          top: 26,
-          right: 100,
+          top: 66,
+          right: 30,
           fontFamily: FONT_MONO,
           fontSize: 9.5,
           letterSpacing: 1.5,
           color: 'rgba(0, 240, 255, 0.7)',
           pointerEvents: 'none',
+          whiteSpace: 'nowrap',
         }}
       >
         {loading ? 'FETCHING…' : formatFetchedAt(fetchedAt)}
@@ -113,7 +114,7 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
         className="cyber-scroll"
         style={{
           position: 'absolute',
-          top: 56,
+          top: 96,
           left: 28,
           right: 28,
           bottom: 28,
@@ -156,13 +157,13 @@ function CornerBrackets() {
   return (
     <>
       {bracket({
-        top: 16,
+        top: 56,
         left: 16,
         borderTop: `${thickness}px solid ${color}`,
         borderLeft: `${thickness}px solid ${color}`,
       })}
       {bracket({
-        top: 16,
+        top: 56,
         right: 16,
         borderTop: `${thickness}px solid ${color}`,
         borderRight: `${thickness}px solid ${color}`,

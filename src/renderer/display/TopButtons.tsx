@@ -15,8 +15,9 @@ export function TopButtons({ loading = false, onRefresh, onClose }: Props) {
         disabled={reloadDisabled}
         style={{
           position: 'absolute',
-          top: 22,
-          right: 60,
+          top: 14,
+          right: 100,
+          zIndex: 20,
           background: 'rgba(8, 12, 24, 0.95)',
           border: `1px solid ${CYAN}`,
           color: CYAN,
@@ -40,8 +41,9 @@ export function TopButtons({ loading = false, onRefresh, onClose }: Props) {
         onClick={onClose}
         style={{
           position: 'absolute',
-          top: 22,
-          right: 28,
+          top: 14,
+          right: 16,
+          zIndex: 20,
           background: 'rgba(8, 12, 24, 0.95)',
           border: `1px solid ${MAGENTA}`,
           color: MAGENTA,
