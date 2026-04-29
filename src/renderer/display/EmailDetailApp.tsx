@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CYAN, FONT_MONO, MAGENTA, CYBER_STYLES } from './styles'
+import { CYAN, FONT_MONO, MAGENTA } from './styles'
+import { DisplayShell } from './DisplayShell'
 
 type EmailDetail = {
   id: string
@@ -52,108 +53,16 @@ export function EmailDetailApp() {
   }, [args])
 
   return (
-    <>
-      <style>{CYBER_STYLES}</style>
-
-      {/* HUDフレーム */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          right: 16,
-          bottom: 16,
-          pointerEvents: 'none',
-          background:
-            'linear-gradient(180deg, rgba(6, 8, 18, 0.96), rgba(10, 4, 20, 0.96))',
-          border: `1px solid rgba(0, 240, 255, 0.25)`,
-          boxShadow:
-            '0 0 24px rgba(0, 240, 255, 0.08), inset 0 0 40px rgba(255, 43, 214, 0.04)',
-          clipPath:
-            'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-        }}
-      />
-      <CornerBrackets />
-
-      {/* ドラッグ用バー */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          right: 16,
-          height: 38,
-          WebkitAppRegion: 'drag',
-        } as React.CSSProperties}
-      />
-
-      {/* ヘッダラベル */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 26,
-          left: 30,
-          fontFamily: FONT_MONO,
-          fontSize: 10.5,
-          fontWeight: 700,
-          letterSpacing: 3,
-          color: CYAN,
-          textShadow: `0 0 8px ${CYAN}`,
-          pointerEvents: 'none',
-          animation: 'cyber-flicker 6s infinite',
-        }}
-      >
-        ◢ MAIL // DETAIL {loading ? '// FETCHING…' : ''}
-      </div>
-
-      {/* 閉じるボタン */}
-      <button
-        onClick={() => window.electronAPI?.closeEmailDetail()}
-        style={{
-          position: 'absolute',
-          top: 22,
-          right: 28,
-          background: 'rgba(8, 12, 24, 0.95)',
-          border: `1px solid ${MAGENTA}`,
-          color: MAGENTA,
-          padding: '3px 8px',
-          fontFamily: FONT_MONO,
-          fontSize: 9.5,
-          fontWeight: 700,
-          letterSpacing: 1.2,
-          textShadow: `0 0 6px ${MAGENTA}`,
-          boxShadow: '0 0 8px rgba(255, 43, 214, 0.35)',
-          cursor: 'pointer',
-          textTransform: 'uppercase',
-          WebkitAppRegion: 'no-drag',
-        } as React.CSSProperties}
-      >
-        ✕ CLOSE
-      </button>
-
-      {/* 本体 */}
-      <div
-        className="cyber-scroll"
-        style={{
-          position: 'absolute',
-          top: 56,
-          left: 28,
-          right: 28,
-          bottom: 28,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}
-      >
-        {!args && <Standby text="メールをクリックすると詳細が表示される" />}
-        {args && loading && !detail && <Standby text="LOADING…" />}
-        {error && <ErrorBlock message={error} />}
-        {detail && <DetailBody detail={detail} />}
-      </div>
-    </>
+    <DisplayShell
+      label={`◢ MAIL // DETAIL${loading ? ' // FETCHING…' : ''}`}
+      loading={loading}
+      onClose={() => window.electronAPI?.closeEmailDetail()}
+    >
+      {!args && <Standby text="メールをクリックすると詳細が表示される" />}
+      {args && loading && !detail && <Standby text="LOADING…" />}
+      {error && <ErrorBlock message={error} />}
+      {detail && <DetailBody detail={detail} />}
+    </DisplayShell>
   )
 }
 
@@ -313,49 +222,3 @@ function ErrorBlock({ message }: { message: string }) {
   )
 }
 
-function CornerBrackets() {
-  const size = 14
-  const thickness = 2
-  const color = CYAN
-  const glow = `0 0 8px ${CYAN}`
-  const bracket = (style: React.CSSProperties) => (
-    <div
-      style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        pointerEvents: 'none',
-        boxShadow: glow,
-        ...style,
-      }}
-    />
-  )
-  return (
-    <>
-      {bracket({
-        top: 16,
-        left: 16,
-        borderTop: `${thickness}px solid ${color}`,
-        borderLeft: `${thickness}px solid ${color}`,
-      })}
-      {bracket({
-        top: 16,
-        right: 16,
-        borderTop: `${thickness}px solid ${color}`,
-        borderRight: `${thickness}px solid ${color}`,
-      })}
-      {bracket({
-        bottom: 16,
-        left: 16,
-        borderBottom: `${thickness}px solid ${color}`,
-        borderLeft: `${thickness}px solid ${color}`,
-      })}
-      {bracket({
-        bottom: 16,
-        right: 16,
-        borderBottom: `${thickness}px solid ${color}`,
-        borderRight: `${thickness}px solid ${color}`,
-      })}
-    </>
-  )
-}

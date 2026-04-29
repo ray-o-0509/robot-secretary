@@ -31,6 +31,37 @@ export function ChatPanel({ messages, languageCode, onLanguageChange }: Props) {
     <>
       <style>{CYBER_STYLES}</style>
 
+      {/* ドラッグハンドル */}
+      <div
+        onMouseEnter={() => window.electronAPI?.setChatInteractive(true)}
+        onMouseLeave={() => window.electronAPI?.setChatInteractive(false)}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 52,
+          WebkitAppRegion: 'drag',
+          cursor: 'grab',
+          display: 'flex',
+          alignItems: 'center',
+          paddingLeft: 18,
+        } as React.CSSProperties}
+      >
+        <span
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: 9,
+            letterSpacing: 2,
+            color: 'rgba(0, 240, 255, 0.3)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          ⠿ DRAG
+        </span>
+      </div>
+
       {/* HUDフレーム */}
       <div
         style={{
@@ -186,7 +217,8 @@ function LanguageSelector({
         right: 16,
         fontFamily: FONT_MONO,
         zIndex: 20,
-      }}
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}
     >
       <button
         onClick={() => setOpen((v) => !v)}

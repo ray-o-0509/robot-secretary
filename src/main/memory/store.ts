@@ -31,7 +31,52 @@ function dirs() {
     logs: root,
     sessionsFile: path.join(root, 'sessions.json'),
     memoryFile: path.join(root, 'memory.json'),
+    profileFile: path.join(root, 'profile.json'),
   }
+}
+
+export type Profile = {
+  items: Record<string, string>
+  updatedAt: string | null
+}
+
+const EMPTY_PROFILE: Profile = { items: {}, updatedAt: null }
+
+export async function loadProfile(): Promise<Profile> {
+  await ensureDir()
+  try {
+    const raw = await fs.readFile(dirs().profileFile, 'utf8')
+    const parsed = JSON.parse(raw)
+    return {
+      items: typeof parsed.items === 'object' && parsed.items ? parsed.items : {},
+      updatedAt: parsed.updatedAt ?? null,
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { ...EMPTY_PROFILE, items: {} }
+    console.warn('[memory] profile.json 読込失敗、空から開始:', err)
+    return { ...EMPTY_PROFILE, items: {} }
+  }
+}
+
+export async function saveProfile(profile: Profile): Promise<void> {
+  await ensureDir()
+  await atomicWrite(dirs().profileFile, JSON.stringify(profile, null, 2))
+}
+
+export async function upsertProfileItem(key: string, value: string): Promise<Profile> {
+  const profile = await loadProfile()
+  profile.items[key] = value
+  profile.updatedAt = new Date().toISOString()
+  await saveProfile(profile)
+  return profile
+}
+
+export async function deleteProfileItem(key: string): Promise<Profile> {
+  const profile = await loadProfile()
+  delete profile.items[key]
+  profile.updatedAt = new Date().toISOString()
+  await saveProfile(profile)
+  return profile
 }
 
 function todayLogName(d = new Date()): string {

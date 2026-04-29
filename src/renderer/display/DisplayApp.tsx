@@ -9,7 +9,7 @@ import { SlackView } from './views/SlackView'
 import { NewsView } from './views/NewsView'
 import { ToolsView } from './views/ToolsView'
 import { MoviesView } from './views/MoviesView'
-import type { PanelPayload } from './types'
+import { PANEL_LABELS, type PanelPayload } from './types'
 
 export function DisplayApp() {
   const [payload, setPayload] = useState<PanelPayload | null>(null)
@@ -58,7 +58,7 @@ export function DisplayApp() {
 
   return (
     <DisplayShell
-      type={payload.type}
+      label={PANEL_LABELS[payload.type]}
       fetchedAt={payload.fetchedAt}
       loading={loading}
       onRefresh={refresh}

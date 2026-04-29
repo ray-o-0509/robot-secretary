@@ -131,6 +131,17 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'web_search',
+    description: 'Webを検索して最新情報・ニュース・調べ物を返す',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '検索クエリ（日本語でもOK）' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'get_dashboard_entry',
     description:
       "daily-dashboard の Turso DB から日次まとめエントリを取得する。skill='ai-news' でAIニュース、'best-tools' でおすすめツール、'movies' で映画、'spending' で支出分析。id 省略で最新を返す。",
@@ -212,6 +223,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case 'get_email_detail': {
       const { getEmailDetail } = await import('./gmail')
       return await getEmailDetail(reqString(args, 'account'), reqString(args, 'id'))
+    }
+    case 'web_search': {
+      const { webSearch } = await import('./search')
+      return await webSearch(reqString(args, 'query'))
     }
     case 'get_dashboard_entry': {
       const { getDashboardEntry } = await import('./dashboard')

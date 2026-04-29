@@ -30,6 +30,8 @@ let win: BrowserWindow | null = null
 let chatWin: BrowserWindow | null = null
 let displayWin: BrowserWindow | null = null
 let displayReady = false
+let searchWin: BrowserWindow | null = null
+let webWin: BrowserWindow | null = null
 let emailDetailWin: BrowserWindow | null = null
 let emailDetailReady = false
 let pendingEmailDetailArgs: { account: string; id: string } | null = null
@@ -40,6 +42,7 @@ let currentX = 0
 let currentY = 0
 let isWandering = true
 let isInteracting = false
+let pinnedUntil = 0
 let isMuted = false
 let pttActive = false
 let shuttingDown = false
@@ -102,15 +105,19 @@ function createWindow() {
 }
 
 function createChatWindow() {
-  const { height } = screen.getPrimaryDisplay().workAreaSize
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const chatW = 360
   const chatH = Math.min(560, height - 80)
+
+  // デフォルト：左上
+  const chatX = 24
+  const chatY = 24
 
   chatWin = new BrowserWindow({
     width: chatW,
     height: chatH,
-    x: 24,
-    y: 40,
+    x: chatX,
+    y: chatY,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -200,6 +207,44 @@ function getOrCreateDisplayWindow(): Promise<{ win: BrowserWindow; ready: boolea
   }
 
   return ready.then(() => ({ win: created, ready: true }))
+}
+
+// ========== Search Window ==========
+
+function getOrCreateSearchWindow(): BrowserWindow {
+  if (searchWin && !searchWin.isDestroyed()) {
+    searchWin.show()
+    return searchWin
+  }
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const w = 480
+  const h = Math.min(640, height - 80)
+  searchWin = new BrowserWindow({
+    width: w,
+    height: h,
+    x: width - w - DISPLAY_RIGHT_MARGIN,
+    y: 40,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: false,
+    hasShadow: false,
+    resizable: true,
+    focusable: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  forwardRendererConsole(searchWin, 'search')
+  searchWin.on('closed', () => { searchWin = null })
+  if (isDev) {
+    searchWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#search')
+  } else {
+    searchWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'search' })
+  }
+  return searchWin
 }
 
 // ========== Push-to-Talk (左 Option キー = keycode 56) ==========
@@ -307,6 +352,7 @@ function startWandering() {
     if (dt > 0.1) dt = 0.016
 
     if (!win || !isWandering || isInteracting) return
+    if (Date.now() < pinnedUntil) return
 
     const dx = targetX - currentX
     const dy = targetY - currentY
@@ -412,6 +458,7 @@ registerCoreIpc({
   getMainWindow: () => win,
   getChatWindow: () => chatWin,
   getOrCreateDisplayWindow,
+  getOrCreateSearchWindow,
   setWanderingByState: (state: string) => {
     isWandering = state !== 'listening' && state !== 'speaking' && state !== 'thinking'
   },
@@ -423,6 +470,7 @@ registerCoreIpc({
         const [x, y] = win.getPosition()
         currentX = x
         currentY = y
+        pinnedUntil = Date.now() + 60 * 60 * 1000
         pickNewTarget()
       }
       isInteracting = false
@@ -510,6 +558,29 @@ ipcMain.on('email:open-detail', (_event, args: unknown) => {
 
 ipcMain.on('email:close-detail', () => {
   if (emailDetailWin && !emailDetailWin.isDestroyed()) emailDetailWin.hide()
+})
+
+// ========== Web View Window ==========
+
+ipcMain.on('open-web-view', (_event, url: string) => {
+  if (typeof url !== 'string' || !url.startsWith('http')) return
+  if (!webWin || webWin.isDestroyed()) {
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize
+    const w = Math.min(1100, width - 100)
+    const h = Math.min(800, height - 100)
+    webWin = new BrowserWindow({
+      width: w,
+      height: h,
+      x: Math.round(width / 2 - w / 2),
+      y: Math.round(height / 2 - h / 2),
+      frame: true,
+      alwaysOnTop: false,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    })
+    webWin.on('closed', () => { webWin = null })
+  }
+  webWin.loadURL(url)
+  webWin.focus()
 })
 
 

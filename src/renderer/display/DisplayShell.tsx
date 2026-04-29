@@ -1,18 +1,17 @@
 import type { ReactNode } from 'react'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
-import { PANEL_LABELS, type PanelType } from './types'
 import { TopButtons } from './TopButtons'
 
 interface Props {
-  type: PanelType
-  fetchedAt: number
-  loading: boolean
-  onRefresh: () => void
+  label: string
+  fetchedAt?: number
+  loading?: boolean
+  onRefresh?: () => void
   onClose: () => void
   children: ReactNode
 }
 
-export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, children }: Props) {
+export function DisplayShell({ label, fetchedAt, loading = false, onRefresh, onClose, children }: Props) {
   return (
     <>
       <style>{CYBER_STYLES}</style>
@@ -86,7 +85,7 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
           animation: 'cyber-flicker 6s infinite',
         }}
       >
-        {PANEL_LABELS[type]}
+        {label}
       </div>
 
       {/* 取得時刻 */}
@@ -103,7 +102,7 @@ export function DisplayShell({ type, fetchedAt, loading, onRefresh, onClose, chi
           whiteSpace: 'nowrap',
         }}
       >
-        {loading ? 'FETCHING…' : formatFetchedAt(fetchedAt)}
+        {loading ? 'FETCHING…' : fetchedAt ? formatFetchedAt(fetchedAt) : ''}
       </div>
 
       {/* CLOSE / RELOAD ボタン */}

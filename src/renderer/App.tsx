@@ -6,6 +6,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { DisplayApp } from './display/DisplayApp'
 import { EmailDetailApp } from './display/EmailDetailApp'
+import { SearchApp } from './search/SearchApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -36,6 +37,10 @@ declare global {
       openEmailDetail: (account: string, id: string) => void
       closeEmailDetail: () => void
       onEmailDetailArgs: (cb: (args: { account: string; id: string }) => void) => () => void
+      onSearchData: (cb: (data: unknown) => void) => () => void
+      searchClose: () => void
+      openUrl: (url: string) => Promise<void>
+      openWebView: (url: string) => void
     }
   }
 }
@@ -46,11 +51,13 @@ const hash = typeof window !== 'undefined' ? window.location.hash : ''
 const isChatWindow = hash === '#chat'
 const isDisplayWindow = hash === '#display'
 const isEmailDetailWindow = hash === '#email-detail'
+const isSearchWindow = hash === '#search'
 
 export default function App() {
   if (isChatWindow) return <ChatWindowApp />
   if (isDisplayWindow) return <DisplayApp />
   if (isEmailDetailWindow) return <EmailDetailApp />
+  if (isSearchWindow) return <SearchApp />
   return <RobotWindowApp />
 }
 

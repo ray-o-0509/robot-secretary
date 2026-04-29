@@ -30,4 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openEmailDetail: (account: string, id: string) => ipcRenderer.send('email:open-detail', { account, id }),
   closeEmailDetail: () => ipcRenderer.send('email:close-detail'),
   onEmailDetailArgs: (cb: (args: { account: string; id: string }) => void) => on('email:detail-args', cb),
+  onSearchData: (cb: (data: unknown) => void) => on('search:data', cb),
+  searchClose: () => ipcRenderer.send('search:close'),
+  openUrl: (url: string) => ipcRenderer.invoke('shell:open-url', url),
+  openWebView: (url: string) => ipcRenderer.send('open-web-view', url),
 })

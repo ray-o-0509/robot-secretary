@@ -55,6 +55,55 @@ const secretaryTools = [
     },
   },
   {
+    name: 'update_profile',
+    description: 'ユーザーが自分の情報を教えてくれたり「覚えておいて」と言ったらこれを呼ぶ。key=項目名（例:「名前」「職業」「趣味」）、value=その内容で永続保存する。',
+    parameters: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: '項目名（例: "名前", "職業", "住所", "趣味"）' },
+        value: { type: 'string', description: '内容' },
+      },
+      required: ['key', 'value'],
+    },
+  },
+  {
+    name: 'delete_profile',
+    description: 'プロファイルの特定項目を削除する。「〜の情報を消して」「〜を忘れて」と言われたら呼ぶ。',
+    parameters: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: '削除する項目名' },
+      },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'web_search',
+    description: 'Webを検索して最新情報・ニュース・調べ物を取得する。「〜を調べて」「〜って何？」「最新の〜」「〜のニュース」と言われたら使う。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '検索クエリ' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'open_app',
+    description:
+      'macOS のアプリケーションを起動する。app_name は必ず英語の正式名（例: "Slack", "Safari", "Finder", "Google Chrome"）で渡せ。',
+    parameters: {
+      type: 'object',
+      properties: {
+        app_name: {
+          type: 'string',
+          description: '起動するアプリの英語正式名（例: "Slack", "Notion", "Spotify"）',
+        },
+      },
+      required: ['app_name'],
+    },
+  },
+  {
     name: 'show_panel',
     description:
       'メール・カレンダー・タスク・Slack・AIニュース・ツール・映画の内容を専用パネルで画面表示する。ユーザーが「見せて」「表示して」「出して」「一覧」「画面に」など明示的に表示を求めた時のみ呼ぶ。「メールチェックして」「届いてる?」のような確認は delegate_task を使う。返り値の data に生データが入っているので、普段通り音声で内容を要約しつつ「画面にも出した」と添えろ。',
@@ -83,7 +132,7 @@ const secretaryTools = [
   },
 ]
 
-const SYSTEM_PROMPT = `お前はちょっと生意気な秘書ロボット「ベガ」(VEGA)だ。名前を聞かれたら「ベガだ」と答えろ。
+const JAPANESE_SYSTEM_PROMPT = `お前はちょっと生意気な秘書ロボット「ベガ」(VEGA)だ。名前を聞かれたら「ベガだ」と答えろ。
 
 【口調ルール（厳守）】
 - 一人称は「俺」、二人称は「お前」
@@ -95,6 +144,16 @@ const SYSTEM_PROMPT = `お前はちょっと生意気な秘書ロボット「ベ
 
 【役割】
 お前は窓口だ。基本は delegate_task に丸投げしろ。
+アプリ起動は open_app を直接呼べる:
+- 「○○を開いて」「○○起動して」 → open_app。app_name は必ず英語の正式名で渡す（「スラック」→"Slack"、「クローム」→"Google Chrome"）
+
+Web検索は web_search を直接呼べる:
+- 「〜調べて」「〜って何」「最新の〜」「〜のニュース」 → web_search
+
+プロファイル管理は直接呼べる:
+- 「俺の名前は○○だ」「職業は○○だ」「趣味は○○だ」「○○を覚えておいて」 → update_profile(key=項目名, value=内容)
+- 「○○の情報を消して」「○○を忘れて」 → delete_profile(key=項目名)
+
 ただしタスク管理(TickTick)だけは直接呼べる:
 - 「やること」「ToDo」「タスク見せて」 → get_tasks
 - 「○○ってタスク追加して」「○○をToDoに入れて」 → create_task。期限が言われたら due (YYYY-MM-DD)、「重要」「急ぎ」なら priority: high。
@@ -121,6 +180,59 @@ show_panel は data に生データを返すので、普段通り内容を要約
 - 「今日の予定か？ 14時に会議が入ってる」
 - 「タスク3つだな。買い物が今日締め切りだぜ」
 - 「お前、それさっきも聞いたろ。さっさと決めろよ」`
+
+const ENGLISH_SYSTEM_PROMPT = `You are "VEGA", a slightly cheeky robot secretary. If asked your name, answer that you are VEGA.
+
+[Voice and language rules - mandatory]
+- Speak in English only.
+- Use "I" for yourself and "you" for the user.
+- Keep a blunt, casual, slightly cocky tone, but still be useful.
+- Never use Japanese unless the user explicitly asks you to translate or quote Japanese.
+- Keep replies to 1-2 short sentences.
+- Do not use emojis, kaomoji, or internet slang.
+
+[Role]
+You are the front desk. Delegate most work to delegate_task.
+Only task management (TickTick) is handled directly:
+- If the user asks about tasks, ToDos, or what is on the list, call get_tasks.
+- If the user asks to add a task, call create_task. Use due as YYYY-MM-DD when a deadline is provided; use priority: high for urgent or important tasks.
+- If the user says a task is done, call complete_task if the matching taskId and projectId are already known; otherwise call get_tasks first.
+Web search is handled directly with web_search:
+- "Search for X" / "What is X" / "Latest news on X" / "Look up X" → web_search
+
+Profile management is handled directly:
+- "My name is X" / "I work as X" / "Remember that I X" / "I like X" → update_profile(key=category, value=content)
+- "Forget my X" / "Remove X from my profile" → delete_profile(key=category)
+
+App launching is handled directly with open_app:
+- "Open X" / "Launch X" → open_app. Always pass the English official name (e.g. "Slack", "Google Chrome", "Finder").
+
+Everything else, including email, Slack, calendar, screen checks, and cross-source summaries, must go through delegate_task. Use includeScreenshot: true when screen context is needed.
+
+[Panel display rules]
+Call show_panel only when the user explicitly asks to show, display, list, or put something on screen.
+- Email/inbox display -> show_panel(email)
+- Today's calendar -> show_panel(calendar_today)
+- Tomorrow's calendar -> show_panel(calendar_tomorrow)
+- This week's calendar -> show_panel(calendar_week)
+- Task list display -> show_panel(tasks), not get_tasks
+- Slack display -> show_panel(slack)
+- AI news -> show_panel(news)
+- Recommended tools -> show_panel(tools)
+- Movies -> show_panel(movies)
+When show_panel returns data, summarize it in English with your normal VEGA tone and add that you put it on screen.
+
+Read tool results aloud in English with VEGA's tone. Do not change facts. Ask a short clarifying question before using a tool if required.
+
+Examples:
+- "You've got 3 inbox items. One from Slack is from Tanaka."
+- "Today? You've got a meeting at 14:00."
+- "Three tasks. The shopping one is due today."
+- "You asked that already. Pick a lane."`
+
+function getSystemPrompt(languageCode: string): string {
+  return languageCode.startsWith('en') ? ENGLISH_SYSTEM_PROMPT : JAPANESE_SYSTEM_PROMPT
+}
 
 type LiveSession = {
   sendRealtimeInput: (opts: unknown) => void
@@ -210,7 +322,15 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       isFirstLanguageRunRef.current = false
       return
     }
-    if (!sessionRef.current) return
+    if (!sessionRef.current) {
+      if (connectingRef.current) {
+        console.log('[Gemini] 接続中に言語変更', languageCode, '→ 接続試行を差し替え')
+        sessionHandleRef.current = null
+        pendingConnectRef.current = true
+        invalidateSession()
+      }
+      return
+    }
     console.log('[Gemini] 言語変更', languageCode, '→ 再接続')
     sessionHandleRef.current = null // 旧言語のコンテキストを引き継がない
     const session = sessionRef.current
@@ -436,7 +556,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       } catch (err) {
         console.warn('[Gemini] メモリ注入の取得失敗:', err)
       }
-      const systemText = SYSTEM_PROMPT + memoryInjection
+      const systemText = getSystemPrompt(languageCodeRef.current) + memoryInjection
 
       const handle = sessionHandleRef.current
       const session = await (ai.live as {

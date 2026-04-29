@@ -2,8 +2,10 @@ import { ipcMain } from 'electron'
 import * as crypto from 'crypto'
 import {
   appendEvent,
+  deleteProfileItem,
   endSession,
   loadMemory,
+  loadProfile,
   loadSessions,
   markSummarized,
   pendingSummarySessions,
@@ -11,6 +13,7 @@ import {
   repairCrashedSessions,
   saveMemory,
   startSession,
+  upsertProfileItem,
   type Memory,
 } from './store'
 import { summarize } from './summarizer'
@@ -22,15 +25,28 @@ function newSessionId(): string {
   return crypto.randomUUID()
 }
 
-function buildInjection(memory: Memory): string {
+async function buildInjection(memory: Memory): Promise<string> {
   const sections: string[] = []
-  if (memory.facts.length) sections.push('## ユーザーについて\n- ' + memory.facts.join('\n- '))
+
+  // 明示的に登録されたパーソナル情報（profile.json）
+  const profile = await loadProfile()
+  const profileEntries = Object.entries(profile.items)
+  if (profileEntries.length) {
+    sections.push(
+      '## ユーザーのパーソナル情報（確定事項）\n' +
+        profileEntries.map(([k, v]) => `- ${k}: ${v}`).join('\n'),
+    )
+  }
+
+  // 会話から自動抽出した記憶
+  if (memory.facts.length) sections.push('## 会話から覚えたこと\n- ' + memory.facts.join('\n- '))
   if (memory.preferences.length)
     sections.push('## 好み・話し方の指針\n- ' + memory.preferences.join('\n- '))
   if (memory.ongoing_topics.length)
     sections.push('## 進行中の話題\n- ' + memory.ongoing_topics.join('\n- '))
+
   if (!sections.length) return ''
-  return '\n\n# 過去の会話から覚えていること\n' + sections.join('\n\n')
+  return '\n\n# 俺が知っているお前のこと\n' + sections.join('\n\n')
 }
 
 async function summarizePending(apiKey: string | undefined): Promise<void> {
@@ -77,6 +93,23 @@ export async function initMemory(getApiKey: () => string | undefined): Promise<v
   ipcMain.handle('memory:get-injection', async () => {
     const memory = await loadMemory()
     return buildInjection(memory)
+  })
+
+  ipcMain.handle('memory:upsert-profile', async (_event, key: string, value: string) => {
+    const profile = await upsertProfileItem(key, value)
+    console.log('[memory] プロファイル更新:', key, '=', value)
+    return { ok: true, items: profile.items }
+  })
+
+  ipcMain.handle('memory:delete-profile', async (_event, key: string) => {
+    const profile = await deleteProfileItem(key)
+    console.log('[memory] プロファイル削除:', key)
+    return { ok: true, items: profile.items }
+  })
+
+  ipcMain.handle('memory:get-profile', async () => {
+    const profile = await loadProfile()
+    return profile.items
   })
 
   ipcMain.on('memory:transcript', (_event, payload: { role: 'user' | 'assistant'; text: string }) => {
