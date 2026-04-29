@@ -105,6 +105,31 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'complete_subtask',
+    description: 'TickTickのサブタスク（チェックリスト項目）を完了状態にする',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: '親タスクID' },
+        projectId: { type: 'string', description: 'プロジェクトID' },
+        subtaskId: { type: 'string', description: 'サブタスクID（subtasks[].id）' },
+      },
+      required: ['taskId', 'projectId', 'subtaskId'],
+    },
+  },
+  {
+    name: 'get_email_detail',
+    description: 'Gmailメッセージの本文（HTML/テキスト）を取得する。事前に get_gmail_inbox で id と account を取得しておく。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: '対象アカウントのメールアドレス' },
+        id: { type: 'string', description: 'メッセージID' },
+      },
+      required: ['account', 'id'],
+    },
+  },
+  {
     name: 'get_dashboard_entry',
     description:
       "daily-dashboard の Turso DB から日次まとめエントリを取得する。skill='ai-news' でAIニュース、'best-tools' でおすすめツール、'movies' で映画、'spending' で支出分析。id 省略で最新を返す。",
@@ -174,6 +199,18 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
         taskId: args.taskId as string,
         projectId: args.projectId as string,
       })
+    }
+    case 'complete_subtask': {
+      const { completeSubtask } = await import('./ticktick')
+      return await completeSubtask({
+        taskId: args.taskId as string,
+        projectId: args.projectId as string,
+        subtaskId: args.subtaskId as string,
+      })
+    }
+    case 'get_email_detail': {
+      const { getEmailDetail } = await import('./gmail')
+      return await getEmailDetail(args.account as string, args.id as string)
     }
     case 'get_dashboard_entry': {
       const { getDashboardEntry } = await import('./dashboard')

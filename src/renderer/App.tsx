@@ -5,10 +5,12 @@ import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { DisplayApp } from './display/DisplayApp'
+import { EmailDetailApp } from './display/EmailDetailApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
 export type RobotState = 'idle' | 'listening' | 'speaking' | 'thinking'
+export type RobotProcessor = 'gemini' | 'claude'
 
 declare global {
   interface Window {
@@ -18,10 +20,10 @@ declare global {
       onPTTStop: (cb: () => void) => void
       onMuteChanged: (cb: (muted: boolean) => void) => void
       onOpenSettings: (cb: () => void) => void
-      sendRobotState: (state: string) => void
+      sendRobotState: (state: string, processor?: RobotProcessor) => void
       sendChatMessages: (messages: ChatMessage[]) => void
       onChatMessages: (cb: (messages: ChatMessage[]) => void) => void
-      onRobotState: (cb: (state: string) => void) => void
+      onRobotState: (cb: (state: string, processor?: RobotProcessor) => void) => void
       setClickThrough: (enabled: boolean) => void
       setChatInteractive: (enabled: boolean) => void
       setLanguage: (lang: string) => void
@@ -31,6 +33,9 @@ declare global {
       onDisplayData: (cb: (payload: PanelPayload) => void) => void
       displayClose: () => void
       displayRefresh: (type: string) => Promise<unknown>
+      openEmailDetail: (account: string, id: string) => void
+      closeEmailDetail: () => void
+      onEmailDetailArgs: (cb: (args: { account: string; id: string }) => void) => void
     }
   }
 }
@@ -40,10 +45,12 @@ const DEFAULT_LANGUAGE = 'ja-JP'
 const hash = typeof window !== 'undefined' ? window.location.hash : ''
 const isChatWindow = hash === '#chat'
 const isDisplayWindow = hash === '#display'
+const isEmailDetailWindow = hash === '#email-detail'
 
 export default function App() {
   if (isChatWindow) return <ChatWindowApp />
   if (isDisplayWindow) return <DisplayApp />
+  if (isEmailDetailWindow) return <EmailDetailApp />
   return <RobotWindowApp />
 }
 
@@ -57,9 +64,9 @@ function RobotWindowApp() {
   )
 
   const { connect, isConnected, messages } = useGeminiLive({
-    onStateChange: (state) => {
+    onStateChange: (state, processor) => {
       setRobotState(state)
-      window.electronAPI?.sendRobotState(state)
+      window.electronAPI?.sendRobotState(state, processor)
     },
     isMuted,
     languageCode,
@@ -127,13 +134,17 @@ function RobotWindowApp() {
 function ChatWindowApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [robotState, setRobotState] = useState<RobotState>('idle')
+  const [processor, setProcessor] = useState<RobotProcessor | undefined>(undefined)
   const [languageCode, setLanguageCode] = useState<string>(
     () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
   )
 
   useEffect(() => {
     window.electronAPI?.onChatMessages((msgs) => setMessages(msgs))
-    window.electronAPI?.onRobotState((s) => setRobotState(s as RobotState))
+    window.electronAPI?.onRobotState((s, p) => {
+      setRobotState(s as RobotState)
+      setProcessor(p)
+    })
     window.electronAPI?.onLanguageChange((lang) => {
       localStorage.setItem('LANGUAGE_CODE', lang)
       setLanguageCode(lang)
@@ -149,7 +160,7 @@ function ChatWindowApp() {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <StatusBanner state={robotState} />
+      <StatusBanner state={robotState} processor={processor} />
       <ChatPanel
         messages={messages}
         languageCode={languageCode}

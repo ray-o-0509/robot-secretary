@@ -1,74 +1,224 @@
-import { FONT_MONO, MAGENTA } from '../styles'
+import { useEffect, useState } from 'react'
+import { CYAN, FONT_MONO, MAGENTA } from '../styles'
 import { Card } from '../components/Card'
 import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
 import type { PanelPayload } from '../types'
 
-type TaskData = {
-  count: number
-  tasks: Array<{
-    taskId: string
-    projectId: string
-    title: string
-    status: 'todo' | 'done'
-    priority?: 'low' | 'medium' | 'high'
-    due?: string
-    tags?: string[]
-    description?: string
-    subtasks?: { title: string; done: boolean }[]
-  }>
+type Subtask = { id?: string; title: string; done: boolean }
+type Task = {
+  taskId: string
+  projectId: string
+  title: string
+  status: 'todo' | 'done'
+  priority?: 'low' | 'medium' | 'high'
+  due?: string
+  tags?: string[]
+  description?: string
+  subtasks?: Subtask[]
 }
+type TaskData = { count: number; tasks: Task[] }
 
 interface Props {
   payload: PanelPayload
 }
 
 export function TasksView({ payload }: Props) {
+  const [pendingTasks, setPendingTasks] = useState<Set<string>>(new Set())
+  const [pendingSubtasks, setPendingSubtasks] = useState<Set<string>>(new Set())
+
+  // 新しいペイロードが届いたら楽観 UI 用の保留状態をリセット
+  useEffect(() => {
+    setPendingTasks(new Set())
+    setPendingSubtasks(new Set())
+  }, [payload.fetchedAt])
+
   if (payload.error) {
     return <ErrorState message={payload.error} hint="TickTick の認証が切れている可能性" />
   }
 
   const data = payload.data as TaskData
-  const todos = data?.tasks.filter((t) => t.status === 'todo') ?? []
+  const todos = (data?.tasks ?? []).filter(
+    (t) => t.status === 'todo' && !pendingTasks.has(t.taskId),
+  )
   if (todos.length === 0) {
     return <EmptyState message="タスクなし。やる事ねえぞ" />
+  }
+
+  const handleCompleteTask = async (taskId: string, projectId: string) => {
+    setPendingTasks((prev) => {
+      const next = new Set(prev)
+      next.add(taskId)
+      return next
+    })
+    try {
+      await window.electronAPI?.callTool('complete_task', { taskId, projectId })
+      await window.electronAPI?.displayRefresh('tasks')
+    } catch (err) {
+      console.error('[tasks] complete failed', err)
+      setPendingTasks((prev) => {
+        const next = new Set(prev)
+        next.delete(taskId)
+        return next
+      })
+    }
+  }
+
+  const handleCompleteSubtask = async (
+    taskId: string,
+    projectId: string,
+    subtaskId: string,
+  ) => {
+    const key = `${taskId}:${subtaskId}`
+    setPendingSubtasks((prev) => {
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+    try {
+      await window.electronAPI?.callTool('complete_subtask', { taskId, projectId, subtaskId })
+      await window.electronAPI?.displayRefresh('tasks')
+    } catch (err) {
+      console.error('[tasks] complete subtask failed', err)
+      setPendingSubtasks((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
   }
 
   return (
     <>
       {todos.map((t) => (
         <Card key={t.taskId} accent={t.priority === 'high' ? 'magenta' : 'cyan'}>
-          <div
-            style={{
-              fontFamily: FONT_MONO,
-              fontSize: 11.5,
-              fontWeight: 700,
-              color: '#e8f6ff',
-              marginBottom: 6,
-            }}
-          >
-            {t.title}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: t.subtasks?.length ? 6 : 0 }}>
-            {t.priority && <PriorityBadge priority={t.priority} />}
-            {t.due && <DueBadge due={t.due} />}
-            {t.tags?.map((tag) => <TagChip key={tag} tag={tag} />)}
-          </div>
-          {t.subtasks && t.subtasks.length > 0 && (
-            <div
-              style={{
-                fontFamily: FONT_MONO,
-                fontSize: 10,
-                color: 'rgba(232, 246, 255, 0.55)',
-                marginTop: 4,
-              }}
-            >
-              {t.subtasks.filter((s) => s.done).length}/{t.subtasks.length} サブタスク完了
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <Checkbox onClick={() => handleCompleteTask(t.taskId, t.projectId)} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontFamily: FONT_MONO,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: '#e8f6ff',
+                  marginBottom: 6,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {t.title}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {t.priority && <PriorityBadge priority={t.priority} />}
+                {t.due && <DueBadge due={t.due} />}
+                {t.tags?.map((tag) => <TagChip key={tag} tag={tag} />)}
+              </div>
+              {t.subtasks && t.subtasks.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    paddingLeft: 4,
+                    borderLeft: `1px solid ${CYAN}30`,
+                  }}
+                >
+                  {t.subtasks.map((s, i) => {
+                    const pending = s.id ? pendingSubtasks.has(`${t.taskId}:${s.id}`) : false
+                    const done = s.done || pending
+                    return (
+                      <SubtaskRow
+                        key={s.id ?? i}
+                        title={s.title}
+                        done={done}
+                        clickable={!!s.id && !done}
+                        onComplete={() => {
+                          if (s.id) handleCompleteSubtask(t.taskId, t.projectId, s.id)
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </Card>
       ))}
     </>
+  )
+}
+
+function Checkbox({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="完了にする"
+      style={{
+        background: 'transparent',
+        border: 'none',
+        padding: '0 2px',
+        margin: 0,
+        cursor: 'pointer',
+        fontFamily: FONT_MONO,
+        fontSize: 12,
+        fontWeight: 700,
+        color: CYAN,
+        textShadow: `0 0 6px ${CYAN}80`,
+        lineHeight: 1.1,
+        flexShrink: 0,
+      }}
+    >
+      [ ]
+    </button>
+  )
+}
+
+function SubtaskRow({
+  title,
+  done,
+  clickable,
+  onComplete,
+}: {
+  title: string
+  done: boolean
+  clickable: boolean
+  onComplete: () => void
+}) {
+  const boxColor = done ? MAGENTA : CYAN
+  const textColor = done ? 'rgba(232, 246, 255, 0.4)' : 'rgba(232, 246, 255, 0.8)'
+  return (
+    <button
+      onClick={clickable ? onComplete : undefined}
+      disabled={!clickable}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        margin: 0,
+        textAlign: 'left',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 6,
+        cursor: clickable ? 'pointer' : 'default',
+        fontFamily: FONT_MONO,
+        fontSize: 10.5,
+        color: textColor,
+        textDecoration: done ? 'line-through' : 'none',
+        wordBreak: 'break-word',
+      }}
+    >
+      <span
+        style={{
+          color: boxColor,
+          textShadow: `0 0 4px ${boxColor}80`,
+          flexShrink: 0,
+          fontWeight: 700,
+        }}
+      >
+        {done ? '[✓]' : '[ ]'}
+      </span>
+      <span style={{ flex: 1 }}>{title}</span>
+    </button>
   )
 }
 

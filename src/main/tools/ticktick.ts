@@ -23,6 +23,7 @@ function authHeaders() {
   }
 }
 
+type RawSubtask = { id: string; title: string; status?: number; completedTime?: string; sortOrder?: number; startDate?: string; isAllDay?: boolean; timeZone?: string }
 type RawTask = {
   id: string
   projectId: string
@@ -32,7 +33,7 @@ type RawTask = {
   dueDate?: string
   tags?: string[]
   desc?: string
-  items?: { title: string; status?: number }[]
+  items?: RawSubtask[]
 }
 
 type Task = {
@@ -44,7 +45,7 @@ type Task = {
   due?: string
   tags?: string[]
   description?: string
-  subtasks?: { title: string; done: boolean }[]
+  subtasks?: { id: string; title: string; done: boolean }[]
 }
 
 function mapTask(t: RawTask): Task {
@@ -59,8 +60,9 @@ function mapTask(t: RawTask): Task {
   if (t.dueDate) item.due = isoToJstDate(t.dueDate)
   if (t.tags?.length) item.tags = t.tags
   if (t.items?.length) {
-    item.subtasks = t.items.map((i) => ({ title: i.title, done: i.status === 2 }))
-  } else if (t.desc) {
+    item.subtasks = t.items.map((i) => ({ id: i.id, title: i.title, done: i.status === 2 }))
+  }
+  if (t.desc) {
     item.description = t.desc
   }
   return item
@@ -105,5 +107,24 @@ export async function completeTask(opts: { taskId: string; projectId: string }) 
     headers: authHeaders(),
   })
   if (!r.ok) throw new Error(`completeTask failed: ${r.status} ${await r.text()}`)
+  return { ok: true }
+}
+
+export async function completeSubtask(opts: { taskId: string; projectId: string; subtaskId: string }) {
+  const headers = authHeaders()
+  const fetchRes = await fetch(`${BASE}/project/${opts.projectId}/task/${opts.taskId}`, { headers })
+  if (!fetchRes.ok) throw new Error(`fetch task failed: ${fetchRes.status} ${await fetchRes.text()}`)
+  const task = (await fetchRes.json()) as RawTask
+  const items = (task.items ?? []).map((it) =>
+    it.id === opts.subtaskId
+      ? { ...it, status: 2, completedTime: new Date().toISOString() }
+      : it,
+  )
+  const upd = await fetch(`${BASE}/task/${opts.taskId}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...task, id: opts.taskId, projectId: opts.projectId, items }),
+  })
+  if (!upd.ok) throw new Error(`completeSubtask failed: ${upd.status} ${await upd.text()}`)
   return { ok: true }
 }

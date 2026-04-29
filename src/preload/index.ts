@@ -16,8 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onOpenSettings: (cb: () => void) =>
     ipcRenderer.on('open-settings', () => cb()),
 
-  sendRobotState: (state: string) =>
-    ipcRenderer.send('robot-state', state),
+  sendRobotState: (state: string, processor?: string) =>
+    ipcRenderer.send('robot-state', state, processor),
 
   sendChatMessages: (messages: unknown) =>
     ipcRenderer.send('chat-messages', messages),
@@ -25,8 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onChatMessages: (cb: (messages: unknown) => void) =>
     ipcRenderer.on('chat-messages', (_e, messages) => cb(messages)),
 
-  onRobotState: (cb: (state: string) => void) =>
-    ipcRenderer.on('robot-state', (_e, state) => cb(state)),
+  onRobotState: (cb: (state: string, processor?: string) => void) =>
+    ipcRenderer.on('robot-state', (_e, state, processor) => cb(state, processor)),
 
   setClickThrough: (enabled: boolean) =>
     ipcRenderer.send('set-clickthrough', enabled),
@@ -52,4 +52,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   displayClose: () => ipcRenderer.send('display:close'),
 
   displayRefresh: (type: string) => ipcRenderer.invoke('display:refresh', type),
+
+  openEmailDetail: (account: string, id: string) =>
+    ipcRenderer.send('email:open-detail', { account, id }),
+
+  closeEmailDetail: () => ipcRenderer.send('email:close-detail'),
+
+  onEmailDetailArgs: (cb: (args: { account: string; id: string }) => void) =>
+    ipcRenderer.on('email:detail-args', (_e, args) => cb(args)),
 })

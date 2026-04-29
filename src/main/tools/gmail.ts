@@ -1,4 +1,4 @@
-import { google } from 'googleapis'
+import { google, type gmail_v1 } from 'googleapis'
 import { getGoogleAuth, listAccounts } from './googleAuth'
 
 type InboxEmail = {
@@ -79,6 +79,45 @@ export async function trashEmails(account: string, ids: string[]) {
     }),
   )
   return { account, results }
+}
+
+function extractBody(part: gmail_v1.Schema$MessagePart | undefined): { html?: string; text?: string } {
+  const out: { html?: string; text?: string } = {}
+  if (!part) return out
+  const walk = (p: gmail_v1.Schema$MessagePart) => {
+    const data = p.body?.data
+    const mime = p.mimeType ?? ''
+    if (data) {
+      const decoded = Buffer.from(data, 'base64url').toString('utf-8')
+      if (mime === 'text/html' && !out.html) out.html = decoded
+      else if (mime === 'text/plain' && !out.text) out.text = decoded
+    }
+    for (const child of p.parts ?? []) walk(child)
+  }
+  walk(part)
+  return out
+}
+
+export async function getEmailDetail(account: string, id: string) {
+  const auth = getGoogleAuth(account)
+  const gmail = google.gmail({ version: 'v1', auth })
+  const detail = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
+  const headers = detail.data.payload?.headers ?? []
+  const get = (name: string) =>
+    headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+  const body = extractBody(detail.data.payload)
+  return {
+    id,
+    account,
+    from: get('From'),
+    to: get('To'),
+    cc: get('Cc'),
+    subject: get('Subject'),
+    date: get('Date'),
+    snippet: detail.data.snippet ?? '',
+    html: body.html ?? null,
+    text: body.text ?? null,
+  }
 }
 
 // INBOX ラベルを外す (アーカイブ。メール自体は残る)

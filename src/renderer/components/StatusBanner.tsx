@@ -1,4 +1,4 @@
-import type { RobotState } from '../App'
+import type { RobotState, RobotProcessor } from '../App'
 
 const FONT_MONO =
   '"JetBrains Mono", "SF Mono", "Cascadia Code", "Roboto Mono", ui-monospace, monospace'
@@ -6,9 +6,14 @@ const FONT_MONO =
 type Theme = { color: string; label: string; prefix: string }
 
 const themes: Partial<Record<RobotState, Theme>> = {
-  listening: { color: '#ff2bd6', label: 'LISTENING',  prefix: '◉ REC' },
-  thinking:  { color: '#00ff9d', label: 'PROCESSING', prefix: '◇ CPU' },
-  speaking:  { color: '#ffd200', label: 'TRANSMIT',   prefix: '▶ TX'  },
+  listening: { color: '#ff2bd6', label: 'LISTENING',  prefix: '◉ REC'  },
+  thinking:  { color: '#00ff9d', label: 'WAITING',    prefix: '◌ STBY' },
+  speaking:  { color: '#ffd200', label: 'TRANSMIT',   prefix: '▶ TX'   },
+}
+
+const PROCESSING_BY_PROCESSOR: Record<RobotProcessor, { prefix: string; color: string }> = {
+  gemini: { prefix: '◇ GEMINI', color: '#00ff9d' },
+  claude: { prefix: '◆ CLAUDE', color: '#ff8a3d' },
 }
 
 const BANNER_STYLES = `
@@ -87,20 +92,36 @@ const BANNER_STYLES = `
 .banner-prefix { opacity: 0.85; font-size: 10px; letter-spacing: 1.5px; }
 `
 
-export function StatusBanner({ state }: { state: RobotState }) {
+export function StatusBanner({
+  state,
+  processor,
+}: {
+  state: RobotState
+  processor?: RobotProcessor
+}) {
   const theme = themes[state]
   if (!theme) return null
+
+  let prefix = theme.prefix
+  let label = theme.label
+  let color = theme.color
+  if (state === 'thinking' && processor) {
+    const p = PROCESSING_BY_PROCESSOR[processor]
+    prefix = p.prefix
+    color = p.color
+    label = 'PROCESSING'
+  }
 
   return (
     <>
       <style>{BANNER_STYLES}</style>
       <div
         className="banner-root"
-        style={{ ['--c' as string]: theme.color } as React.CSSProperties}
+        style={{ ['--c' as string]: color } as React.CSSProperties}
       >
         <span className="banner-dot" />
-        <span className="banner-prefix">{theme.prefix}</span>
-        <span>{theme.label}</span>
+        <span className="banner-prefix">{prefix}</span>
+        <span>{label}</span>
         <span className="banner-bars" aria-hidden>
           <span /><span /><span /><span />
         </span>

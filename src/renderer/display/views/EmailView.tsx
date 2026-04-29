@@ -7,6 +7,7 @@ import type { PanelPayload } from '../types'
 type EmailData = {
   accounts: Array<{ account: string; error: string | null; count: number }>
   messages: Array<{
+    id: string
     account: string
     from: string
     subject: string
@@ -34,7 +35,7 @@ export function EmailView({ payload }: Props) {
     return (
       <>
         <AccountStatus accounts={data?.accounts ?? []} />
-        <EmptyState message="インボックス空っぽ。お前は自由だ" />
+        <EmptyState message="INBOX IS EMPTY" />
       </>
     )
   }
@@ -66,49 +67,65 @@ export function EmailView({ payload }: Props) {
             ▸ {account} ({messages.length})
           </div>
           {messages.map((m, i) => (
-            <Card key={`${account}-${i}`} accent="cyan">
-              <div
-                style={{
-                  fontFamily: FONT_MONO,
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  color: '#e8f6ff',
-                  marginBottom: 4,
-                }}
-              >
-                {m.subject || '(件名なし)'}
-              </div>
-              <div
-                style={{
-                  fontFamily: FONT_MONO,
-                  fontSize: 10,
-                  color: 'rgba(232, 246, 255, 0.7)',
-                  marginBottom: 6,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {parseFrom(m.from)}
-                </span>
-                <span style={{ flexShrink: 0, color: MAGENTA, opacity: 0.85 }}>
-                  {formatDate(m.date)}
-                </span>
-              </div>
-              {m.snippet && (
+            <button
+              key={`${account}-${m.id ?? i}`}
+              onClick={() => window.electronAPI?.openEmailDetail(m.account, m.id)}
+              title="クリックで詳細を別ウィンドウで開く"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                textAlign: 'left',
+                cursor: 'pointer',
+                width: '100%',
+                display: 'block',
+              }}
+            >
+              <Card accent="cyan">
                 <div
                   style={{
                     fontFamily: FONT_MONO,
-                    fontSize: 10.5,
-                    color: 'rgba(232, 246, 255, 0.55)',
-                    lineHeight: 1.55,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: '#e8f6ff',
+                    marginBottom: 4,
                   }}
                 >
-                  {m.snippet}
+                  {m.subject || '(件名なし)'}
                 </div>
-              )}
-            </Card>
+                <div
+                  style={{
+                    fontFamily: FONT_MONO,
+                    fontSize: 10,
+                    color: 'rgba(232, 246, 255, 0.7)',
+                    marginBottom: 6,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {parseFrom(m.from)}
+                  </span>
+                  <span style={{ flexShrink: 0, color: MAGENTA, opacity: 0.85 }}>
+                    {formatDate(m.date)}
+                  </span>
+                </div>
+                {m.snippet && (
+                  <div
+                    style={{
+                      fontFamily: FONT_MONO,
+                      fontSize: 10.5,
+                      color: 'rgba(232, 246, 255, 0.55)',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {m.snippet}
+                  </div>
+                )}
+              </Card>
+            </button>
           ))}
         </div>
       ))}

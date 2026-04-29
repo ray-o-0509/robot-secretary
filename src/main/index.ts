@@ -16,6 +16,9 @@ let win: BrowserWindow | null = null
 let chatWin: BrowserWindow | null = null
 let displayWin: BrowserWindow | null = null
 let displayReady = false
+let emailDetailWin: BrowserWindow | null = null
+let emailDetailReady = false
+let pendingEmailDetailArgs: { account: string; id: string } | null = null
 let wanderInterval: NodeJS.Timeout | null = null
 let targetX = 0
 let targetY = 0
@@ -386,8 +389,14 @@ ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string
       })
       return { result }
     }
-    // Gemini が直接呼べるツール (Claude を介さない)
-    if (toolName === 'get_tasks' || toolName === 'create_task' || toolName === 'complete_task') {
+    // Gemini / UI が直接呼べるツール (Claude を介さない)
+    if (
+      toolName === 'get_tasks' ||
+      toolName === 'create_task' ||
+      toolName === 'complete_task' ||
+      toolName === 'complete_subtask' ||
+      toolName === 'get_email_detail'
+    ) {
       const { executeTool } = await import('./tools/dispatcher')
       const result = await executeTool(toolName, args)
       return { result }
@@ -406,6 +415,84 @@ ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string
 
 ipcMain.on('display:close', () => {
   if (displayWin && !displayWin.isDestroyed()) displayWin.hide()
+})
+
+// ========== Email Detail Window ==========
+
+const EMAIL_DETAIL_WIDTH = 580
+
+ipcMain.on('email:open-detail', (_event, args: unknown) => {
+  if (
+    !args ||
+    typeof args !== 'object' ||
+    typeof (args as { account?: unknown }).account !== 'string' ||
+    typeof (args as { id?: unknown }).id !== 'string'
+  ) return
+  const a = args as { account: string; id: string }
+  pendingEmailDetailArgs = a
+
+  if (emailDetailWin && !emailDetailWin.isDestroyed()) {
+    if (emailDetailReady) {
+      emailDetailWin.webContents.send('email:detail-args', a)
+      pendingEmailDetailArgs = null
+    }
+    emailDetailWin.show()
+    emailDetailWin.focus()
+    return
+  }
+
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const w = EMAIL_DETAIL_WIDTH
+  const h = Math.min(720, height - 80)
+  // 右側のディスプレイウィンドウとは重ならないように左にずらす
+  const x = Math.max(40, width - DISPLAY_WIDTH - DISPLAY_RIGHT_MARGIN - w - 16)
+
+  emailDetailReady = false
+  const created = new BrowserWindow({
+    width: w,
+    height: h,
+    x,
+    y: 60,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: false,
+    hasShadow: false,
+    skipTaskbar: false,
+    resizable: true,
+    focusable: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  emailDetailWin = created
+
+  created.on('closed', () => {
+    if (emailDetailWin === created) {
+      emailDetailWin = null
+      emailDetailReady = false
+    }
+  })
+
+  created.webContents.once('did-finish-load', () => {
+    emailDetailReady = true
+    if (pendingEmailDetailArgs && !created.isDestroyed()) {
+      created.webContents.send('email:detail-args', pendingEmailDetailArgs)
+      pendingEmailDetailArgs = null
+    }
+  })
+
+  if (isDev) {
+    created.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#email-detail')
+  } else {
+    created.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'email-detail' })
+  }
+})
+
+ipcMain.on('email:close-detail', () => {
+  if (emailDetailWin && !emailDetailWin.isDestroyed()) emailDetailWin.hide()
 })
 
 ipcMain.handle('display:refresh', async (_event, type: unknown) => {
@@ -440,13 +527,13 @@ ipcMain.on('set-clickthrough', (_event, enabled: boolean) => {
   }
 })
 
-ipcMain.on('robot-state', (_event, state: string) => {
+ipcMain.on('robot-state', (_event, state: string, processor?: string) => {
   if (state === 'listening' || state === 'speaking' || state === 'thinking') {
     isWandering = false
   } else {
     isWandering = true
   }
-  chatWin?.webContents.send('robot-state', state)
+  chatWin?.webContents.send('robot-state', state, processor)
 })
 
 // チャットウィンドウは通常クリックスルー。言語セレクター上にカーソルが来たときだけ

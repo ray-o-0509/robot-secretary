@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import type { RobotState } from '../App'
+import type { RobotState, RobotProcessor } from '../App'
 import type { ChatMessage } from '../components/ChatPanel'
 
 const secretaryTools = [
@@ -128,7 +128,7 @@ type LiveSession = {
 }
 
 interface Options {
-  onStateChange: (state: RobotState) => void
+  onStateChange: (state: RobotState, processor?: RobotProcessor) => void
   isMuted: boolean
   languageCode: string
 }
@@ -138,6 +138,8 @@ const MAX_RECONNECT_ATTEMPTS = 10
 // resumption handle 付きで何回失敗したら handle を捨てて素のセッションで再開するか。
 // handle は 2 時間で失効するので長時間スリープ復帰時にここで救う
 const HANDLE_RETRY_THRESHOLD = 3
+// PTT 押下がこの長さ未満なら誤爆扱いして音声を捨てる
+const PTT_MIN_DURATION_MS = 200
 
 export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options) {
   const [isConnected, setIsConnected] = useState(false)
@@ -146,6 +148,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const playbackCtxRef = useRef<AudioContext | null>(null)
   const nextPlayTimeRef = useRef(0)
   const isPTTActiveRef = useRef(false)
+  const pttStartTimeRef = useRef(0)
+  // PTT 開始から PTT_MIN_DURATION_MS 未満のあいだに収集したチャンクを溜めておく置き場。
+  // 閾値を超えた瞬間に flush、閾値未満のまま PTT が離されたら丸ごと破棄する
+  const pttPendingChunksRef = useRef<string[]>([])
   const isMutedRef = useRef(isMuted)
   const languageCodeRef = useRef(languageCode)
   const isFirstLanguageRunRef = useRef(true)
@@ -212,7 +218,6 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     let audioSendCount = 0
     processor.onaudioprocess = (e) => {
       if (!sessionRef.current || !isPTTActiveRef.current || isMutedRef.current) return
-      if (audioSendCount++ % 20 === 0) console.log('[Gemini] 音声送信中...', audioSendCount)
       try {
         const inputData = e.inputBuffer.getChannelData(0)
 
@@ -224,12 +229,27 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           const sample = inputData[Math.floor(i * ratio)]
           int16[i] = Math.max(-32768, Math.min(32767, sample * 32768))
         }
+        const data = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)))
 
+        // PTT 開始直後の規定時間は溜めておくだけ。閾値未満で離されたら丸ごと捨てるので
+        // 誤爆プチタップで音声が API に届かない
+        const elapsed = performance.now() - pttStartTimeRef.current
+        if (elapsed < PTT_MIN_DURATION_MS) {
+          pttPendingChunksRef.current.push(data)
+          return
+        }
+        if (pttPendingChunksRef.current.length) {
+          for (const buffered of pttPendingChunksRef.current) {
+            sessionRef.current.sendRealtimeInput({
+              audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' },
+            })
+          }
+          pttPendingChunksRef.current = []
+        }
+
+        if (audioSendCount++ % 20 === 0) console.log('[Gemini] 音声送信中...', audioSendCount)
         sessionRef.current.sendRealtimeInput({
-          audio: {
-            data: btoa(String.fromCharCode(...new Uint8Array(int16.buffer))),
-            mimeType: 'audio/pcm;rate=16000',
-          },
+          audio: { data, mimeType: 'audio/pcm;rate=16000' },
         })
       } catch {
         // WebSocketが既に閉じている場合は無視
@@ -313,7 +333,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
 
     // ツール呼び出し
     if (m.toolCall?.functionCalls?.length) {
-      onStateChangeRef.current('thinking')
+      const hasDelegate = m.toolCall.functionCalls.some(
+        (c: { name?: string }) => c.name === 'delegate_task',
+      )
+      onStateChangeRef.current('thinking', hasDelegate ? 'claude' : 'gemini')
       const responses = []
       for (const call of m.toolCall.functionCalls) {
         const result = await window.electronAPI.callTool(call.name, call.args)
@@ -483,6 +506,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       console.log('[PTT] Start — session:', !!sessionRef.current, 'muted:', isMutedRef.current)
       if (isMutedRef.current || !sessionRef.current) return
       isPTTActiveRef.current = true
+      pttStartTimeRef.current = performance.now()
+      pttPendingChunksRef.current = []
       onStateChangeRef.current('listening')
     })
 
@@ -490,6 +515,18 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       console.log('[PTT] Stop — wasActive:', isPTTActiveRef.current)
       if (!isPTTActiveRef.current) return
       isPTTActiveRef.current = false
+
+      // 短すぎる押下は誤爆扱い。バッファに溜めただけのチャンクを捨てて idle に戻る
+      const duration = performance.now() - pttStartTimeRef.current
+      if (duration < PTT_MIN_DURATION_MS) {
+        console.log(`[PTT] 短すぎ (${duration.toFixed(0)}ms) — 録音を破棄`)
+        pttPendingChunksRef.current = []
+        onStateChangeRef.current('idle')
+        return
+      }
+
+      // 送信済みでGeminiの返事待ち。ツール呼び出しが来たら
+      // 改めて processor 付きの 'thinking' に上書きする
       onStateChangeRef.current('thinking')
 
       // 発話終了を明示してVADタイマーを待たずに即応答させる
