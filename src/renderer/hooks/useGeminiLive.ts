@@ -158,6 +158,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const isFirstLanguageRunRef = useRef(true)
   const onStateChangeRef = useRef(onStateChange)
   const connectingRef = useRef(false)
+  const pendingConnectRef = useRef(false)
   const userMsgIdRef = useRef<string | null>(null)
   const assistantMsgIdRef = useRef<string | null>(null)
   const micSetupRef = useRef(false)
@@ -187,8 +188,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
   useEffect(() => { onStateChangeRef.current = onStateChange }, [onStateChange])
 
-  const invalidateSession = useCallback(() => {
-    sessionEpochRef.current += 1
+  const resetSessionState = useCallback(() => {
     sessionRef.current = null
     setIsConnected(false)
     isPTTActiveRef.current = false
@@ -197,6 +197,11 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     assistantMsgIdRef.current = null
     onStateChangeRef.current('idle')
   }, [])
+
+  const invalidateSession = useCallback(() => {
+    sessionEpochRef.current += 1
+    resetSessionState()
+  }, [resetSessionState])
 
   // 言語が変わったら既存セッションを閉じて再接続。onclose 経由で scheduleReconnect が走る
   useEffect(() => {
@@ -396,12 +401,19 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   // ========== 接続（自動再接続あり） ==========
 
   const connect = useCallback(async () => {
-    if (connectingRef.current || sessionRef.current) return
+    intentionalCloseRef.current = false
+    if (connectingRef.current) {
+      pendingConnectRef.current = true
+      return
+    }
+    if (sessionRef.current) return
     connectingRef.current = true
     const sessionEpoch = sessionEpochRef.current + 1
     sessionEpochRef.current = sessionEpoch
 
-    const apiKey = localStorage.getItem('GEMINI_API_KEY') ?? import.meta.env.VITE_GEMINI_API_KEY
+    const storedApiKey = localStorage.getItem('GEMINI_API_KEY')?.trim()
+    const envApiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim()
+    const apiKey = storedApiKey || envApiKey
     if (!apiKey) {
       // API Key 未設定で再接続ループに入ると無限に失敗するので止める
       console.warn('[Gemini] API Key が未設定。右クリック→設定から入力してください。')
@@ -462,7 +474,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           onerror: (e: unknown) => {
             if (sessionEpochRef.current !== sessionEpoch) return
             console.error('[Gemini] エラー:', e)
-            invalidateSession()
+            resetSessionState()
             // onclose も大抵続いて呼ばれるが、scheduleReconnect 側で二重スケジュールガード済
             scheduleReconnect()
           },
@@ -471,7 +483,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             const reason = e?.reason
             console.log('[Gemini] 接続終了 code:', code, 'reason:', reason)
             if (sessionEpochRef.current !== sessionEpoch) return
-            invalidateSession()
+            resetSessionState()
             // 認証/ポリシー違反は再試行しても同じ結果なので即停止。
             // 1008=policy violation, 4401/4403=auth 系のアプリ定義
             if (code === 1008 || code === 4401 || code === 4403) {
@@ -496,12 +508,16 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       await setupMic()
     } catch (err) {
       console.error('[Gemini] 接続エラー:', err)
-      invalidateSession()
+      resetSessionState()
       scheduleReconnect()
     } finally {
       connectingRef.current = false
+      if (pendingConnectRef.current && !sessionRef.current && !intentionalCloseRef.current) {
+        pendingConnectRef.current = false
+        setTimeout(() => connectRef.current(), 0)
+      }
     }
-  }, [handleMessage, invalidateSession, setupMic, scheduleReconnect])
+  }, [handleMessage, resetSessionState, setupMic, scheduleReconnect])
 
   useEffect(() => { connectRef.current = connect }, [connect])
 
@@ -509,6 +525,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   useEffect(() => {
     return () => {
       intentionalCloseRef.current = true
+      pendingConnectRef.current = false
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null

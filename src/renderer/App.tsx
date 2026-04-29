@@ -88,8 +88,7 @@ function RobotWindowApp() {
 
   // 起動時にGemini Live セッションを接続（PTTで発話制御）
   useEffect(() => {
-    const autoConnect = localStorage.getItem('AUTO_CONNECT_ON_STARTUP') !== 'false'
-    if (autoConnect) connect()
+    connect()
   }, [connect])
 
   // チャットウィンドウへメッセージを転送

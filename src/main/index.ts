@@ -46,6 +46,13 @@ let shuttingDown = false
 
 // ========== Window ==========
 
+function forwardRendererConsole(window: BrowserWindow, label: string) {
+  window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const source = sourceId ? `${path.basename(sourceId)}:${line}` : `line ${line}`
+    console.log(`[renderer:${label}]`, message, `(${source}, level ${level})`)
+  })
+}
+
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   currentX = Math.floor(width / 2 - 150)
@@ -71,6 +78,8 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
+
+  forwardRendererConsole(win, 'robot')
 
   // クリックスルー（右クリックのみ有効）
   win.setIgnoreMouseEvents(true, { forward: true })
@@ -117,6 +126,8 @@ function createChatWindow() {
     },
   })
 
+  forwardRendererConsole(chatWin, 'chat')
+
   chatWin.setIgnoreMouseEvents(true, { forward: true })
   chatWin.on('closed', () => { chatWin = null })
 
@@ -162,6 +173,7 @@ function getOrCreateDisplayWindow(): Promise<{ win: BrowserWindow; ready: boolea
     },
   })
   displayWin = created
+  forwardRendererConsole(created, 'display')
 
   created.on('closed', () => {
     if (displayWin === created) {
@@ -472,6 +484,7 @@ ipcMain.on('email:open-detail', (_event, args: unknown) => {
     },
   })
   emailDetailWin = created
+  forwardRendererConsole(created, 'email-detail')
 
   created.on('closed', () => {
     if (emailDetailWin === created) {
