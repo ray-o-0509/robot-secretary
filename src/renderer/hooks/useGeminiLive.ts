@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
+import { LIMITS, MODELS } from '../../config/models'
 import type { RobotState, RobotProcessor } from '../App'
 import type { ChatMessage } from '../components/ChatPanel'
 
@@ -134,7 +135,7 @@ interface Options {
 }
 
 // 連続して再接続に失敗したら諦める閾値。長文プロンプトを永久に再送し続けるのを防ぐ
-const MAX_RECONNECT_ATTEMPTS = 10
+const MAX_RECONNECT_ATTEMPTS = LIMITS.geminiMaxReconnectAttempts
 // resumption handle 付きで何回失敗したら handle を捨てて素のセッションで再開するか。
 // handle は 2 時間で失効するので長時間スリープ復帰時にここで救う
 const HANDLE_RETRY_THRESHOLD = 3
@@ -412,7 +413,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       const session = await (ai.live as {
         connect: (opts: unknown) => Promise<LiveSession>
       }).connect({
-        model: 'gemini-3.1-flash-live-preview',
+        model: MODELS.geminiLive,
         config: {
           responseModalities: ['AUDIO'],
           systemInstruction: { parts: [{ text: systemText }] },
