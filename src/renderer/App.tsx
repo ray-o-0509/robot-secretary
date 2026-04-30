@@ -47,6 +47,10 @@ declare global {
       respondToConfirmation: (id: string, confirmed: boolean) => void
       onWeatherData: (cb: (data: unknown) => void) => () => void
       weatherClose: () => void
+      sendConnectionError: (err: unknown) => void
+      onConnectionError: (cb: (err: unknown) => void) => () => void
+      sendGeminiRetry: () => void
+      onGeminiRetry: (cb: () => void) => () => void
     }
   }
 }
@@ -79,7 +83,7 @@ function RobotWindowApp() {
     () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
   )
 
-  const { connect, isConnected, messages } = useGeminiLive({
+  const { connect, isConnected, messages, connectionError, retry } = useGeminiLive({
     onStateChange: (state, processor) => {
       setRobotState(state)
       window.electronAPI?.sendRobotState(state, processor)
@@ -116,6 +120,17 @@ function RobotWindowApp() {
   useEffect(() => {
     window.electronAPI?.sendChatMessages(messages)
   }, [messages])
+
+  // エラー状態をチャットウィンドウへ転送
+  useEffect(() => {
+    window.electronAPI?.sendConnectionError(connectionError)
+  }, [connectionError])
+
+  // チャットウィンドウからのリトライ要求を受信
+  useEffect(() => {
+    const off = window.electronAPI?.onGeminiRetry(() => retry())
+    return () => off?.()
+  }, [retry])
 
   // ホバー検出: forwarded mousemove でカーソル滞在を判定
   useEffect(() => {
@@ -171,6 +186,7 @@ function ChatWindowApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [robotState, setRobotState] = useState<RobotState>('idle')
   const [processor, setProcessor] = useState<RobotProcessor | undefined>(undefined)
+  const [connectionError, setConnectionError] = useState<unknown>(null)
   const [languageCode, setLanguageCode] = useState<string>(
     () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
   )
@@ -185,6 +201,7 @@ function ChatWindowApp() {
       localStorage.setItem('LANGUAGE_CODE', lang)
       setLanguageCode(lang)
     })
+    window.electronAPI?.onConnectionError((err) => setConnectionError(err))
   }, [])
 
   const handleLanguageChange = (lang: string) => {
@@ -201,6 +218,8 @@ function ChatWindowApp() {
         messages={messages}
         languageCode={languageCode}
         onLanguageChange={handleLanguageChange}
+        connectionError={connectionError as import('./hooks/useGeminiLive').ConnectionError | null}
+        onRetry={() => window.electronAPI?.sendGeminiRetry()}
       />
     </div>
   )

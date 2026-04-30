@@ -1,10 +1,48 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, screen, systemPreferences } from 'electron'
+import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as dotenv from 'dotenv'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
+
+const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
+const originalConsole = {
+  log: console.log.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+}
+
+function writeDebugLog(level: 'log' | 'warn' | 'error', args: unknown[]) {
+  try {
+    fs.mkdirSync(path.dirname(debugLogPath), { recursive: true })
+    const line = args.map((arg) => {
+      if (typeof arg === 'string') return arg
+      try {
+        return JSON.stringify(arg)
+      } catch {
+        return String(arg)
+      }
+    }).join(' ')
+    fs.appendFileSync(debugLogPath, `${new Date().toISOString()} [${level}] ${line}\n`)
+  } catch {
+    // ログ書き込み失敗でアプリ本体を止めない
+  }
+}
+
+console.log = (...args: unknown[]) => {
+  originalConsole.log(...args)
+  writeDebugLog('log', args)
+}
+console.warn = (...args: unknown[]) => {
+  originalConsole.warn(...args)
+  writeDebugLog('warn', args)
+}
+console.error = (...args: unknown[]) => {
+  originalConsole.error(...args)
+  writeDebugLog('error', args)
+}
 
 // .env / .env.local の探索パス。
 // - dev: プロジェクトルート（__dirname = out/main/ なので ../../）
@@ -266,6 +304,7 @@ function setupPTT() {
   uIOhook.on('keydown', (e) => {
     // 左Option のみ（右Option = 3640 は除外）
     if (e.keycode === UiohookKey.Alt && !pttActive) {
+      console.log('[PTT:main] keydown alt')
       pttActive = true
       win?.webContents.send('ptt-start')
     }
@@ -273,6 +312,7 @@ function setupPTT() {
 
   uIOhook.on('keyup', (e) => {
     if (e.keycode === UiohookKey.Alt && pttActive) {
+      console.log('[PTT:main] keyup alt')
       pttActive = false
       win?.webContents.send('ptt-stop')
     }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FONT_MONO, CYAN, MAGENTA, CYBER_STYLES } from '../display/styles'
+import type { ConnectionError } from '../hooks/useGeminiLive'
 
 export type ChatMessage = {
   id: string
@@ -11,6 +12,8 @@ interface Props {
   messages: ChatMessage[]
   languageCode?: string
   onLanguageChange?: (lang: string) => void
+  connectionError?: ConnectionError | null
+  onRetry?: () => void
 }
 
 const LANGUAGES: { code: string; label: string }[] = [
@@ -18,7 +21,7 @@ const LANGUAGES: { code: string; label: string }[] = [
   { code: 'en-US', label: 'English' },
 ]
 
-export function ChatPanel({ messages, languageCode, onLanguageChange }: Props) {
+export function ChatPanel({ messages, languageCode, onLanguageChange, connectionError, onRetry }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -128,6 +131,11 @@ export function ChatPanel({ messages, languageCode, onLanguageChange }: Props) {
         <LanguageSelector value={languageCode ?? 'ja-JP'} onChange={onLanguageChange} />
       )}
 
+      {/* 接続エラーバナー */}
+      {connectionError && (
+        <ConnectionErrorBanner error={connectionError} onRetry={onRetry} />
+      )}
+
       {/* メッセージリスト */}
       <div
         ref={scrollRef}
@@ -137,7 +145,7 @@ export function ChatPanel({ messages, languageCode, onLanguageChange }: Props) {
           top: 90,
           left: 28,
           right: 28,
-          bottom: 28,
+          bottom: connectionError ? 100 : 28,
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
@@ -188,6 +196,69 @@ export function ChatPanel({ messages, languageCode, onLanguageChange }: Props) {
         ))}
       </div>
     </>
+  )
+}
+
+const ERROR_ICON: Record<string, string> = {
+  no_api_key: '⚙',
+  auth:        '🔑',
+  network:     '📡',
+  max_retries: '↺',
+  mic_permission: '🎙',
+  connect_error: '⚡',
+}
+
+function ConnectionErrorBanner({ error, onRetry }: { error: ConnectionError; onRetry?: () => void }) {
+  const RED = '#ff4444'
+  const icon = ERROR_ICON[error.type] ?? '!'
+  const canRetry = error.type !== 'no_api_key' && error.type !== 'auth' && error.type !== 'mic_permission'
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        bottom: 16,
+        background: 'linear-gradient(135deg, rgba(30, 6, 6, 0.97), rgba(20, 4, 4, 0.97))',
+        border: `1px solid rgba(255, 68, 68, 0.55)`,
+        boxShadow: '0 0 18px rgba(255, 68, 68, 0.2)',
+        padding: '10px 14px',
+        fontFamily: FONT_MONO,
+        zIndex: 30,
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}
+    >
+      {/* タイプラベル */}
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: RED, textShadow: `0 0 6px ${RED}`, marginBottom: 5 }}>
+        {icon} CONNECTION_ERROR // {error.type.toUpperCase()}
+      </div>
+      {/* メッセージ */}
+      <div style={{ fontSize: 11, color: 'rgba(255, 180, 180, 0.9)', lineHeight: 1.5, marginBottom: canRetry ? 8 : 0 }}>
+        {error.message}
+      </div>
+      {/* リトライボタン */}
+      {canRetry && onRetry && (
+        <button
+          onClick={onRetry}
+          style={{
+            fontFamily: FONT_MONO,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 1.5,
+            color: RED,
+            textShadow: `0 0 6px ${RED}`,
+            background: 'rgba(255, 68, 68, 0.1)',
+            border: `1px solid rgba(255, 68, 68, 0.4)`,
+            padding: '4px 10px',
+            cursor: 'pointer',
+            textTransform: 'uppercase',
+          }}
+        >
+          ↺ RETRY
+        </button>
+      )}
+    </div>
   )
 }
 

@@ -360,13 +360,22 @@ const HANDLE_RETRY_THRESHOLD = 3
 // PTT 押下がこの長さ未満なら誤爆扱いして音声を捨てる
 const PTT_MIN_DURATION_MS = 200
 
+export type ConnectionError = {
+  type: 'no_api_key' | 'auth' | 'network' | 'max_retries' | 'mic_permission' | 'connect_error'
+  message: string
+}
+
 export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options) {
   const [isConnected, setIsConnected] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [connectionError, setConnectionError] = useState<ConnectionError | null>(null)
   const sessionRef = useRef<LiveSession | null>(null)
   const playbackCtxRef = useRef<AudioContext | null>(null)
+  const micAudioCtxRef = useRef<AudioContext | null>(null)
   const nextPlayTimeRef = useRef(0)
   const isPTTActiveRef = useRef(false)
+  const pttActivityStartedRef = useRef(false)
+  const pttAudioSentRef = useRef(false)
   const pttStartTimeRef = useRef(0)
   // PTT 開始から PTT_MIN_DURATION_MS 未満のあいだに収集したチャンクを溜めておく置き場。
   // 閾値を超えた瞬間に flush、閾値未満のまま PTT が離されたら丸ごと破棄する
@@ -418,6 +427,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     sessionRef.current = null
     setIsConnected(false)
     isPTTActiveRef.current = false
+    pttActivityStartedRef.current = false
+    pttAudioSentRef.current = false
     pttPendingChunksRef.current = []
     userMsgIdRef.current = null
     assistantMsgIdRef.current = null
@@ -461,58 +472,72 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
 
   const setupMic = useCallback(async () => {
     if (micSetupRef.current) return
-    micSetupRef.current = true
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const audioCtx = new AudioContext()
+      micAudioCtxRef.current = audioCtx
+      const nativeSR = audioCtx.sampleRate
+      console.log('[Gemini] マイク AudioContext sampleRate:', nativeSR)
+      const source = audioCtx.createMediaStreamSource(stream)
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1)
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const audioCtx = new AudioContext()
-    const nativeSR = audioCtx.sampleRate
-    console.log('[Gemini] マイク AudioContext sampleRate:', nativeSR)
-    const source = audioCtx.createMediaStreamSource(stream)
-    const processor = audioCtx.createScriptProcessor(4096, 1, 1)
+      let audioSendCount = 0
+      processor.onaudioprocess = (e) => {
+        if (!sessionRef.current || !isPTTActiveRef.current || isMutedRef.current) return
+        try {
+          const inputData = e.inputBuffer.getChannelData(0)
 
-    let audioSendCount = 0
-    processor.onaudioprocess = (e) => {
-      if (!sessionRef.current || !isPTTActiveRef.current || isMutedRef.current) return
-      try {
-        const inputData = e.inputBuffer.getChannelData(0)
-
-        // ネイティブレートから16000Hzへダウンサンプル
-        const ratio = nativeSR / 16000
-        const outLen = Math.floor(inputData.length / ratio)
-        const int16 = new Int16Array(outLen)
-        for (let i = 0; i < outLen; i++) {
-          const sample = inputData[Math.floor(i * ratio)]
-          int16[i] = Math.max(-32768, Math.min(32767, sample * 32768))
-        }
-        const data = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)))
-
-        // PTT 開始直後の規定時間は溜めておくだけ。閾値未満で離されたら丸ごと捨てるので
-        // 誤爆プチタップで音声が API に届かない
-        const elapsed = performance.now() - pttStartTimeRef.current
-        if (elapsed < PTT_MIN_DURATION_MS) {
-          pttPendingChunksRef.current.push(data)
-          return
-        }
-        if (pttPendingChunksRef.current.length) {
-          for (const buffered of pttPendingChunksRef.current) {
-            sessionRef.current.sendRealtimeInput({
-              audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' },
-            })
+          // ネイティブレートから16000Hzへダウンサンプル
+          const ratio = nativeSR / 16000
+          const outLen = Math.floor(inputData.length / ratio)
+          const int16 = new Int16Array(outLen)
+          for (let i = 0; i < outLen; i++) {
+            const sample = inputData[Math.floor(i * ratio)]
+            int16[i] = Math.max(-32768, Math.min(32767, sample * 32768))
           }
-          pttPendingChunksRef.current = []
+          const data = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)))
+
+          // PTT 開始直後の規定時間は溜めておくだけ。閾値未満で離されたら丸ごと捨てるので
+          // 誤爆プチタップで音声が API に届かない
+          const elapsed = performance.now() - pttStartTimeRef.current
+          if (elapsed < PTT_MIN_DURATION_MS) {
+            pttPendingChunksRef.current.push(data)
+            return
+          }
+          if (!pttActivityStartedRef.current) {
+            sessionRef.current.sendRealtimeInput({ activityStart: {} })
+            pttActivityStartedRef.current = true
+          }
+          if (pttPendingChunksRef.current.length) {
+            console.log('[Gemini] 保留音声を送信:', pttPendingChunksRef.current.length)
+            for (const buffered of pttPendingChunksRef.current) {
+              sessionRef.current.sendRealtimeInput({
+                audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' },
+              })
+            }
+            pttAudioSentRef.current = true
+            pttPendingChunksRef.current = []
+          }
+
+          if (audioSendCount++ % 20 === 0) console.log('[Gemini] 音声送信中...', audioSendCount)
+          sessionRef.current.sendRealtimeInput({
+            audio: { data, mimeType: 'audio/pcm;rate=16000' },
+          })
+          pttAudioSentRef.current = true
+        } catch {
+          // WebSocketが既に閉じている場合は無視
         }
-
-        if (audioSendCount++ % 20 === 0) console.log('[Gemini] 音声送信中...', audioSendCount)
-        sessionRef.current.sendRealtimeInput({
-          audio: { data, mimeType: 'audio/pcm;rate=16000' },
-        })
-      } catch {
-        // WebSocketが既に閉じている場合は無視
       }
-    }
 
-    source.connect(processor)
-    processor.connect(audioCtx.destination)
+      source.connect(processor)
+      processor.connect(audioCtx.destination)
+      micSetupRef.current = true
+    } catch (err) {
+      micSetupRef.current = false
+      const e = err as { name?: string; message?: string }
+      console.error('[Gemini] マイク初期化失敗:', e?.name ?? String(err), e?.message ?? '')
+      throw err
+    }
   }, [])
 
   // ========== 再接続スケジューリング ==========
@@ -523,10 +548,9 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
 
     const attempt = reconnectAttemptsRef.current
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-      console.error(
-        `[Gemini] 再接続を ${MAX_RECONNECT_ATTEMPTS} 回試して失敗。諦める。設定や接続を確認してくれ。`,
-      )
+      console.error(`[Gemini] 再接続を ${MAX_RECONNECT_ATTEMPTS} 回試して失敗。諦める。`)
       intentionalCloseRef.current = true
+      setConnectionError({ type: 'max_retries', message: `${MAX_RECONNECT_ATTEMPTS}回の再接続に失敗しました。接続状況を確認してください。` })
       return
     }
     // resumption handle で連続失敗したら handle を破棄してフレッシュなセッションを試す
@@ -607,6 +631,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       if (!part.inlineData?.data) continue
       onStateChangeRef.current('speaking')
       const playback = playbackCtxRef.current!
+      if (playback.state === 'suspended') await playback.resume()
 
       const binary = atob(part.inlineData.data)
       const bytes = new Uint8Array(binary.length)
@@ -649,10 +674,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const envApiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim()
     const apiKey = storedApiKey || envApiKey
     if (!apiKey) {
-      // API Key 未設定で再接続ループに入ると無限に失敗するので止める
       console.warn('[Gemini] API Key が未設定。右クリック→設定から入力してください。')
       intentionalCloseRef.current = true
       connectingRef.current = false
+      setConnectionError({ type: 'no_api_key', message: 'Gemini API キーが未設定です。右クリック→設定から入力してください。' })
       return
     }
 
@@ -687,6 +712,9 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          realtimeInputConfig: {
+            automaticActivityDetection: { disabled: true },
+          },
           // 過去 turn の累積トークンが毎ターン再課金されるのを抑える
           contextWindowCompression: { slidingWindow: {} },
           // 切断時にコンテキストを引き継いで再開できるようにする。
@@ -699,6 +727,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             console.log('[Gemini] 接続完了 ✓', handle ? '(resumed)' : '(fresh)')
             reconnectAttemptsRef.current = 0
             setIsConnected(true)
+            setConnectionError(null)
             onStateChangeRef.current('idle')
           },
           onmessage: (msg: unknown) => {
@@ -723,6 +752,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             if (code === 1008 || code === 4401 || code === 4403) {
               console.error('[Gemini] 恒久エラー、再接続中止:', code, reason)
               intentionalCloseRef.current = true
+              setConnectionError({ type: 'auth', message: `認証エラー (${code})。APIキーが無効または期限切れです。設定を確認してください。` })
               return
             }
             scheduleReconnect()
@@ -743,6 +773,22 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     } catch (err) {
       console.error('[Gemini] 接続エラー:', err)
       resetSessionState()
+      const domErr = err as { name?: string; message?: string }
+      if (domErr?.name === 'NotAllowedError' || domErr?.name === 'PermissionDeniedError') {
+        intentionalCloseRef.current = true
+        setConnectionError({
+          type: 'mic_permission',
+          message: 'マイク権限が拒否されています。システム設定で Robot Secretary のマイク使用を許可して、アプリを再起動してください。',
+        })
+        return
+      }
+      const msg = String(err)
+      const isOffline = !navigator.onLine
+      const isNetworkErr = isOffline || msg.includes('Failed to fetch') || msg.includes('ERR_INTERNET') || msg.includes('ERR_NAME_NOT_RESOLVED') || msg.includes('NetworkError')
+      setConnectionError({
+        type: isNetworkErr ? 'network' : 'connect_error',
+        message: isNetworkErr ? 'インターネット接続を確認してください。' : `接続に失敗しました。(${msg.slice(0, 80)})`,
+      })
       scheduleReconnect()
     } finally {
       connectingRef.current = false
@@ -784,8 +830,12 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       console.log('[PTT] Start — session:', !!sessionRef.current, 'muted:', isMutedRef.current)
       if (isMutedRef.current || !sessionRef.current) return
       isPTTActiveRef.current = true
+      pttActivityStartedRef.current = false
+      pttAudioSentRef.current = false
       pttStartTimeRef.current = performance.now()
       pttPendingChunksRef.current = []
+      void micAudioCtxRef.current?.resume?.()
+      void playbackCtxRef.current?.resume?.()
       onStateChangeRef.current('listening')
     })
 
@@ -798,6 +848,14 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       const duration = performance.now() - pttStartTimeRef.current
       if (duration < PTT_MIN_DURATION_MS) {
         console.log(`[PTT] 短すぎ (${duration.toFixed(0)}ms) — 録音を破棄`)
+        if (pttActivityStartedRef.current) {
+          try {
+            sessionRef.current?.sendRealtimeInput({ activityEnd: {} })
+          } catch {
+            // WebSocketが既に閉じている場合は無視
+          }
+        }
+        pttActivityStartedRef.current = false
         pttPendingChunksRef.current = []
         onStateChangeRef.current('idle')
         return
@@ -810,7 +868,28 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       // 発話終了を明示してVADタイマーを待たずに即応答させる
       if (sessionRef.current) {
         try {
-          sessionRef.current.sendRealtimeInput({ audioStreamEnd: true })
+          if (!pttActivityStartedRef.current) {
+            sessionRef.current.sendRealtimeInput({ activityStart: {} })
+            pttActivityStartedRef.current = true
+          }
+          if (pttPendingChunksRef.current.length) {
+            console.log('[Gemini] release時に保留音声を送信:', pttPendingChunksRef.current.length)
+            for (const buffered of pttPendingChunksRef.current) {
+              sessionRef.current.sendRealtimeInput({
+                audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' },
+              })
+            }
+            pttAudioSentRef.current = true
+            pttPendingChunksRef.current = []
+          }
+          if (!pttAudioSentRef.current) {
+            console.warn('[PTT] 音声が送信されていないためターン終了を送らない')
+            pttActivityStartedRef.current = false
+            onStateChangeRef.current('idle')
+            return
+          }
+          sessionRef.current.sendRealtimeInput({ activityEnd: {} })
+          pttActivityStartedRef.current = false
         } catch {
           // WebSocketが既に閉じている場合は無視
         }
@@ -822,5 +901,16 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }
   }, [])
 
-  return { connect, isConnected, messages }
+  const retry = useCallback(() => {
+    setConnectionError(null)
+    intentionalCloseRef.current = false
+    reconnectAttemptsRef.current = 0
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
+    void connectRef.current()
+  }, [])
+
+  return { connect, isConnected, messages, connectionError, retry }
 }

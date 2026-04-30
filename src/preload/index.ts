@@ -39,4 +39,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send('confirmation:respond', id, confirmed),
   onWeatherData: (cb: (data: unknown) => void) => on('weather:data', cb),
   weatherClose: () => ipcRenderer.send('weather:close'),
+  sendConnectionError: (err: unknown) => ipcRenderer.send('connection-error', err),
+  onConnectionError: (cb: (err: unknown) => void) => on('connection-error', cb),
+  sendGeminiRetry: () => ipcRenderer.send('gemini:retry'),
+  onGeminiRetry: (cb: () => void) => on('gemini:retry', cb),
 })

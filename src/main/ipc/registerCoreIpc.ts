@@ -136,6 +136,16 @@ export function registerCoreIpc(deps: Deps): void {
 
   ipcMain.on('set-clickthrough', (_event, enabled: boolean) => deps.onClickthroughChanged(enabled))
 
+  // ロボット窓→チャット窓へエラー転送
+  ipcMain.on('connection-error', (_event, err: unknown) => {
+    deps.getChatWindow()?.webContents.send('connection-error', err)
+  })
+
+  // チャット窓→ロボット窓へリトライ転送
+  ipcMain.on('gemini:retry', () => {
+    deps.getMainWindow()?.webContents.send('gemini:retry')
+  })
+
   ipcMain.on('robot-state', (_event, state: string, processor?: string) => {
     deps.setWanderingByState(state)
     deps.getChatWindow()?.webContents.send('robot-state', state, processor)
