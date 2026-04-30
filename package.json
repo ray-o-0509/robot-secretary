@@ -46,7 +46,8 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "identity": "9C9ED537830CF7DA312CE7B59AB1AE634A8036AA"
     },
     "files": [
       "out/**/*",

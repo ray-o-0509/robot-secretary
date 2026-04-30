@@ -199,16 +199,36 @@ function LanguageSelector({
   onChange: (lang: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const current = LANGUAGES.find((l) => l.code === value) ?? LANGUAGES[0]
 
   const handleEnter = () => window.electronAPI?.setChatInteractive(true)
   const handleLeave = () => {
+    // ドロップダウンが開いているときは interactive を解除しない
+    // （解除するとリストにカーソルが届く前にクリックスルーになる）
+    if (!open) window.electronAPI?.setChatInteractive(false)
+  }
+
+  const close = () => {
     setOpen(false)
     window.electronAPI?.setChatInteractive(false)
   }
 
+  // ドロップダウン外クリックで閉じる
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        close()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div
+      ref={wrapperRef}
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
       style={{
@@ -243,7 +263,7 @@ function LanguageSelector({
         <div
           style={{
             position: 'absolute',
-            top: 'calc(100% + 4px)',
+            top: '100%',
             right: 0,
             minWidth: 110,
             background: 'rgba(8, 12, 24, 0.97)',
