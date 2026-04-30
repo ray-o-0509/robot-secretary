@@ -47,6 +47,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setupOpenSettings: (type: string) => ipcRenderer.send('setup:open-settings', type),
   setupLaunch: () => ipcRenderer.invoke('setup:launch'),
 
+  // Notification watch
+  startNotificationWatch: () => ipcRenderer.invoke('notification:start-watch'),
+  notificationSessionReady: () => ipcRenderer.invoke('notification:session-ready'),
+  onNotification: (cb: (notifs: unknown[]) => void) => on('notification:incoming', cb),
+
   // Settings window
   settingsClose: () => ipcRenderer.send('settings:close'),
   settingsGetProfile: () => ipcRenderer.invoke('settings:get-profile'),

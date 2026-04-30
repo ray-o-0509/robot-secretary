@@ -496,6 +496,18 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     resolveLocation().then((loc) => { locationRef.current = loc })
   }, [])
 
+  // 通知監視を開始し、incoming 通知を現在のセッションに注入する
+  useEffect(() => {
+    void window.electronAPI?.startNotificationWatch?.()
+    const off = window.electronAPI?.onNotification?.((notifs) => {
+      if (sessionRef.current && notifs.length > 0) {
+        injectNotifications(sessionRef.current, notifs)
+      }
+    })
+    return () => off?.()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
   useEffect(() => { onStateChangeRef.current = onStateChange }, [onStateChange])
 
@@ -737,6 +749,29 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }
   }, [appendTranscript])
 
+  // ========== 通知注入ヘルパー ==========
+
+  function injectNotifications(
+    session: LiveSession,
+    notifs: { appName: string; title?: string; body?: string }[],
+  ) {
+    const text = notifs.map((n) =>
+      n.title
+        ? `[通知] ${n.appName}「${n.title}」${n.body ? '：' + n.body : ''}`
+        : `[通知] ${n.appName}から通知が来た`
+    ).join('\n')
+    try {
+      ;(session as unknown as {
+        sendClientContent: (opts: unknown) => void
+      }).sendClientContent({
+        turns: [{ role: 'user', parts: [{ text }] }],
+        turnComplete: true,
+      })
+    } catch (e) {
+      console.warn('[notification] sendClientContent 失敗:', e)
+    }
+  }
+
   // ========== 接続（自動再接続あり） ==========
 
   const connect = useCallback(async () => {
@@ -809,6 +844,13 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             setIsConnected(true)
             setConnectionError(null)
             onStateChangeRef.current('idle')
+
+            // セッション接続完了 → 接続前に来た通知を flush してベガに注入
+            void window.electronAPI?.notificationSessionReady?.().then((pending) => {
+              if (pending && pending.length > 0) {
+                injectNotifications(session, pending)
+              }
+            }).catch(() => {/* 通知機能が使えない場合は無視 */})
           },
           onmessage: (msg: unknown) => {
             if (sessionEpochRef.current !== sessionEpoch) return

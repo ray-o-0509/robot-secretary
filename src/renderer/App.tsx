@@ -57,6 +57,11 @@ declare global {
       setupOpenSettings: (type: string) => void
       setupLaunch: () => Promise<void>
 
+      // Notification watch
+      startNotificationWatch: () => Promise<void>
+      notificationSessionReady: () => Promise<{ bundleId: string; appName: string; title?: string; body?: string; ts: string }[]>
+      onNotification: (cb: (notifs: { bundleId: string; appName: string; title?: string; body?: string; ts: string }[]) => void) => () => void
+
       // Settings window
       settingsClose: () => void
       settingsGetProfile: () => Promise<Record<string, string>>

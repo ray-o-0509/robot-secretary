@@ -879,6 +879,7 @@ app.whenReady().then(async () => {
   registerSetupIpc()
   registerSettingsIpc()
 
+
   // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
