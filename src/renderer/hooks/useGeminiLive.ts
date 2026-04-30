@@ -846,7 +846,18 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
 
     const offStart = api.onPTTStart(() => {
       console.log('[PTT] Start — session:', !!sessionRef.current, 'muted:', isMutedRef.current)
-      if (isMutedRef.current || !sessionRef.current) return
+      if (isMutedRef.current) return
+
+      // セッションが切れていたら再接続を試みる（今回の PTT には間に合わないが次回から使える）
+      if (!sessionRef.current) {
+        if (!connectingRef.current) {
+          console.log('[PTT] セッションなし — 再接続を開始')
+          intentionalCloseRef.current = false
+          reconnectAttemptsRef.current = 0
+          void connectRef.current()
+        }
+        return
+      }
 
       // speaking中なら再生を即停止して割り込む
       if (activeSourcesRef.current.length > 0) {
