@@ -1,0 +1,33 @@
+diff --git a/build/src/index.d.ts b/build/src/index.d.ts
+index ba5eb3e20399181e015755ef88e15a9bc3f3a4b9..bbc345059c026f490d83d806266768c2305c8ac0 100644
+--- a/build/src/index.d.ts
++++ b/build/src/index.d.ts
+@@ -1,6 +1,7 @@
+ import { GoogleAuth } from './auth/googleauth';
+ export * as gcpMetadata from 'gcp-metadata';
+ export * as gaxios from 'gaxios';
++export { Gaxios as DefaultTransporter } from 'gaxios';
+ import { AuthClient } from './auth/authclient';
+ export { AuthClient, DEFAULT_UNIVERSE } from './auth/authclient';
+ export { Compute, ComputeOptions } from './auth/computeclient';
+diff --git a/build/src/index.js b/build/src/index.js
+index 6fce44b43cefe0fd3cd2b41df93fbb4dfa0b11d3..ddbe702ac6d643db10415efb84eac94eddfc9c55 100644
+--- a/build/src/index.js
++++ b/build/src/index.js
+@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
+     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+ };
+ Object.defineProperty(exports, "__esModule", { value: true });
+-exports.GoogleAuth = exports.auth = exports.PassThroughClient = exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = exports.ExecutableError = exports.PluggableAuthClient = exports.DownscopedClient = exports.BaseExternalAccountClient = exports.ExternalAccountClient = exports.IdentityPoolClient = exports.AwsRequestSigner = exports.AwsClient = exports.UserRefreshClient = exports.LoginTicket = exports.ClientAuthentication = exports.OAuth2Client = exports.CodeChallengeMethod = exports.Impersonated = exports.JWT = exports.JWTAccess = exports.IdTokenClient = exports.IAMAuth = exports.GCPEnv = exports.Compute = exports.DEFAULT_UNIVERSE = exports.AuthClient = exports.gaxios = exports.gcpMetadata = void 0;
++exports.GoogleAuth = exports.auth = exports.PassThroughClient = exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = exports.ExecutableError = exports.PluggableAuthClient = exports.DownscopedClient = exports.BaseExternalAccountClient = exports.ExternalAccountClient = exports.IdentityPoolClient = exports.AwsRequestSigner = exports.AwsClient = exports.UserRefreshClient = exports.LoginTicket = exports.ClientAuthentication = exports.OAuth2Client = exports.CodeChallengeMethod = exports.Impersonated = exports.JWT = exports.JWTAccess = exports.IdTokenClient = exports.IAMAuth = exports.GCPEnv = exports.Compute = exports.DEFAULT_UNIVERSE = exports.AuthClient = exports.DefaultTransporter = exports.gaxios = exports.gcpMetadata = void 0;
+ // Copyright 2017 Google LLC
+ //
+ // Licensed under the Apache License, Version 2.0 (the "License");
+@@ -34,6 +34,7 @@ Object.defineProperty(exports, "GoogleAuth", { enumerable: true, get: function (
+ // for consistently configuring the library across versions.
+ exports.gcpMetadata = require("gcp-metadata");
+ exports.gaxios = require("gaxios");
++exports.DefaultTransporter = exports.gaxios.Gaxios;
+ var authclient_1 = require("./auth/authclient");
+ Object.defineProperty(exports, "AuthClient", { enumerable: true, get: function () { return authclient_1.AuthClient; } });
+ Object.defineProperty(exports, "DEFAULT_UNIVERSE", { enumerable: true, get: function () { return authclient_1.DEFAULT_UNIVERSE; } });

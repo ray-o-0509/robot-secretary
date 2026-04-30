@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "Floating robot secretary with Gemini Flash voice-to-voice",
   "main": "out/main/index.js",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=25.9.0",
+    "npm": ">=11.12.1"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && electron-builder",
@@ -31,7 +36,7 @@
     "@libsql/client": "^0.17.3",
     "@react-three/drei": "^9.115.0",
     "@react-three/fiber": "^8.17.0",
-    "@react-three/postprocessing": "^3.0.4",
+    "@react-three/postprocessing": "^2.19.1",
     "@slack/web-api": "^7.3.0",
     "dotenv": "^16.4.0",
     "googleapis": "^144.0.0",
@@ -39,6 +44,19 @@
     "react-dom": "^18.3.0",
     "three": "^0.168.0",
     "uiohook-napi": "^1.5.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@google/genai",
+      "electron",
+      "esbuild",
+      "protobufjs",
+      "uiohook-napi"
+    ],
+    "patchedDependencies": {
+      "gaxios@7.1.4": "patches/gaxios@7.1.4.patch",
+      "google-auth-library@10.6.2": "patches/google-auth-library@10.6.2.patch"
+    }
   },
   "build": {
     "appId": "com.robot-secretary.app",

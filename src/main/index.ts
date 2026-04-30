@@ -60,7 +60,7 @@ for (const dir of envSearchDirs) {
 }
 console.log('[env] searched:', envSearchDirs.join(', '), 'has GEMINI_API_KEY:', !!process.env.GEMINI_API_KEY)
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+const isDev = !app.isPackaged
 
 const iconPath = path.join(__dirname, '../../assets/icon.png')
 

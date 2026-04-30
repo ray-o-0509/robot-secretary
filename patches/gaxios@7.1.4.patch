@@ -1,0 +1,19 @@
+diff --git a/package.json b/package.json
+index d98f1fe6bc6a323792ef722f8e565dc32e447e5a..b5ed2060fac2bd28886ecbf27f18e91d3ee45722 100644
+--- a/package.json
++++ b/package.json
+@@ -17,6 +17,14 @@
+         "types": "./build/cjs/src/index.d.ts",
+         "default": "./build/cjs/src/index.js"
+       }
++    },
++    "./build/src/common": {
++      "import": "./build/esm/src/common.js",
++      "require": "./build/cjs/src/common.js"
++    },
++    "./build/src/common.js": {
++      "import": "./build/esm/src/common.js",
++      "require": "./build/cjs/src/common.js"
+     }
+   },
+   "scripts": {
