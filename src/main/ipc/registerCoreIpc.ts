@@ -83,6 +83,23 @@ export function registerCoreIpc(deps: Deps): void {
         if (!isPanelType(t)) return { error: `invalid type: ${String(t)}` }
         return await showPanel(t, { getOrCreateWindow: deps.getOrCreateDisplayWindow })
       }
+      if (toolName === 'search_gmail') {
+        const { searchEmails } = await import('../tools/gmail')
+        const { pushPayload } = await import('../display/show-panel')
+        const query = String(args.query ?? '').trim()
+        const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 20
+        const account = typeof args.account === 'string' ? args.account : undefined
+        if (!query) return { error: 'query is required' }
+        const result = await searchEmails(query, maxResults, account)
+        const { win, ready } = await deps.getOrCreateDisplayWindow()
+        win.show()
+        pushPayload(win, { type: 'email_search', data: result, fetchedAt: Date.now() }, ready)
+        return {
+          ok: true,
+          totalCount: result.messages.length,
+          accounts: result.accounts.map((a) => `${a.account}(${a.count}件)`),
+        }
+      }
       if (toolName === 'open_app') {
         const { openApp } = await import('../tools/openApp')
         return await openApp(args.app_name as string)

@@ -125,6 +125,19 @@ const secretaryTools = [
     },
   },
   {
+    name: 'search_gmail',
+    description: 'Gmailメールをキーワード・送信者・件名などで検索する。全アカウント横断で検索し、受信トレイ以外も含む。結果はディスプレイに表示される。「〜さんからのメール」「〜について来たメール」「〜の件名のメール」と言われたら使う。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Gmail検索クエリ（例: "from:hoge@example.com"、"subject:請求書"、"山田"）' },
+        account: { type: 'string', description: '特定アカウントのみ検索する場合に指定（省略で全アカウント横断）' },
+        maxResults: { type: 'number', description: '各アカウントの取得上限（デフォルト20）' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'open_app',
     description:
       'macOS のアプリケーションを起動する。app_name は必ず英語の正式名（例: "Slack", "Safari", "Finder", "Google Chrome"）で渡せ。',

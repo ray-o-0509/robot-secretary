@@ -1,5 +1,6 @@
 export type PanelType =
   | 'email'
+  | 'email_search'
   | 'calendar_today'
   | 'calendar_tomorrow'
   | 'calendar_week'
@@ -19,6 +20,7 @@ export type PanelPayload = {
 
 export const PANEL_LABELS: Record<PanelType, string> = {
   email: '◢ INBOX // GMAIL',
+  email_search: '◢ SEARCH // GMAIL',
   calendar_today: '◢ AGENDA // TODAY',
   calendar_tomorrow: '◢ AGENDA // TOMORROW',
   calendar_week: '◢ AGENDA // WEEK',

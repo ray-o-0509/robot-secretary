@@ -3,6 +3,7 @@ import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { DisplayShell } from './DisplayShell'
 import { TopButtons } from './TopButtons'
 import { EmailView } from './views/EmailView'
+import { EmailSearchView } from './views/EmailSearchView'
 import { CalendarView } from './views/CalendarView'
 import { TasksView } from './views/TasksView'
 import { SlackView } from './views/SlackView'
@@ -73,6 +74,8 @@ function renderView(payload: PanelPayload) {
   switch (payload.type) {
     case 'email':
       return <EmailView payload={payload} />
+    case 'email_search':
+      return <EmailSearchView payload={payload} />
     case 'calendar_today':
     case 'calendar_tomorrow':
     case 'calendar_week':

@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron'
 
 export type PanelType =
   | 'email'
+  | 'email_search'
   | 'calendar_today'
   | 'calendar_tomorrow'
   | 'calendar_week'
@@ -21,6 +22,7 @@ export type PanelPayload = {
 
 const VALID_TYPES = new Set<PanelType>([
   'email',
+  'email_search',
   'calendar_today',
   'calendar_tomorrow',
   'calendar_week',
@@ -92,6 +94,11 @@ export function buildSummary(payload: PanelPayload): string {
       const errPart = errs.length ? `（認証エラー: ${errs.map((a) => a.account).join(', ')}）` : ''
       const breakdown = d.accounts.filter((a) => !a.error).map((a) => `${a.account}:${a.count}`).join(', ')
       return `インボックス${total}件${breakdown ? ` (${breakdown})` : ''}${errPart}`
+    }
+    case 'email_search': {
+      const d = payload.data as { query: string; messages: unknown[] } | null
+      if (!d) return '0件'
+      return `「${d.query}」の検索結果 ${d.messages.length}件`
     }
     case 'calendar_today':
     case 'calendar_tomorrow':

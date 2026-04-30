@@ -83,6 +83,55 @@ export async function getInboxEmails(maxResults = 100, account?: string) {
   }
 }
 
+export async function searchEmails(query: string, maxResults = 20, account?: string) {
+  const accounts = account ? [account] : listAccounts()
+  const seen = new Set<string>()
+  const perAccount = await Promise.all(
+    accounts.map(async (a) => {
+      try {
+        const auth = getGoogleAuth(a)
+        const gmail = google.gmail({ version: 'v1', auth })
+        const actualAccount = await getActualEmail(auth)
+        if (seen.has(actualAccount)) return null // 重複アカウントをスキップ
+        seen.add(actualAccount)
+
+        const list = await gmail.users.messages.list({ userId: 'me', q: query, maxResults })
+        const messages = list.data.messages ?? []
+        const results: InboxEmail[] = []
+
+        for (const msg of messages) {
+          if (!msg.id) continue
+          const detail = await gmail.users.messages.get({
+            userId: 'me',
+            id: msg.id,
+            format: 'metadata',
+            metadataHeaders: ['From', 'Subject', 'Date'],
+          })
+          const headers = detail.data.payload?.headers ?? []
+          const get = (name: string) => headers.find((h) => h.name === name)?.value ?? ''
+          results.push({
+            id: msg.id,
+            account: actualAccount,
+            from: get('From'),
+            subject: get('Subject'),
+            date: get('Date'),
+            snippet: detail.data.snippet,
+          })
+        }
+        return { account: actualAccount, messages: results, error: null as string | null }
+      } catch (err) {
+        return { account: a, messages: [] as InboxEmail[], error: String(err instanceof Error ? err.message : err) }
+      }
+    }),
+  )
+  const filtered = perAccount.filter((p): p is NonNullable<typeof p> => p !== null)
+  return {
+    query,
+    accounts: filtered.map(({ account, messages, error }) => ({ account, error, count: messages.length })),
+    messages: filtered.flatMap((p) => p.messages),
+  }
+}
+
 // メッセージをゴミ箱に送る (30日後にGoogle側で自動削除、それまでは復元可)
 export async function trashEmails(account: string, ids: string[]) {
   const auth = getGoogleAuth(account)
