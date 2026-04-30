@@ -34,12 +34,6 @@ export function SettingsApp() {
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>設定</div>
           </div>
-          <button
-            onClick={() => window.electronAPI.settingsClose()}
-            style={{ ...noDrag, background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '4px 6px' }}
-          >
-            ✕
-          </button>
         </div>
 
         {/* Tab bar */}
