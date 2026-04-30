@@ -879,6 +879,24 @@ app.whenReady().then(async () => {
   registerSetupIpc()
   registerSettingsIpc()
 
+  // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { label: `${app.name} について`, role: 'about' },
+        { type: 'separator' },
+        {
+          label: '設定...',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => openSettingsWindow(),
+        },
+        { type: 'separator' },
+        { label: '終了', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
+      ],
+    },
+  ]))
+
   // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
   const micStatus = process.platform === 'darwin'
     ? systemPreferences.getMediaAccessStatus('microphone')
