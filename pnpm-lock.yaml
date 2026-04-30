@@ -8,6 +8,9 @@ patchedDependencies:
   gaxios@7.1.4:
     hash: 27a87d682e7e473a2381a7f5f372b660d0f63df78456f87692415589ff6092b3
     path: patches/gaxios@7.1.4.patch
+  google-auth-library@10.6.2:
+    hash: 85b1c57457de003418e0ee720cf3411aede9e48fb112fd11e49217cd8ed4d286
+    path: patches/google-auth-library@10.6.2.patch
 
 importers:
 
@@ -3272,7 +3275,7 @@ snapshots:
 
   '@google/genai@1.51.0':
     dependencies:
-      google-auth-library: 10.6.2
+      google-auth-library: 10.6.2(patch_hash=85b1c57457de003418e0ee720cf3411aede9e48fb112fd11e49217cd8ed4d286)
       p-retry: 4.6.2
       protobufjs: 7.5.6
       ws: 8.20.0
@@ -4668,7 +4671,7 @@ snapshots:
 
   glsl-noise@0.0.0: {}
 
-  google-auth-library@10.6.2:
+  google-auth-library@10.6.2(patch_hash=85b1c57457de003418e0ee720cf3411aede9e48fb112fd11e49217cd8ed4d286):
     dependencies:
       base64-js: 1.5.1
       ecdsa-sig-formatter: 1.0.11

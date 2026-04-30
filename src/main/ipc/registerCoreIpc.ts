@@ -1,4 +1,5 @@
 import { ipcMain, shell, type BrowserWindow } from 'electron'
+import { homedir } from 'node:os'
 
 type Deps = {
   getDisplayWindow: () => BrowserWindow | null
@@ -16,6 +17,7 @@ const CHAT_HIDE_DELAY_MS = 10_000 // 10秒会話がなければチャットウ�
 
 export function registerCoreIpc(deps: Deps): void {
   let chatHideTimer: ReturnType<typeof setTimeout> | null = null
+  let currentCwd = homedir()
 
   function resetChatHideTimer() {
     if (chatHideTimer) clearTimeout(chatHideTimer)
@@ -116,6 +118,32 @@ export function registerCoreIpc(deps: Deps): void {
         const { deleteProfileItem } = await import('../memory/store')
         const profile = await deleteProfileItem(String(args.key ?? ''))
         return { result: { ok: true, items: profile.items } }
+      }
+      if (toolName === 'cd') {
+        const target = String(args.path ?? '').trim()
+        if (!target) return { error: 'path is required' }
+        currentCwd = target.startsWith('~') ? target.replace('~', homedir()) : target
+        return { cwd: currentCwd }
+      }
+      if (toolName === 'run_command') {
+        const { runCommand } = await import('../tools/shell')
+        const cwd = (args.cwd as string | undefined) ?? currentCwd
+        const result = await runCommand(String(args.command ?? ''), cwd)
+        const { pushPayload } = await import('../display/show-panel')
+        const { win, ready } = await deps.getOrCreateDisplayWindow()
+        win.show()
+        pushPayload(win, { type: 'terminal_output', data: { command: args.command, ...result }, fetchedAt: Date.now() }, ready)
+        return { result }
+      }
+      if (toolName === 'run_claude') {
+        const { runClaude } = await import('../tools/shell')
+        const cwd = (args.cwd as string | undefined) ?? currentCwd
+        const result = await runClaude(String(args.prompt ?? ''), cwd)
+        const { pushPayload } = await import('../display/show-panel')
+        const { win, ready } = await deps.getOrCreateDisplayWindow()
+        win.show()
+        pushPayload(win, { type: 'terminal_output', data: { command: `claude -p "${args.prompt}"`, stdout: String(result.result ?? ''), stderr: '', cwd }, fetchedAt: Date.now() }, ready)
+        return { result }
       }
       return { error: `Unknown tool: ${toolName}` }
     } catch (err) {

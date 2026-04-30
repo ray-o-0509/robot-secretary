@@ -65,6 +65,7 @@ const isDev = !app.isPackaged
 const iconPath = path.join(__dirname, '../../assets/icon.png')
 
 let setupWin: BrowserWindow | null = null
+let settingsWin: BrowserWindow | null = null
 let win: BrowserWindow | null = null
 let chatWin: BrowserWindow | null = null
 let displayWin: BrowserWindow | null = null
@@ -88,6 +89,75 @@ let pinnedUntil = 0
 let isMuted = false
 let pttActive = false
 let shuttingDown = false
+
+// ========== Settings Window ==========
+
+function openSettingsWindow() {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.focus()
+    return
+  }
+  settingsWin = new BrowserWindow({
+    width: 480,
+    height: 640,
+    resizable: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    transparent: false,
+    alwaysOnTop: true,
+    center: true,
+    backgroundColor: '#0a0a14',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  forwardRendererConsole(settingsWin, 'settings')
+  settingsWin.on('closed', () => { settingsWin = null })
+  if (isDev) {
+    settingsWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#settings')
+  } else {
+    settingsWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'settings' })
+  }
+}
+
+function registerSettingsIpc() {
+  ipcMain.on('settings:close', () => {
+    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.close()
+  })
+
+  ipcMain.handle('settings:get-profile', async () => {
+    const { loadProfile } = await import('./memory/store')
+    const profile = await loadProfile()
+    return profile.items
+  })
+
+  ipcMain.handle('settings:upsert-profile', async (_event, key: string, value: string) => {
+    const { upsertProfileItem } = await import('./memory/store')
+    const profile = await upsertProfileItem(String(key), String(value))
+    return profile.items
+  })
+
+  ipcMain.handle('settings:delete-profile', async (_event, key: string) => {
+    const { deleteProfileItem } = await import('./memory/store')
+    const profile = await deleteProfileItem(String(key))
+    return profile.items
+  })
+
+  ipcMain.handle('settings:get-default-apps', async () => {
+    const { loadDefaultApps } = await import('./tools/defaultApps')
+    return await loadDefaultApps()
+  })
+
+  ipcMain.handle('settings:save-default-apps', async (_event, apps: unknown) => {
+    const { saveDefaultApps } = await import('./tools/defaultApps')
+    if (apps && typeof apps === 'object') {
+      await saveDefaultApps(apps as import('./tools/defaultApps').DefaultApps)
+    }
+    return { ok: true }
+  })
+}
 
 // ========== Setup Window ==========
 
@@ -190,9 +260,10 @@ function forwardRendererConsole(window: BrowserWindow, label: string) {
 }
 
 function createWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  currentX = Math.floor(width / 2 - 150)
-  currentY = Math.floor(height / 2 - 150)
+  const { width: _w, height } = screen.getPrimaryDisplay().workAreaSize
+  // 起動時は左下（チャットウィンドウの下付近）に配置
+  currentX = 24 + 360 + 24  // チャットウィンドウ右端 + 余白
+  currentY = Math.floor(height - 300 - 40)
   targetX = currentX
   targetY = currentY
 
@@ -551,7 +622,7 @@ function setupContextMenu() {
         },
       },
       { type: 'separator' },
-      { label: '設定', click: () => win?.webContents.send('open-settings') },
+      { label: '設定', click: () => openSettingsWindow() },
       ...(isDev
         ? [
             { type: 'separator' as const },
@@ -806,6 +877,7 @@ app.whenReady().then(async () => {
   }
 
   registerSetupIpc()
+  registerSettingsIpc()
 
   // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
   const micStatus = process.platform === 'darwin'

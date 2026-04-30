@@ -46,4 +46,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setupGetStatus: () => ipcRenderer.invoke('setup:get-status'),
   setupOpenSettings: (type: string) => ipcRenderer.send('setup:open-settings', type),
   setupLaunch: () => ipcRenderer.invoke('setup:launch'),
+
+  // Settings window
+  settingsClose: () => ipcRenderer.send('settings:close'),
+  settingsGetProfile: () => ipcRenderer.invoke('settings:get-profile'),
+  settingsUpsertProfile: (key: string, value: string) => ipcRenderer.invoke('settings:upsert-profile', key, value),
+  settingsDeleteProfile: (key: string) => ipcRenderer.invoke('settings:delete-profile', key),
+  settingsGetDefaultApps: () => ipcRenderer.invoke('settings:get-default-apps'),
+  settingsSaveDefaultApps: (apps: unknown) => ipcRenderer.invoke('settings:save-default-apps', apps),
 })

@@ -1,7 +1,9 @@
 import { exec } from 'child_process'
+import { resolveAppName } from './defaultApps'
 
 export async function openApp(appName: string): Promise<{ ok: boolean; error?: string }> {
-  const safe = appName.replace(/"/g, '').trim()
+  const resolved = await resolveAppName(appName)
+  const safe = resolved.replace(/"/g, '').trim()
   if (!safe) return { ok: false, error: 'アプリ名が空' }
 
   return new Promise((resolve) => {

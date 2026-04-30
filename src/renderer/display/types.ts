@@ -9,6 +9,7 @@ export type PanelType =
   | 'news'
   | 'tools'
   | 'movies'
+  | 'terminal_output'
 
 export type PanelPayload = {
   type: PanelType
@@ -29,6 +30,14 @@ export const PANEL_LABELS: Record<PanelType, string> = {
   news: '◢ FEED // AI_NEWS',
   tools: '◢ ARSENAL // BEST_TOOLS',
   movies: '◢ CINEMA // RELEASES',
+  terminal_output: '◢ TERMINAL // OUTPUT',
+}
+
+export type TerminalOutputData = {
+  command: string
+  cwd: string
+  stdout: string
+  stderr: string
 }
 
 // daily-dashboard の getDashboardEntry が返す共通形状

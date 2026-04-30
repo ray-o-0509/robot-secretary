@@ -12,7 +12,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build && electron-builder",
     "patch:pnpm": "cp node_modules/google-auth-library/build/src/index.js \"$(find node_modules/.pnpm -path '*/google-auth-library@10.6.2*/google-auth-library/build/src/index.js' | head -1)\"",
-    "build:app": "npm run patch:pnpm && electron-vite build && electron-builder --config.mac.target=dir && cp -r dist/mac-arm64/Robot\\ Secretary.app /Applications/Robot\\ Secretary.app",
+    "build:app": "npm run patch:pnpm && electron-vite build && electron-builder --config.mac.target=dir && rm -rf /Applications/Robot\\ Secretary.app && cp -r dist/mac-arm64/Robot\\ Secretary.app /Applications/Robot\\ Secretary.app",
     "preview": "electron-vite preview"
   },
   "keywords": [],

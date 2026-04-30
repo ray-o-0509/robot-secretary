@@ -11,6 +11,7 @@ export type PanelType =
   | 'news'
   | 'tools'
   | 'movies'
+  | 'terminal_output'
 
 export type PanelPayload = {
   type: PanelType
@@ -31,6 +32,7 @@ const VALID_TYPES = new Set<PanelType>([
   'news',
   'tools',
   'movies',
+  'terminal_output',
 ])
 
 export function isPanelType(v: unknown): v is PanelType {
@@ -139,6 +141,11 @@ export function buildSummary(payload: PanelPayload): string {
       const nowN = d.data?.nowPlaying?.length ?? 0
       const upN = d.data?.upcoming?.length ?? 0
       return `映画: 公開中${nowN}件、来月${upN}件`
+    }
+    case 'terminal_output': {
+      const d = payload.data as { command: string; stdout: string; stderr: string } | null
+      if (!d) return '実行結果なし'
+      return `コマンド実行完了: ${d.command}`
     }
   }
 }

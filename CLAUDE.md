@@ -23,6 +23,27 @@ open "/Applications/Robot Secretary.app"
 
 `build:app` は内部で `electron-builder --config.mac.target=dir` を使い DMG を作らないので高速。
 
+### ⚠️ /Applications へのコピーが反映されない場合
+
+`cp -r` は **コピー先が既に存在すると中に入れてしまう**（`cp -r dist/.../Robot\ Secretary.app /Applications/` → `/Applications/Robot Secretary.app/Robot Secretary.app` になる）。`build:app` スクリプトの `cp -r` が失敗なく終わっても古いrendererが残ることがある。
+
+インストール後は必ずrendererのハッシュで確認：
+
+```bash
+node -e "
+const asar = require('@electron/asar');
+const files = asar.listPackage('/Applications/Robot Secretary.app/Contents/Resources/app.asar');
+files.filter(f => f.includes('renderer') && f.includes('index')).forEach(f => console.log(f));
+"
+```
+
+古いハッシュが出たら手動で上書き：
+
+```bash
+rm -rf "/Applications/Robot Secretary.app"
+cp -r "/Users/ray/Desktop/github/robot-secretary/dist/mac-arm64/Robot Secretary.app" "/Applications/Robot Secretary.app"
+```
+
 ## macOS permissions (重要)
 
 ### Bundle ID と署名
@@ -30,6 +51,24 @@ open "/Applications/Robot Secretary.app"
 - **appId**: `com.rayotsuka.robot-secretary`（固定）
 - **署名 identity**: `Apple Development: Ray Otsuka (HDVKHZKZ9M)`（`security find-identity -v -p codesigning` で確認）
 - 旧 appId `com.robot-secretary.app` は ad-hoc 署名（TeamIdentifier=not set）だった。現在は `TeamIdentifier=9D4FL72RZ5` で署名済み。
+
+### ⚠️ 起動するたびにアクセシビリティ権限がリセットされる問題
+
+**根本原因**：Claude Code（非インタラクティブな Bash）から `build:app` を実行すると、electron-builder が Keychain にアクセスできず署名が失敗してアドホック署名（`Signature=adhoc`）になる。アドホック署名アプリは macOS TCC が CDHash で識別するため、**ビルドのたびに CDHash が変わり TCC エントリが無効化される → アクセシビリティ権限がリセット**される。
+
+確認コマンド（`adhoc` と出たら署名失敗）：
+```bash
+codesign -d --verbose=2 "/Applications/Robot Secretary.app" 2>&1 | grep "Signature="
+```
+
+**対処法**：`build:app` はユーザー自身がインタラクティブなターミナルから実行すること。Claude Code に実行させると署名が壊れる。Claude Code にビルドさせた後は、ユーザーが自分のターミナルで以下を実行して再ビルド・インストールする：
+
+```bash
+cd ~/Desktop/github/robot-secretary
+npm run build:app
+```
+
+再ビルド後にアクセシビリティを一度付与すれば、次回以降は（再ビルドしない限り）持続する。
 
 ### prod環境の .env 配置
 

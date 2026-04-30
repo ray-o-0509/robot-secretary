@@ -10,6 +10,7 @@ import { SlackView } from './views/SlackView'
 import { NewsView } from './views/NewsView'
 import { ToolsView } from './views/ToolsView'
 import { MoviesView } from './views/MoviesView'
+import { TerminalView } from './views/TerminalView'
 import { PANEL_LABELS, type PanelPayload } from './types'
 
 export function DisplayApp() {
@@ -90,5 +91,7 @@ function renderView(payload: PanelPayload) {
       return <ToolsView payload={payload} />
     case 'movies':
       return <MoviesView payload={payload} />
+    case 'terminal_output':
+      return <TerminalView payload={payload} />
   }
 }

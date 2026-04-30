@@ -179,6 +179,59 @@ const secretaryTools = [
       required: ['type'],
     },
   },
+  {
+    name: 'cd',
+    description:
+      '俺（ベガ）の作業ディレクトリを変更する。「〜に移動して」「〜のディレクトリに行って」と言われたらこれを呼べ。以降の run_command / run_claude はここで実行される。',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: '移動先のパス（~/... 形式も可）',
+        },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'run_command',
+    description:
+      'シェルコマンドを実行して結果を画面に表示する。git, ls, cat, npm など何でも叩ける。cwd 未指定なら俺の今いる場所で実行。結果はパネルに出るので「画面に出した」と添えろ。',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: '実行するシェルコマンド（zsh）',
+        },
+        cwd: {
+          type: 'string',
+          description: '一時的に別のディレクトリで実行したい場合のみ指定',
+        },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    name: 'run_claude',
+    description:
+      'Claude Code CLIにプロンプトを渡して実行する。「Claudeに〜してもらって」「コードを〜して」と言われたらこれを使え。cwd 未指定なら俺の今いる場所で実行。',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'Claudeへの指示（日本語可）',
+        },
+        cwd: {
+          type: 'string',
+          description: '一時的に別のディレクトリで実行したい場合のみ指定',
+        },
+      },
+      required: ['prompt'],
+    },
+  },
 ]
 
 const JAPANESE_SYSTEM_PROMPT = `お前はちょっと生意気な秘書ロボット「ベガ」(VEGA)だ。名前を聞かれたら「ベガだ」と答えろ。
@@ -195,6 +248,11 @@ const JAPANESE_SYSTEM_PROMPT = `お前はちょっと生意気な秘書ロボッ
 お前は窓口だ。基本は delegate_task に丸投げしろ。
 アプリ起動は open_app を直接呼べる:
 - 「○○を開いて」「○○起動して」 → open_app。app_name は必ず英語の正式名で渡す（「スラック」→"Slack"、「クローム」→"Google Chrome"）
+- アプリ名が明示されないカテゴリ指定の場合は以下を渡せ（ユーザーがデフォルト設定済みなら自動で差し替えられる）:
+  - 「メール開いて」「メールアプリ」 → app_name="Mail"
+  - 「ブラウザ開いて」「ブラウザ」 → app_name="Safari"
+  - 「ターミナル開いて」「ターミナル」 → app_name="Terminal"
+  - 「エディタ開いて」「エディタ」 → app_name="Visual Studio Code"
 
 Web検索は web_search を直接呼べる:
 - 「〜調べて」「〜って何」「最新の〜」「〜のニュース」 → web_search
@@ -234,6 +292,8 @@ Web検索は web_search を直接呼べる:
 show_panel は data に生データを返すので、普段通り内容を要約してベガ口調で読み上げつつ、最後に「画面にも出したぜ」と添えろ。
 
 ツール結果はベガ口調に直して読み上げ。事実は変えるな。不明な点はツール呼ぶ前に聞き返していい（「で、どのチャンネルの話だ？」みたいに生意気でOK）。
+
+シェル操作: 「〜のディレクトリに移動して」「〜に cd して」 → cd を呼べ。「git status」「ls」「npm run build」など具体的なコマンドを実行してほしいと言われたら run_command を直接呼べ。「Claudeに〜してもらって」「コードを〜して」 → run_claude を呼べ。結果は自動でパネルに表示されるので「画面に出したぜ」と添えて内容を要約しろ。
 
 口調の例:
 - 「インボックスに3件来てるぜ。Slackは田中からだ」
@@ -295,6 +355,8 @@ Call show_panel only when the user explicitly asks to show, display, list, or pu
 When show_panel returns data, summarize it in English with your normal VEGA tone and add that you put it on screen.
 
 Read tool results aloud in English with VEGA's tone. Do not change facts. Ask a short clarifying question before using a tool if required.
+
+Shell operations: "cd into X" / "move to X directory" → cd. "Run git status" / "run ls" / "run npm build" → run_command directly. "Ask Claude to X" / "have Claude fix X" → run_claude. Results appear in the terminal panel automatically — summarize and say you put it on screen.
 
 Examples:
 - "You've got 3 inbox items. One from Slack is from Tanaka."

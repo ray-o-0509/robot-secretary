@@ -10,6 +10,7 @@ import { EmailDetailApp } from './display/EmailDetailApp'
 import { SearchApp } from './search/SearchApp'
 import { WeatherApp } from './weather/WeatherApp'
 import { SetupApp } from './setup/SetupApp'
+import { SettingsApp } from './settings/SettingsApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -55,6 +56,14 @@ declare global {
       setupGetStatus: () => Promise<unknown>
       setupOpenSettings: (type: string) => void
       setupLaunch: () => Promise<void>
+
+      // Settings window
+      settingsClose: () => void
+      settingsGetProfile: () => Promise<Record<string, string>>
+      settingsUpsertProfile: (key: string, value: string) => Promise<Record<string, string>>
+      settingsDeleteProfile: (key: string) => Promise<Record<string, string>>
+      settingsGetDefaultApps: () => Promise<{ email?: string; browser?: string; terminal?: string; editor?: string }>
+      settingsSaveDefaultApps: (apps: { email?: string; browser?: string; terminal?: string; editor?: string }) => Promise<{ ok: boolean }>
     }
   }
 }
@@ -68,9 +77,11 @@ const isEmailDetailWindow = hash === '#email-detail'
 const isSearchWindow = hash === '#search'
 const isWeatherWindow = hash === '#weather'
 const isSetupWindow = hash === '#setup'
+const isSettingsWindow = hash === '#settings'
 
 export default function App() {
   if (isSetupWindow) return <SetupApp />
+  if (isSettingsWindow) return <SettingsApp />
   if (isChatWindow) return <ChatWindowApp />
   if (isDisplayWindow) return <DisplayApp />
   if (isEmailDetailWindow) return <EmailDetailApp />
