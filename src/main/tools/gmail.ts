@@ -120,6 +120,56 @@ export async function getEmailDetail(account: string, id: string) {
   }
 }
 
+export async function replyToEmail(opts: {
+  account: string
+  messageId: string
+  body: string
+}) {
+  const { requireConfirmation } = await import('./confirmation')
+  const auth = getGoogleAuth(opts.account)
+  const gmail = google.gmail({ version: 'v1', auth })
+
+  // 元メッセージの情報を取得
+  const orig = await gmail.users.messages.get({
+    userId: 'me', id: opts.messageId,
+    format: 'metadata', metadataHeaders: ['From', 'Subject', 'Message-ID'],
+  })
+  const headers = orig.data.payload?.headers ?? []
+  const get = (name: string) => headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+  const originalFrom = get('From')
+  const originalSubject = get('Subject')
+  const originalMessageId = get('Message-ID')
+  const threadId = orig.data.threadId ?? ''
+  const reSubject = originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`
+
+  const confirmed = await requireConfirmation({
+    action: 'メール返信',
+    summary: `${originalFrom} への返信`,
+    details: {
+      'To': originalFrom,
+      '件名': reSubject,
+      '本文': opts.body.length > 80 ? opts.body.slice(0, 80) + '…' : opts.body,
+    },
+  })
+  if (!confirmed) return { ok: false, cancelled: true }
+
+  const raw = [
+    `From: ${opts.account}`,
+    `To: ${originalFrom}`,
+    `Subject: ${reSubject}`,
+    ...(originalMessageId ? [`In-Reply-To: ${originalMessageId}`, `References: ${originalMessageId}`] : []),
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    opts.body,
+  ].join('\r\n')
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: Buffer.from(raw).toString('base64url'), threadId },
+  })
+  return { ok: true, to: originalFrom, subject: reSubject }
+}
+
 // INBOX ラベルを外す (アーカイブ。メール自体は残る)
 export async function archiveEmails(account: string, ids: string[]) {
   if (ids.length === 0) return { account, modified: 0 }

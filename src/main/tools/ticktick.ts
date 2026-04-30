@@ -110,6 +110,28 @@ export async function completeTask(opts: { taskId: string; projectId: string }) 
   return { ok: true }
 }
 
+export async function updateTask(opts: {
+  taskId: string
+  projectId: string
+  title?: string
+  due?: string | null
+  priority?: 'low' | 'medium' | 'high' | 'none'
+}) {
+  const headers = authHeaders()
+  const fetchRes = await fetch(`${BASE}/project/${opts.projectId}/task/${opts.taskId}`, { headers })
+  if (!fetchRes.ok) throw new Error(`fetch task failed: ${fetchRes.status} ${await fetchRes.text()}`)
+  const task = (await fetchRes.json()) as RawTask
+  const body: Record<string, unknown> = { ...task, id: opts.taskId, projectId: opts.projectId }
+  if (opts.title !== undefined) body.title = opts.title
+  if (opts.due !== undefined) body.dueDate = opts.due ?? null
+  if (opts.priority !== undefined) body.priority = opts.priority === 'none' ? 0 : PRIORITY_TO_INT[opts.priority]
+  const upd = await fetch(`${BASE}/task/${opts.taskId}`, {
+    method: 'POST', headers, body: JSON.stringify(body),
+  })
+  if (!upd.ok) throw new Error(`updateTask failed: ${upd.status} ${await upd.text()}`)
+  return mapTask((await upd.json()) as RawTask)
+}
+
 export async function completeSubtask(opts: { taskId: string; projectId: string; subtaskId: string }) {
   const headers = authHeaders()
   const fetchRes = await fetch(`${BASE}/project/${opts.projectId}/task/${opts.taskId}`, { headers })

@@ -33,6 +33,23 @@ const SYSTEM_PROMPT = `お前は秘書ロボット「ベガ」の作業実行エ
 - タスク追加は create_task。期限が明示されたら due (YYYY-MM-DD) を渡す。「重要」「急ぎ」と言われたら priority: high。
 - 完了報告は complete_task に taskId と projectId を渡す。両方は事前に get_tasks で取得した値を使う。
 
+【タスク更新ルール】
+- 期限・タイトル・優先度を変えるには update_task(taskId, projectId, ...)。due は YYYY-MM-DD または null（期限解除）。事前に get_tasks で値を確認してから呼ぶ。
+
+【メール返信ルール】
+- 返信には reply_gmail(account, messageId, body) を使う。呼び出すと確認ダイアログが表示され、ユーザーが「実行」を押した場合のみ送信される。キャンセルされたら cancelled: true が返る。
+- 本文は日本語で自然な文体で書く。送信先・件名は元メールから自動引き継ぎ。
+- account と messageId は事前に get_gmail_inbox で取得すること。
+
+【カレンダーイベント作成ルール】
+- 新規イベントは create_calendar_event(title, startDateTime, endDateTime, ...)。
+- startDateTime/endDateTime は ISO 8601（例: "2026-05-01T15:00:00"）または終日なら YYYY-MM-DD + allDay: true。
+- attendees にメールアドレスを渡すと招待メールが送られる前に確認ダイアログが出る。
+- account 省略で最初の Google アカウント、timeZone 省略で Asia/Tokyo。
+
+【天気確認ルール】
+- get_weather(location) で現在の天気と3日間の予報を取得。location は日本語地名でOK。
+
 【ダッシュボード確認ルール】
 - 「今日のニュース」「AIで何かあった」「最近のAI」 → get_dashboard_entry skill=ai-news
 - 「おすすめツール」「最近のツール」「何か新しいツール」 → get_dashboard_entry skill=best-tools
@@ -44,6 +61,17 @@ const SYSTEM_PROMPT = `お前は秘書ロボット「ベガ」の作業実行エ
 
 const MAX_ITERATIONS = LIMITS.claudeMaxIterations
 const MODEL = MODELS.claudeDelegate
+
+function buildDateContext(): string {
+  const now = new Date()
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const city = tz.split('/').pop()?.replace(/_/g, ' ') ?? tz
+  const dateStr = now.toLocaleDateString('ja-JP', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: tz,
+  })
+  const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: tz })
+  return `【現在の状況】\n- 日時: ${dateStr} ${timeStr}\n- タイムゾーン: ${tz}（デフォルト地名: "${city}"）`
+}
 
 export async function runClaudeTask(opts: {
   task: string
@@ -85,6 +113,7 @@ export async function runClaudeTask(opts: {
         output_config: { effort: 'high' },
         system: [
           { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: buildDateContext() },
         ],
         tools: toolSchemas,
         messages,

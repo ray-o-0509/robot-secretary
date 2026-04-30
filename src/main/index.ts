@@ -31,6 +31,9 @@ let chatWin: BrowserWindow | null = null
 let displayWin: BrowserWindow | null = null
 let displayReady = false
 let searchWin: BrowserWindow | null = null
+let weatherWin: BrowserWindow | null = null
+let weatherReady = false
+let pendingWeatherData: unknown = null
 let webWin: BrowserWindow | null = null
 let emailDetailWin: BrowserWindow | null = null
 let emailDetailReady = false
@@ -450,6 +453,65 @@ async function triggerDebugPanel(type: string) {
 }
 
 
+// ========== Weather Window ==========
+
+function getOrCreateWeatherWindow(): BrowserWindow {
+  if (weatherWin && !weatherWin.isDestroyed()) {
+    weatherWin.show()
+    weatherWin.focus()
+    return weatherWin
+  }
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const w = 440
+  const h = Math.min(720, height - 80)
+  weatherReady = false
+  const created = new BrowserWindow({
+    width: w,
+    height: h,
+    x: width - w - DISPLAY_RIGHT_MARGIN,
+    y: 40,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: false,
+    hasShadow: false,
+    resizable: true,
+    focusable: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  weatherWin = created
+  forwardRendererConsole(created, 'weather')
+  created.on('closed', () => {
+    if (weatherWin === created) { weatherWin = null; weatherReady = false }
+  })
+  created.webContents.once('did-finish-load', () => {
+    weatherReady = true
+    if (pendingWeatherData && weatherWin && !weatherWin.isDestroyed()) {
+      weatherWin.webContents.send('weather:data', pendingWeatherData)
+      pendingWeatherData = null
+    }
+  })
+  if (isDev) {
+    created.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#weather')
+  } else {
+    created.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'weather' })
+  }
+  return created
+}
+
+function showWeatherData(data: unknown) {
+  const win = getOrCreateWeatherWindow()
+  if (weatherReady) {
+    win.webContents.send('weather:data', data)
+  } else {
+    pendingWeatherData = data
+  }
+}
+
 // ========== IPC ==========
 
 registerCoreIpc({
@@ -459,6 +521,7 @@ registerCoreIpc({
   getChatWindow: () => chatWin,
   getOrCreateDisplayWindow,
   getOrCreateSearchWindow,
+  showWeatherData,
   setWanderingByState: (state: string) => {
     isWandering = state !== 'listening' && state !== 'speaking' && state !== 'thinking'
   },

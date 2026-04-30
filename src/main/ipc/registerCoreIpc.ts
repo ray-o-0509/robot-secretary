@@ -7,11 +7,23 @@ type Deps = {
   getChatWindow: () => BrowserWindow | null
   getOrCreateDisplayWindow: () => Promise<{ win: BrowserWindow; ready: boolean }>
   getOrCreateSearchWindow: () => BrowserWindow
+  showWeatherData: (data: unknown) => void
   setWanderingByState: (state: string) => void
   onClickthroughChanged: (enabled: boolean) => void
 }
 
 export function registerCoreIpc(deps: Deps): void {
+  // 確認ダイアログをメインウィンドウへ送れるよう初期化
+  import('../tools/confirmation').then(({ initConfirmation }) => {
+    initConfirmation(deps.getMainWindow)
+  })
+
+  ipcMain.on('confirmation:respond', (_event, id: string, confirmed: boolean) => {
+    import('../tools/confirmation').then(({ respondToConfirmation }) => {
+      respondToConfirmation(id, confirmed)
+    })
+  })
+
   ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
     try {
       if (toolName === 'delegate_task') {
@@ -22,16 +34,27 @@ export function registerCoreIpc(deps: Deps): void {
         })
         return { result }
       }
+      if (toolName === 'analyze_screen') {
+        const { runClaudeTask } = await import('../agent/claude')
+        const question = (args.question as string | undefined) ?? '画面に何が表示されているか教えてくれ'
+        const result = await runClaudeTask({ task: question, includeScreenshot: true })
+        return { result }
+      }
       if (
         toolName === 'get_tasks' ||
         toolName === 'create_task' ||
         toolName === 'complete_task' ||
         toolName === 'complete_subtask' ||
+        toolName === 'update_task' ||
         toolName === 'get_email_detail' ||
-        toolName === 'web_search'
+        toolName === 'web_search' ||
+        toolName === 'get_weather'
       ) {
         const { executeTool } = await import('../tools/dispatcher')
         const result = await executeTool(toolName, args)
+        if (toolName === 'get_weather') {
+          deps.showWeatherData(result)
+        }
         if (toolName === 'web_search') {
           const sw = deps.getOrCreateSearchWindow()
           // ウィンドウのロード完了後に送る
@@ -70,6 +93,16 @@ export function registerCoreIpc(deps: Deps): void {
     } catch (err) {
       return { error: String(err) }
     }
+  })
+
+  ipcMain.on('weather:close', () => {
+    // WeatherApp から閉じるリクエスト — ウィンドウは index.ts が管理するので
+    // ここでは hide のみ。ウィンドウ参照がないので BrowserWindow.getFocusedWindow() で対処
+    const { BrowserWindow: BW } = require('electron') as typeof import('electron')
+    BW.getAllWindows().forEach((w) => {
+      const url = w.webContents.getURL()
+      if (url.includes('#weather') || url.endsWith('hash=weather')) w.hide()
+    })
   })
 
   ipcMain.on('search:close', () => {

@@ -86,6 +86,63 @@ export async function getTomorrowEvents() {
   return getEventsInRange(start, end)
 }
 
+export async function createCalendarEvent(opts: {
+  title: string
+  startDateTime: string
+  endDateTime: string
+  account?: string
+  allDay?: boolean
+  location?: string
+  description?: string
+  attendees?: string[]
+  timeZone?: string
+}) {
+  const { requireConfirmation } = await import('./confirmation')
+  const account = opts.account ?? listAccounts()[0]
+  if (!account) throw new Error('Googleアカウントが登録されていない')
+
+  const tz = opts.timeZone ?? 'Asia/Tokyo'
+  const attendees = opts.attendees ?? []
+
+  if (attendees.length > 0) {
+    const confirmed = await requireConfirmation({
+      action: 'カレンダーイベント作成',
+      summary: opts.title,
+      details: {
+        '日時': `${opts.startDateTime} 〜 ${opts.endDateTime}`,
+        '出席者': attendees.join(', '),
+        ...(opts.location ? { '場所': opts.location } : {}),
+      },
+    })
+    if (!confirmed) return { ok: false, cancelled: true }
+  }
+
+  const auth = getGoogleAuth(account)
+  const calendar = google.calendar({ version: 'v3', auth })
+  const event = {
+    summary: opts.title,
+    ...(opts.location ? { location: opts.location } : {}),
+    ...(opts.description ? { description: opts.description } : {}),
+    start: opts.allDay
+      ? { date: opts.startDateTime.slice(0, 10) }
+      : { dateTime: opts.startDateTime, timeZone: tz },
+    end: opts.allDay
+      ? { date: opts.endDateTime.slice(0, 10) }
+      : { dateTime: opts.endDateTime, timeZone: tz },
+    ...(attendees.length > 0 ? { attendees: attendees.map((email) => ({ email })) } : {}),
+  }
+
+  const res = await calendar.events.insert({ calendarId: 'primary', requestBody: event })
+  return {
+    ok: true,
+    id: res.data.id,
+    title: res.data.summary,
+    start: res.data.start?.dateTime ?? res.data.start?.date,
+    end: res.data.end?.dateTime ?? res.data.end?.date,
+    htmlLink: res.data.htmlLink,
+  }
+}
+
 export async function getUpcomingEvents(days = 7) {
   const clampedDays = Math.max(1, Math.min(14, Math.floor(days)))
   const now = new Date()

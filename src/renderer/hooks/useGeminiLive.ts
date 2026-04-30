@@ -78,6 +78,42 @@ const secretaryTools = [
     },
   },
   {
+    name: 'update_task',
+    description: 'TickTickのタスクの期限・タイトル・優先度を変更する。「〜の期限を〇日に変えて」「〜のタスク名を変更して」など。事前に get_tasks で taskId と projectId を確認してから呼ぶ。',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'タスクID（get_tasks の返り値）' },
+        projectId: { type: 'string', description: 'プロジェクトID（get_tasks の返り値）' },
+        title: { type: 'string', description: '新しいタイトル（変更する場合）' },
+        due: { type: 'string', description: '新しい期限 YYYY-MM-DD。期限を消す場合は null' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: '新しい優先度' },
+      },
+      required: ['taskId', 'projectId'],
+    },
+  },
+  {
+    name: 'get_weather',
+    description: '天気予報を取得する。「天気」「今日の天気」「〜の天気」「明日傘いる？」などの質問に直接呼ぶ。',
+    parameters: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: '地名（例: "東京", "大阪", "札幌"）' },
+      },
+      required: ['location'],
+    },
+  },
+  {
+    name: 'analyze_screen',
+    description: '現在の画面をキャプチャして内容を分析する。「画面に何が表示されてる？」「今見てるのは何？」「これ何のアプリ？」など。',
+    parameters: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: '画面について知りたいこと（省略可）' },
+      },
+    },
+  },
+  {
     name: 'web_search',
     description: 'Webを検索して最新情報・ニュース・調べ物を取得する。「〜を調べて」「〜って何？」「最新の〜」「〜のニュース」と言われたら使う。',
     parameters: {
@@ -154,11 +190,22 @@ Web検索は web_search を直接呼べる:
 - 「俺の名前は○○だ」「職業は○○だ」「趣味は○○だ」「○○を覚えておいて」 → update_profile(key=項目名, value=内容)
 - 「○○の情報を消して」「○○を忘れて」 → delete_profile(key=項目名)
 
-ただしタスク管理(TickTick)だけは直接呼べる:
+ただし以下は直接呼べる:
+タスク管理(TickTick):
 - 「やること」「ToDo」「タスク見せて」 → get_tasks
 - 「○○ってタスク追加して」「○○をToDoに入れて」 → create_task。期限が言われたら due (YYYY-MM-DD)、「重要」「急ぎ」なら priority: high。
-- 「○○終わった」「○○完了」 → 直前の get_tasks の結果に該当タスクがあれば complete_task。無ければ先に get_tasks。
-それ以外（メール・Slack・カレンダー・画面の確認・横断要約など）は全部 delegate_task に渡す。画面を見る必要があるなら includeScreenshot: true。
+- 「○○終わった」「○○完了」 → 直前の get_tasks に該当タスクがあれば complete_task。無ければ先に get_tasks。
+- 「○○の期限を〇日に変えて」「○○のタイトル変えて」「優先度変えて」 → get_tasks で確認してから update_task。
+
+天気: 「天気」「傘いる？」「〜の天気」「今日暑い？」 → get_weather(location)。結果は天気ウィンドウに自動表示され、音声でも読み上げる。location省略時はシステムプロンプト上部の現在地を使え。
+
+画面分析: 「画面に何が映ってる？」「今見てるのは何？」 → analyze_screen。
+
+⚠ 他人に影響が出る操作（メール返信・invitation付きカレンダー作成）は全部 delegate_task に渡す。
+- Claudeが内部で確認ダイアログを出す。ユーザーが「実行」を押すまで送信・作成は行われない。
+- 「○○にメール返信して」「○○を招待してカレンダー追加して」 → delegate_task(task="...")
+
+それ以外（メール確認・Slack・カレンダー確認・横断要約）も delegate_task に渡す。画面が必要なら includeScreenshot: true。
 
 【パネル表示ルール】
 ユーザーが「見せて」「表示して」「出して」「一覧」と明示的に画面表示を求めたら show_panel を呼ぶ。
@@ -193,10 +240,22 @@ const ENGLISH_SYSTEM_PROMPT = `You are "VEGA", a slightly cheeky robot secretary
 
 [Role]
 You are the front desk. Delegate most work to delegate_task.
-Only task management (TickTick) is handled directly:
-- If the user asks about tasks, ToDos, or what is on the list, call get_tasks.
-- If the user asks to add a task, call create_task. Use due as YYYY-MM-DD when a deadline is provided; use priority: high for urgent or important tasks.
-- If the user says a task is done, call complete_task if the matching taskId and projectId are already known; otherwise call get_tasks first.
+The following are handled directly:
+Tasks (TickTick):
+- List or check tasks → get_tasks.
+- Add a task → create_task. Use due as YYYY-MM-DD for deadlines; priority: high for urgent tasks.
+- Mark done → complete_task if taskId/projectId known; otherwise get_tasks first.
+- Change due date, title, or priority → get_tasks then update_task.
+
+Weather: "weather", "will it rain", "temperature in X", "do I need an umbrella" → get_weather(location). A weather window opens automatically; also read the result aloud. Use the location from the context block at the top when not specified.
+
+Screen analysis: "what's on screen", "what am I looking at" → analyze_screen.
+
+⚠ Actions that affect other people (email replies, calendar events with invitees) must go through delegate_task.
+Claude will show a confirmation dialog — nothing is sent until the user clicks "実行".
+- "Reply to X's email", "Create a meeting and invite X" → delegate_task(task="...")
+
+Everything else (reading email, Slack, calendar, summaries) also goes through delegate_task.
 Web search is handled directly with web_search:
 - "Search for X" / "What is X" / "Latest news on X" / "Look up X" → web_search
 
@@ -230,8 +289,55 @@ Examples:
 - "Three tasks. The shopping one is due today."
 - "You asked that already. Pick a lane."`
 
-function getSystemPrompt(languageCode: string): string {
-  return languageCode.startsWith('en') ? ENGLISH_SYSTEM_PROMPT : JAPANESE_SYSTEM_PROMPT
+function buildContextBlock(isJa: boolean, location: string): string {
+  const now = new Date()
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+  if (isJa) {
+    const dateStr = now.toLocaleDateString('ja-JP', {
+      year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: tz,
+    })
+    const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: tz })
+    return `【現在の状況】\n- 日時: ${dateStr} ${timeStr}\n- 現在地: ${location}（天気・場所の質問でデフォルトはここを使え）`
+  } else {
+    const dateStr = now.toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz,
+    })
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: tz })
+    return `[Current context]\n- Date/Time: ${dateStr}, ${timeStr}\n- Location: ${location} (use as default for weather/place queries)`
+  }
+}
+
+function getSystemPrompt(languageCode: string, location: string): string {
+  const isJa = !languageCode.startsWith('en')
+  return buildContextBlock(isJa, location) + '\n\n' + (isJa ? JAPANESE_SYSTEM_PROMPT : ENGLISH_SYSTEM_PROMPT)
+}
+
+async function resolveLocation(): Promise<string> {
+  const tzFallback = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? '不明'
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(tzFallback); return }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lon } = pos.coords
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ja`,
+            { headers: { 'Accept-Language': 'ja' } }
+          )
+          const data = await res.json() as { address?: { city?: string; town?: string; village?: string; county?: string; country?: string } }
+          const addr = data.address ?? {}
+          const city = addr.city ?? addr.town ?? addr.village ?? addr.county ?? tzFallback
+          const country = addr.country ?? ''
+          resolve(country ? `${city}（${country}）` : city)
+        } catch {
+          resolve(tzFallback)
+        }
+      },
+      () => resolve(tzFallback),
+      { timeout: 5000 }
+    )
+  })
 }
 
 type LiveSession = {
@@ -279,6 +385,9 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const intentionalCloseRef = useRef(false)
   const sessionHandleRef = useRef<string | null>(null)
   const connectRef = useRef<() => Promise<void>>(async () => {})
+  const locationRef = useRef<string>(
+    Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? '不明'
+  )
   const sessionEpochRef = useRef(0)
 
   const appendTranscript = useCallback((role: 'user' | 'assistant', delta: string) => {
@@ -295,6 +404,11 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         prev.map((m) => (m.id === targetId ? { ...m, text: m.text + delta } : m)),
       )
     }
+  }, [])
+
+  // 起動時に実際の位置情報を取得してシステムプロンプトに使う
+  useEffect(() => {
+    resolveLocation().then((loc) => { locationRef.current = loc })
   }, [])
 
   useEffect(() => { isMutedRef.current = isMuted }, [isMuted])
@@ -556,7 +670,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       } catch (err) {
         console.warn('[Gemini] メモリ注入の取得失敗:', err)
       }
-      const systemText = getSystemPrompt(languageCodeRef.current) + memoryInjection
+      const systemText = getSystemPrompt(languageCodeRef.current, locationRef.current) + memoryInjection
 
       const handle = sessionHandleRef.current
       const session = await (ai.live as {

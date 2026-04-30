@@ -4,9 +4,11 @@ import { StatusRing } from './components/StatusRing'
 import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
+import { ConfirmationCard, type ConfirmationRequest } from './components/ConfirmationCard'
 import { DisplayApp } from './display/DisplayApp'
 import { EmailDetailApp } from './display/EmailDetailApp'
 import { SearchApp } from './search/SearchApp'
+import { WeatherApp } from './weather/WeatherApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -41,6 +43,10 @@ declare global {
       searchClose: () => void
       openUrl: (url: string) => Promise<void>
       openWebView: (url: string) => void
+      onConfirmationRequest: (cb: (req: ConfirmationRequest) => void) => () => void
+      respondToConfirmation: (id: string, confirmed: boolean) => void
+      onWeatherData: (cb: (data: unknown) => void) => () => void
+      weatherClose: () => void
     }
   }
 }
@@ -52,12 +58,14 @@ const isChatWindow = hash === '#chat'
 const isDisplayWindow = hash === '#display'
 const isEmailDetailWindow = hash === '#email-detail'
 const isSearchWindow = hash === '#search'
+const isWeatherWindow = hash === '#weather'
 
 export default function App() {
   if (isChatWindow) return <ChatWindowApp />
   if (isDisplayWindow) return <DisplayApp />
   if (isEmailDetailWindow) return <EmailDetailApp />
   if (isSearchWindow) return <SearchApp />
+  if (isWeatherWindow) return <WeatherApp />
   return <RobotWindowApp />
 }
 
@@ -66,6 +74,7 @@ function RobotWindowApp() {
   const [showSettings, setShowSettings] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [interactive, setInteractive] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null)
   const [languageCode, setLanguageCode] = useState<string>(
     () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
   )
@@ -86,10 +95,15 @@ function RobotWindowApp() {
       localStorage.setItem('LANGUAGE_CODE', lang)
       setLanguageCode(lang)
     })
+    const offConfirm = window.electronAPI?.onConfirmationRequest((req) => {
+      setPendingConfirmation(req)
+      window.electronAPI?.setClickThrough(false)
+    })
     return () => {
       offMute?.()
       offSettings?.()
       offLang?.()
+      offConfirm?.()
     }
   }, [])
 
@@ -118,7 +132,14 @@ function RobotWindowApp() {
   const handleLeave = () => {
     if (!interactive) return
     setInteractive(false)
-    window.electronAPI?.setClickThrough(true)
+    // 確認カードが表示中はクリックスルーに戻さない
+    if (!pendingConfirmation) window.electronAPI?.setClickThrough(true)
+  }
+
+  const handleConfirmationRespond = (id: string, confirmed: boolean) => {
+    window.electronAPI?.respondToConfirmation(id, confirmed)
+    setPendingConfirmation(null)
+    if (!interactive) window.electronAPI?.setClickThrough(true)
   }
 
   const wrapperStyle: React.CSSProperties = {
@@ -138,6 +159,9 @@ function RobotWindowApp() {
         <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <SettingsPanel onClose={() => setShowSettings(false)} />
         </div>
+      )}
+      {pendingConfirmation && (
+        <ConfirmationCard request={pendingConfirmation} onRespond={handleConfirmationRespond} />
       )}
     </div>
   )

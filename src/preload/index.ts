@@ -34,4 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchClose: () => ipcRenderer.send('search:close'),
   openUrl: (url: string) => ipcRenderer.invoke('shell:open-url', url),
   openWebView: (url: string) => ipcRenderer.send('open-web-view', url),
+  onConfirmationRequest: (cb: (req: unknown) => void) => on('confirmation:request', cb),
+  respondToConfirmation: (id: string, confirmed: boolean) =>
+    ipcRenderer.send('confirmation:respond', id, confirmed),
+  onWeatherData: (cb: (data: unknown) => void) => on('weather:data', cb),
+  weatherClose: () => ipcRenderer.send('weather:close'),
 })

@@ -142,6 +142,64 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'update_task',
+    description: 'TickTickのタスクを更新する。期限変更・タイトル変更・優先度変更などに使う。事前に get_tasks で taskId と projectId を取得すること',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'タスクID' },
+        projectId: { type: 'string', description: 'プロジェクトID' },
+        title: { type: 'string', description: '新しいタイトル（変更する場合）' },
+        due: { type: 'string', description: '新しい期限 YYYY-MM-DD。null を渡すと期限を解除' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: '新しい優先度' },
+      },
+      required: ['taskId', 'projectId'],
+    },
+  },
+  {
+    name: 'reply_gmail',
+    description: '指定メッセージへ返信メールを送信する。呼び出すと確認ダイアログが表示され、ユーザーが「実行」を押した場合のみ送信される。事前に get_gmail_inbox で id と account を取得すること',
+    input_schema: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: '送信元 Gmail アカウント' },
+        messageId: { type: 'string', description: '返信先メッセージID（get_gmail_inbox の id）' },
+        body: { type: 'string', description: '返信本文（プレーンテキスト）' },
+      },
+      required: ['account', 'messageId', 'body'],
+    },
+  },
+  {
+    name: 'create_calendar_event',
+    description: 'Googleカレンダーに新しいイベントを作成する。出席者を指定すると確認ダイアログが表示され、ユーザーが「実行」を押した場合のみ作成・招待が送られる',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'イベントタイトル' },
+        startDateTime: { type: 'string', description: '開始日時（ISO 8601 または YYYY-MM-DD）' },
+        endDateTime: { type: 'string', description: '終了日時（ISO 8601 または YYYY-MM-DD）' },
+        account: { type: 'string', description: 'Googleアカウント（省略で最初のアカウント）' },
+        allDay: { type: 'boolean', description: '終日イベントなら true' },
+        location: { type: 'string', description: '場所（任意）' },
+        description: { type: 'string', description: '説明（任意）' },
+        attendees: { type: 'array', items: { type: 'string' }, description: '出席者のメールアドレス配列（任意）' },
+        timeZone: { type: 'string', description: 'タイムゾーン（省略で Asia/Tokyo）' },
+      },
+      required: ['title', 'startDateTime', 'endDateTime'],
+    },
+  },
+  {
+    name: 'get_weather',
+    description: '指定した場所の現在の天気と3日間の予報を取得する（Open-Meteo、認証不要）',
+    input_schema: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: '地名（例: "東京", "大阪", "札幌"）' },
+      },
+      required: ['location'],
+    },
+  },
+  {
     name: 'get_dashboard_entry',
     description:
       "daily-dashboard の Turso DB から日次まとめエントリを取得する。skill='ai-news' でAIニュース、'best-tools' でおすすめツール、'movies' で映画、'spending' で支出分析。id 省略で最新を返す。",
@@ -227,6 +285,42 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case 'web_search': {
       const { webSearch } = await import('./search')
       return await webSearch(reqString(args, 'query'))
+    }
+    case 'update_task': {
+      const { updateTask } = await import('./ticktick')
+      return await updateTask({
+        taskId: reqString(args, 'taskId'),
+        projectId: reqString(args, 'projectId'),
+        title: args.title as string | undefined,
+        due: args.due as string | null | undefined,
+        priority: args.priority as 'low' | 'medium' | 'high' | 'none' | undefined,
+      })
+    }
+    case 'reply_gmail': {
+      const { replyToEmail } = await import('./gmail')
+      return await replyToEmail({
+        account: reqString(args, 'account'),
+        messageId: reqString(args, 'messageId'),
+        body: reqString(args, 'body'),
+      })
+    }
+    case 'create_calendar_event': {
+      const { createCalendarEvent } = await import('./calendar')
+      return await createCalendarEvent({
+        title: reqString(args, 'title'),
+        startDateTime: reqString(args, 'startDateTime'),
+        endDateTime: reqString(args, 'endDateTime'),
+        account: args.account as string | undefined,
+        allDay: args.allDay as boolean | undefined,
+        location: args.location as string | undefined,
+        description: args.description as string | undefined,
+        attendees: args.attendees as string[] | undefined,
+        timeZone: args.timeZone as string | undefined,
+      })
+    }
+    case 'get_weather': {
+      const { getWeather } = await import('./weather')
+      return await getWeather(reqString(args, 'location'))
     }
     case 'get_dashboard_entry': {
       const { getDashboardEntry } = await import('./dashboard')
