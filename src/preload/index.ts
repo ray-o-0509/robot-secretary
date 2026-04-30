@@ -43,4 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onConnectionError: (cb: (err: unknown) => void) => on('connection-error', cb),
   sendGeminiRetry: () => ipcRenderer.send('gemini:retry'),
   onGeminiRetry: (cb: () => void) => on('gemini:retry', cb),
+  setupGetStatus: () => ipcRenderer.invoke('setup:get-status'),
+  setupOpenSettings: (type: string) => ipcRenderer.send('setup:open-settings', type),
+  setupLaunch: () => ipcRenderer.invoke('setup:launch'),
 })

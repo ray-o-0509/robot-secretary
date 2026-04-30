@@ -30,7 +30,7 @@ if (!email) {
 }
 
 const SECRET_PATH = path.join(os.homedir(), '.config/gmail-triage/client_secret.json')
-const TOKENS_DIR = path.join(os.homedir(), '.config/gmail-triage/tokens')
+const TOKENS_DIR = path.join(os.homedir(), '.config/robot-secretary/google-tokens')
 const TOKEN_PATH = path.join(TOKENS_DIR, `${email}.json`)
 
 const secret = JSON.parse(fs.readFileSync(SECRET_PATH, 'utf-8')).installed

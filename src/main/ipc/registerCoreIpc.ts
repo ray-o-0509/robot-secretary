@@ -12,7 +12,18 @@ type Deps = {
   onClickthroughChanged: (enabled: boolean) => void
 }
 
+const CHAT_HIDE_DELAY_MS = 10_000 // 10秒会話がなければチャットウィンドウを非表示
+
 export function registerCoreIpc(deps: Deps): void {
+  let chatHideTimer: ReturnType<typeof setTimeout> | null = null
+
+  function resetChatHideTimer() {
+    if (chatHideTimer) clearTimeout(chatHideTimer)
+    chatHideTimer = setTimeout(() => {
+      const chat = deps.getChatWindow()
+      if (chat && !chat.isDestroyed() && chat.isVisible()) chat.hide()
+    }, CHAT_HIDE_DELAY_MS)
+  }
   // 確認ダイアログをメインウィンドウへ送れるよう初期化
   import('../tools/confirmation').then(({ initConfirmation }) => {
     initConfirmation(deps.getMainWindow)
@@ -148,7 +159,18 @@ export function registerCoreIpc(deps: Deps): void {
 
   ipcMain.on('robot-state', (_event, state: string, processor?: string) => {
     deps.setWanderingByState(state)
-    deps.getChatWindow()?.webContents.send('robot-state', state, processor)
+    const chat = deps.getChatWindow()
+    if (chat && !chat.isDestroyed()) {
+      // 会話中はチャットウィンドウを表示、タイマーをリセット
+      if (state !== 'idle') {
+        if (!chat.isVisible()) chat.show()
+        resetChatHideTimer()
+      } else {
+        // idle になったら10秒タイマー開始
+        resetChatHideTimer()
+      }
+      chat.webContents.send('robot-state', state, processor)
+    }
   })
 
   ipcMain.on('chat-set-interactive', (_event, enabled: boolean) => {

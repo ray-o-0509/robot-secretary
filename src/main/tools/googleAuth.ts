@@ -2,11 +2,14 @@ import { google } from 'googleapis'
 import * as fs from 'fs'
 import * as path from 'path'
 
-const TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/gmail-triage/tokens')
+// robot-secretary 専用トークンディレクトリ。なければ旧 gmail-triage 共有ディレクトリにフォールバック。
+const PRIMARY_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/robot-secretary/google-tokens')
+const FALLBACK_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/gmail-triage/tokens')
+const TOKENS_DIR = fs.existsSync(PRIMARY_TOKENS_DIR) ? PRIMARY_TOKENS_DIR : FALLBACK_TOKENS_DIR
 
 export function listAccounts(): string[] {
   if (!fs.existsSync(TOKENS_DIR)) {
-    throw new Error(`gmail-triage トークンディレクトリがありません: ${TOKENS_DIR}`)
+    throw new Error(`Googleトークンディレクトリがありません: ${PRIMARY_TOKENS_DIR}`)
   }
   const files = fs.readdirSync(TOKENS_DIR).filter((f) => f.endsWith('.json')).sort()
   if (files.length === 0) throw new Error(`トークンが ${TOKENS_DIR} に1つもありません`)

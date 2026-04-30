@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && electron-builder",
+    "patch:pnpm": "cp node_modules/google-auth-library/build/src/index.js node_modules/.pnpm/google-auth-library@10.6.2/node_modules/google-auth-library/build/src/index.js",
+    "build:app": "npm run patch:pnpm && electron-vite build && electron-builder --config.mac.target=dir && cp -r dist/mac-arm64/Robot\\ Secretary.app /Applications/Robot\\ Secretary.app",
     "preview": "electron-vite preview"
   },
   "keywords": [],
@@ -59,13 +61,16 @@
     }
   },
   "build": {
-    "appId": "com.robot-secretary.app",
+    "appId": "com.rayotsuka.robot-secretary",
     "productName": "Robot Secretary",
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
       "icon": "assets/icon.icns",
-      "identity": "9C9ED537830CF7DA312CE7B59AB1AE634A8036AA"
+      "identity": "Apple Development: Ray Otsuka (HDVKHZKZ9M)",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "files": [
       "out/**/*",

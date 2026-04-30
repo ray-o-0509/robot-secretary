@@ -9,6 +9,7 @@ import { DisplayApp } from './display/DisplayApp'
 import { EmailDetailApp } from './display/EmailDetailApp'
 import { SearchApp } from './search/SearchApp'
 import { WeatherApp } from './weather/WeatherApp'
+import { SetupApp } from './setup/SetupApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -51,6 +52,9 @@ declare global {
       onConnectionError: (cb: (err: unknown) => void) => () => void
       sendGeminiRetry: () => void
       onGeminiRetry: (cb: () => void) => () => void
+      setupGetStatus: () => Promise<unknown>
+      setupOpenSettings: (type: string) => void
+      setupLaunch: () => Promise<void>
     }
   }
 }
@@ -63,8 +67,10 @@ const isDisplayWindow = hash === '#display'
 const isEmailDetailWindow = hash === '#email-detail'
 const isSearchWindow = hash === '#search'
 const isWeatherWindow = hash === '#weather'
+const isSetupWindow = hash === '#setup'
 
 export default function App() {
+  if (isSetupWindow) return <SetupApp />
   if (isChatWindow) return <ChatWindowApp />
   if (isDisplayWindow) return <DisplayApp />
   if (isEmailDetailWindow) return <EmailDetailApp />

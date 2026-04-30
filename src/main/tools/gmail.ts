@@ -10,9 +10,18 @@ type InboxEmail = {
   snippet: string | null | undefined
 }
 
-async function getInboxFor(account: string, maxResults: number): Promise<InboxEmail[]> {
+async function getActualEmail(auth: ReturnType<typeof getGoogleAuth>): Promise<string> {
+  const gmail = google.gmail({ version: 'v1', auth })
+  const profile = await gmail.users.getProfile({ userId: 'me' })
+  return profile.data.emailAddress ?? ''
+}
+
+async function getInboxFor(account: string, maxResults: number): Promise<{ actualAccount: string; messages: InboxEmail[] }> {
   const auth = getGoogleAuth(account)
   const gmail = google.gmail({ version: 'v1', auth })
+
+  // 実際の認証済みアカウントを取得（トークンファイル名と異なる場合がある）
+  const actualAccount = await getActualEmail(auth)
 
   const list = await gmail.users.messages.list({
     userId: 'me',
@@ -36,7 +45,7 @@ async function getInboxFor(account: string, maxResults: number): Promise<InboxEm
 
     results.push({
       id: msg.id,
-      account,
+      account: actualAccount,
       from: get('From'),
       subject: get('Subject'),
       date: get('Date'),
@@ -44,7 +53,7 @@ async function getInboxFor(account: string, maxResults: number): Promise<InboxEm
     })
   }
 
-  return results
+  return { actualAccount, messages: results }
 }
 
 export async function getInboxEmails(maxResults = 100, account?: string) {
@@ -52,15 +61,25 @@ export async function getInboxEmails(maxResults = 100, account?: string) {
   const perAccount = await Promise.all(
     accounts.map(async (a) => {
       try {
-        return { account: a, messages: await getInboxFor(a, maxResults), error: null as string | null }
+        const { actualAccount, messages } = await getInboxFor(a, maxResults)
+        return { account: actualAccount, messages, error: null as string | null }
       } catch (err) {
         return { account: a, messages: [] as InboxEmail[], error: String(err instanceof Error ? err.message : err) }
       }
     }),
   )
+
+  // 重複アカウント（トークンファイルが同じGoogleアカウントを指す場合）を除外
+  const seen = new Set<string>()
+  const deduped = perAccount.filter(({ account }) => {
+    if (seen.has(account)) return false
+    seen.add(account)
+    return true
+  })
+
   return {
-    accounts: perAccount.map(({ account, messages, error }) => ({ account, error, count: messages.length })),
-    messages: perAccount.flatMap((p) => p.messages),
+    accounts: deduped.map(({ account, messages, error }) => ({ account, error, count: messages.length })),
+    messages: deduped.flatMap((p) => p.messages),
   }
 }
 

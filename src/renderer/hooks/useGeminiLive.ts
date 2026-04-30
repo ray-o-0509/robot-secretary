@@ -358,7 +358,7 @@ const MAX_RECONNECT_ATTEMPTS = LIMITS.geminiMaxReconnectAttempts
 // handle は 2 時間で失効するので長時間スリープ復帰時にここで救う
 const HANDLE_RETRY_THRESHOLD = 3
 // PTT 押下がこの長さ未満なら誤爆扱いして音声を捨てる
-const PTT_MIN_DURATION_MS = 200
+const PTT_MIN_DURATION_MS = 1000
 
 export type ConnectionError = {
   type: 'no_api_key' | 'auth' | 'network' | 'max_retries' | 'mic_permission' | 'connect_error'
@@ -373,6 +373,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const playbackCtxRef = useRef<AudioContext | null>(null)
   const micAudioCtxRef = useRef<AudioContext | null>(null)
   const nextPlayTimeRef = useRef(0)
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
   const isPTTActiveRef = useRef(false)
   const pttActivityStartedRef = useRef(false)
   const pttAudioSentRef = useRef(false)
@@ -648,6 +649,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       const startAt = Math.max(playback.currentTime, nextPlayTimeRef.current)
       src.start(startAt)
       nextPlayTimeRef.current = startAt + buffer.duration
+      activeSourcesRef.current.push(src)
+      src.onended = () => {
+        activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== src)
+      }
     }
 
     if (m.serverContent?.turnComplete) {
@@ -829,6 +834,17 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const offStart = api.onPTTStart(() => {
       console.log('[PTT] Start — session:', !!sessionRef.current, 'muted:', isMutedRef.current)
       if (isMutedRef.current || !sessionRef.current) return
+
+      // speaking中なら再生を即停止して割り込む
+      if (activeSourcesRef.current.length > 0) {
+        console.log('[PTT] 割り込み: 再生中の音声を停止')
+        for (const src of activeSourcesRef.current) {
+          try { src.stop() } catch { /* already stopped */ }
+        }
+        activeSourcesRef.current = []
+        nextPlayTimeRef.current = 0
+      }
+
       isPTTActiveRef.current = true
       pttActivityStartedRef.current = false
       pttAudioSentRef.current = false

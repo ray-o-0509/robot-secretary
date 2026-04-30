@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, screen, systemPreferences } from 'electron'
+import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, screen, shell, systemPreferences } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -64,6 +64,7 @@ const isDev = !app.isPackaged
 
 const iconPath = path.join(__dirname, '../../assets/icon.png')
 
+let setupWin: BrowserWindow | null = null
 let win: BrowserWindow | null = null
 let chatWin: BrowserWindow | null = null
 let displayWin: BrowserWindow | null = null
@@ -87,6 +88,97 @@ let pinnedUntil = 0
 let isMuted = false
 let pttActive = false
 let shuttingDown = false
+
+// ========== Setup Window ==========
+
+function createSetupWindow() {
+  setupWin = new BrowserWindow({
+    width: 480,
+    height: 560,
+    resizable: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    transparent: false,
+    alwaysOnTop: true,
+    center: true,
+    backgroundColor: '#0a0a14',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  forwardRendererConsole(setupWin, 'setup')
+
+  if (isDev) {
+    setupWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#setup')
+  } else {
+    setupWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'setup' })
+  }
+
+  // セットアップ表示直後にマイク権限ダイアログを発火（未決定の場合のみ）
+  if (process.platform === 'darwin') {
+    const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+    if (micStatus === 'not-determined') {
+      systemPreferences.askForMediaAccess('microphone').catch(() => {})
+    }
+  }
+}
+
+function getGmailAccounts(): string[] {
+  try {
+    const primaryDir = path.join(os.homedir(), '.config', 'robot-secretary', 'google-tokens')
+    const fallbackDir = path.join(os.homedir(), '.config', 'gmail-triage', 'tokens')
+    const tokensDir = fs.existsSync(primaryDir) ? primaryDir : fallbackDir
+    if (!fs.existsSync(tokensDir)) return []
+    return fs.readdirSync(tokensDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace(/\.json$/, ''))
+  } catch {
+    return []
+  }
+}
+
+function registerSetupIpc() {
+  ipcMain.handle('setup:get-status', async () => {
+    const micPermission = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('microphone')
+      : 'granted'
+    const accessibilityPermission = process.platform === 'darwin'
+      ? systemPreferences.isTrustedAccessibilityClient(false)
+      : true
+
+    return {
+      micPermission,
+      accessibilityPermission,
+      geminiApiKey: !!(process.env.GEMINI_API_KEY),
+      ticktickToken: !!(process.env.TICKTICK_ACCESS_TOKEN),
+      slackToken: !!(process.env.SLACK_BOT_TOKEN),
+      gmailAccounts: getGmailAccounts(),
+    }
+  })
+
+  ipcMain.on('setup:open-settings', (_event, type: string) => {
+    if (type === 'microphone') {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+    } else if (type === 'accessibility') {
+      if (process.platform === 'darwin') {
+        systemPreferences.isTrustedAccessibilityClient(true)
+      }
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility')
+    }
+  })
+
+  ipcMain.handle('setup:launch', async () => {
+    if (setupWin && !setupWin.isDestroyed()) {
+      setupWin.close()
+      setupWin = null
+    }
+    await initMemory(() => process.env.GEMINI_API_KEY)
+    createWindow()
+  })
+}
 
 // ========== Window ==========
 
@@ -698,12 +790,36 @@ ipcMain.on('open-web-view', (_event, url: string) => {
 // ========== App lifecycle ==========
 
 app.whenReady().then(async () => {
+  // rendererのgetUserMediaリクエストを許可する
+  const { session } = await import('electron')
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    if (permission === 'media') {
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+
   if (process.platform === 'darwin' && app.dock) {
     const img = nativeImage.createFromPath(iconPath)
     if (!img.isEmpty()) app.dock.setIcon(img)
   }
-  await initMemory(() => process.env.GEMINI_API_KEY)
-  createWindow()
+
+  registerSetupIpc()
+
+  // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
+  const micStatus = process.platform === 'darwin'
+    ? systemPreferences.getMediaAccessStatus('microphone')
+    : 'granted'
+  const hasGeminiKey = !!(process.env.GEMINI_API_KEY)
+  const needsSetup = micStatus !== 'granted' || !hasGeminiKey
+
+  if (needsSetup) {
+    createSetupWindow()
+  } else {
+    await initMemory(() => process.env.GEMINI_API_KEY)
+    createWindow()
+  }
 })
 
 app.on('before-quit', async (e) => {

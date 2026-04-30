@@ -5,10 +5,98 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - `npm run dev` — start electron-vite dev (main, preload, renderer with HMR; Renderer URL is injected as `ELECTRON_RENDERER_URL`)
-- `npm run build` — `electron-vite build` then `electron-builder` (produces a macOS DMG; see `package.json` `build` block)
+- `npm run build` — `electron-vite build` then `electron-builder` (produces a macOS DMG)
+- `npm run build:app` — **日常使い用**。ビルド → `dist/mac-arm64/Robot Secretary.app` を `/Applications/` に上書きコピーする。署名済み（`Apple Development: Ray Otsuka (HDVKHZKZ9M)`）。コード変更後はこれを実行して `/Applications/Robot Secretary.app` を起動すること。
 - `npm run preview` — preview the production build without packaging
 
 There is no test runner, linter, or formatter configured. Don't fabricate one; ask before adding tooling.
+
+## Build & Deploy workflow
+
+コードを変更したら：
+
+```bash
+npm run build:app          # ビルド + /Applications に自動インストール
+pkill -x "Robot Secretary" # 旧プロセスを終了（起動中の場合）
+open "/Applications/Robot Secretary.app"
+```
+
+`build:app` は内部で `electron-builder --config.mac.target=dir` を使い DMG を作らないので高速。
+
+## macOS permissions (重要)
+
+### Bundle ID と署名
+
+- **appId**: `com.rayotsuka.robot-secretary`（固定）
+- **署名 identity**: `Apple Development: Ray Otsuka (HDVKHZKZ9M)`（`security find-identity -v -p codesigning` で確認）
+- 旧 appId `com.robot-secretary.app` は ad-hoc 署名（TeamIdentifier=not set）だった。現在は `TeamIdentifier=9D4FL72RZ5` で署名済み。
+
+### prod環境の .env 配置
+
+prod ビルドはプロジェクトルートの `.env.local` を読まない。`~/Library/Application Support/robot-secretary/` に配置する：
+
+```bash
+cp .env.local ~/Library/Application\ Support/robot-secretary/.env.local
+```
+
+`.env.local` を更新したら毎回このコピーが必要。
+
+### 権限リセット（bundle ID 変更後など）
+
+```bash
+tccutil reset Microphone com.rayotsuka.robot-secretary
+tccutil reset Accessibility com.rayotsuka.robot-secretary
+tccutil reset ScreenCapture com.rayotsuka.robot-secretary
+```
+
+### セットアップ画面
+
+起動時に必須権限（マイク + Gemini API Key）をチェックする。問題があれば自動的にセットアップウィンドウ（`#setup` ルート）を表示し、問題なければ直接ロボットを起動する。セットアップ画面の実装は `src/renderer/setup/SetupApp.tsx`、IPC ハンドラは `src/main/index.ts` の `registerSetupIpc()`。
+
+### Renderer の getUserMedia 権限
+
+`session.defaultSession.setPermissionRequestHandler` で `media` を明示的に許可している（`src/main/index.ts` の `app.whenReady`）。これがないと renderer の `getUserMedia` が常に拒否される。
+
+### `DefaultTransporter is not a constructor` エラー
+
+`googleapis-common` が `google-auth-library` の `DefaultTransporter` を使うが、pnpm パッチは top-level `node_modules/google-auth-library/` にのみ適用される。electron-builder は pnpm virtual store (`node_modules/.pnpm/google-auth-library@10.6.2/`) から asar を作るため、**パッチなしの版が asar に入る**。
+
+`build:app` の冒頭に `patch:pnpm` スクリプトを実行してvirtual storeのファイルを上書きする：
+
+```bash
+npm run patch:pnpm  # node_modules/.pnpm/.../ に patched index.js をコピー
+```
+
+確認コマンド：
+```bash
+node -e "const asar = require('@electron/asar'); const c = asar.extractFile('dist/mac-arm64/Robot Secretary.app/Contents/Resources/app.asar', 'node_modules/google-auth-library/build/src/index.js').toString(); console.log('patched:', c.includes('DefaultTransporter'), 'size:', c.length)"
+```
+
+`pnpm install` を実行すると virtual store が上書きされてパッチが消えるので、再度 `npm run build:app` でリビルドすること。
+
+### マイクがシステム設定に表示されない問題
+
+Hardened Runtime（署名済みアプリ）では `NSMicrophoneUsageDescription` が Info.plist にあっても、**`com.apple.security.device.audio-input` エンタイトルメントがないとmacOSのマイクリストに載らない**。ダイアログも出ない。
+
+`build/entitlements.mac.plist` に以下が必要：
+```xml
+<key>com.apple.security.device.audio-input</key>
+<true/>
+<key>com.apple.security.device.microphone</key>
+<true/>
+```
+
+`package.json` の `build.mac` に以下が必要：
+```json
+"hardenedRuntime": true,
+"entitlements": "build/entitlements.mac.plist",
+"entitlementsInherit": "build/entitlements.mac.plist"
+```
+
+確認コマンド：
+```bash
+codesign -d --entitlements - "/Applications/Robot Secretary.app" 2>/dev/null | grep -E "audio-input|microphone"
+```
 
 ## Architecture
 
@@ -44,7 +132,7 @@ The window is `transparent: true, frame: false, alwaysOnTop: true, hasShadow: fa
 
 Each tool reads its credentials from `process.env` at call time and constructs its client lazily. Important quirks:
 
-- **Gmail and Calendar reuse the user's `gmail-triage` Claude Code skill tokens** at `~/.config/gmail-triage/tokens/<email>.json` via `src/main/tools/googleAuth.ts`. Each token JSON has embedded `client_id` / `client_secret` / `scopes` (gmail.readonly + gmail.send + calendar). `gmail.ts` and `calendar.ts` both call `listAccounts()` and fan out to every token by default; pass an explicit `account` (Gmail) or use `GMAIL_ACCOUNT` env (single-account fallback in `getGoogleAuth`) to scope down. Calendar de-duplicates events by id across accounts. Run `node scripts/auth-google.mjs <email>` to (re)authorize when the refresh token expires or when adding new scopes.
+- **Gmail and Calendar** use Google OAuth2 tokens via `src/main/tools/googleAuth.ts`. トークンは **`~/.config/robot-secretary/google-tokens/<email>.json`** に置く（プロジェクト専用ディレクトリ）。このディレクトリがなければ旧 `~/.config/gmail-triage/tokens/` にフォールバックする。各トークン JSON には `client_id` / `client_secret` / `refresh_token` / `scopes` (gmail.readonly + gmail.send + calendar) が含まれる。`gmail.ts` と `calendar.ts` は `listAccounts()` で全トークンを自動検出しファンアウト。`GMAIL_ACCOUNT` env で絞り込み可能。refresh token は有効期限なし（手動失効しない限り）のでコピーするだけで再認証不要。トークンを再発行する場合は `node scripts/auth-google.mjs <email>` を実行し出力を `~/.config/robot-secretary/google-tokens/<email>.json` に保存する。
 - **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/tools/tickTickAuth.ts`). Token is shared with the user's `daily-dashboard` Vercel project; if it expires, pull from there with `vercel env pull` against `daily-viewer`.
 - **Slack is currently NOT wired** — `slack.ts` exists but `.env.local` only has placeholder `xoxb-...` / `xoxp-...` values. To enable, create a Slack App, install to the workspace, then drop the bot token into `SLACK_BOT_TOKEN`. Note: `getUnreadMessages` without a channel iterates every joined channel and is slow for users in many workspaces — fix before relying on it.
 - **Dashboard** (`dashboard.ts`) reads daily summary entries from the user's `daily-dashboard` Turso (libSQL) DB via `@libsql/client`. Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local` (copy from `daily-dashboard/.env.local`). Read-only; the `entries` rows are written by `daily-dashboard`'s skill scripts. `getDashboardEntry(skill, id?)` resolves `id` to the latest row when omitted; supported skills are `ai-news` / `best-tools` / `movies` / `spending`.
