@@ -288,6 +288,10 @@ function createWindow() {
 
   forwardRendererConsole(win, 'robot')
 
+  // 全 Space で表示（フルスクリーン Space は除外）
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false })
+  win.setAlwaysOnTop(true, 'floating')
+
   // クリックスルー（右クリックのみ有効）
   win.setIgnoreMouseEvents(true, { forward: true })
 
@@ -338,6 +342,10 @@ function createChatWindow() {
   })
 
   forwardRendererConsole(chatWin, 'chat')
+
+  // 全 Space で表示（フルスクリーン Space は除外）
+  chatWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false })
+  chatWin.setAlwaysOnTop(true, 'floating')
 
   chatWin.setIgnoreMouseEvents(true, { forward: true })
   chatWin.on('closed', () => { chatWin = null })

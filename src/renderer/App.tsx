@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { RobotScene } from './components/RobotScene'
-import { StatusRing } from './components/StatusRing'
 import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
@@ -190,8 +189,7 @@ function RobotWindowApp() {
 
   return (
     <div style={wrapperStyle} onMouseLeave={handleLeave}>
-      <RobotScene state={robotState} />
-      <StatusRing isConnected={isConnected} />
+      <RobotScene state={robotState} isConnected={isConnected} />
       {showSettings && (
         <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <SettingsPanel onClose={() => setShowSettings(false)} />

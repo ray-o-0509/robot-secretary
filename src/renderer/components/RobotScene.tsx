@@ -4,9 +4,20 @@ import { useGLTF, useAnimations, Float } from '@react-three/drei'
 import * as THREE from 'three'
 import type { RobotState } from '../App'
 
+// 接続状態 × ロボット状態 → アンテナ球の色
+function getAntennaColor(isConnected: boolean, state: RobotState): string {
+  if (!isConnected) return '#ff4444'
+  return {
+    idle:      '#44ff88',
+    listening: '#44ddff',
+    speaking:  '#ff8844',
+    thinking:  '#ffdd44',
+  }[state]
+}
+
 // ========== Placeholder robot ==========
 
-function PlaceholderRobot({ state }: { state: RobotState }) {
+function PlaceholderRobot({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
   const bodyRef = useRef<THREE.Mesh>(null)
   const eye1Ref = useRef<THREE.Mesh>(null)
 
@@ -50,11 +61,18 @@ function PlaceholderRobot({ state }: { state: RobotState }) {
       <mesh position={[0, 1.45, 0]}>
         <sphereGeometry args={[0.07, 8, 8]} />
         <meshStandardMaterial
-          color={state === 'listening' ? '#ff2222' : '#ff6600'}
-          emissive={state === 'listening' ? '#ff2222' : '#ff6600'}
-          emissiveIntensity={4}
+          color={getAntennaColor(isConnected, state)}
+          emissive={getAntennaColor(isConnected, state)}
+          emissiveIntensity={20}
+          toneMapped={false}
         />
       </mesh>
+      <pointLight
+        position={[0, 1.45, 0]}
+        color={getAntennaColor(isConnected, state)}
+        intensity={8}
+        distance={3}
+      />
       {[[-0.7, -0.6, 0], [0.7, -0.6, 0], [0, -0.6, 0.7]].map(([x, y, z], i) => (
         <group key={i} position={[x, y, z]}>
           <mesh>
@@ -78,10 +96,13 @@ function PlaceholderRobot({ state }: { state: RobotState }) {
 
 // ========== GLB robot ==========
 
-function GLBRobot({ state, onReady }: { state: RobotState; onReady?: () => void }) {
+function GLBRobot({ state, isConnected, onReady }: { state: RobotState; isConnected: boolean; onReady?: () => void }) {
   const group = useRef<THREE.Group>(null)
   const { scene, animations } = useGLTF('./assets/robot.glb')
   const { actions, mixer } = useAnimations(animations, group)
+  const antennaMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
+  const antennaLightRef = useRef<THREE.PointLight>(null)
+  const antennaPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1.5, 0))
 
   useEffect(() => {
     // バウンディングボックスで自動センタリング
@@ -93,6 +114,10 @@ function GLBRobot({ state, onReady }: { state: RobotState; onReady?: () => void 
     // body_6 / body_7 が眼球本体（レンズと縁）。真っ黒に上書きする。
     // body_5 (mat: "eye hilight(ball)") は目のハイライトなので残す。
     const EYE_MESH_NAMES = new Set(['body_6', 'body_7'])
+
+    // アンテナ球を位置ヒューリスティックで特定（最も高いY座標のメッシュ）
+    let highestY = -Infinity
+    let antennaMesh: THREE.Mesh | null = null
 
     const hsl = { h: 0, s: 0, l: 0 }
     scene.traverse((obj) => {
@@ -124,7 +149,33 @@ function GLBRobot({ state, onReady }: { state: RobotState; onReady?: () => void 
           mat.toneMapped = false // bloomが正しく効くよう HDR値を維持
         }
       })
+
+      // アンテナ球候補: 眼球以外で最も高いメッシュ
+      if (!isEyeMesh) {
+        const box = new THREE.Box3().setFromObject(obj)
+        const centerY = (box.min.y + box.max.y) / 2
+        if (centerY > highestY) {
+          highestY = centerY
+          antennaMesh = obj
+        }
+      }
     })
+
+    // アンテナ球マテリアルと位置を保存
+    if (antennaMesh) {
+      const mat = Array.isArray((antennaMesh as THREE.Mesh).material)
+        ? ((antennaMesh as THREE.Mesh).material as THREE.MeshStandardMaterial[])[0]
+        : ((antennaMesh as THREE.Mesh).material as THREE.MeshStandardMaterial)
+      if (mat instanceof THREE.MeshStandardMaterial) {
+        mat.emissiveIntensity = 20
+        mat.toneMapped = false
+        antennaMatRef.current = mat
+      }
+      // ワールド座標を取得してポイントライト配置に使う
+      const worldPos = new THREE.Vector3()
+      ;(antennaMesh as THREE.Mesh).getWorldPosition(worldPos)
+      antennaPosRef.current = worldPos
+    }
   }, [scene])
 
   // GLBロード完了を通知
@@ -150,22 +201,45 @@ function GLBRobot({ state, onReady }: { state: RobotState; onReady?: () => void 
     }
     group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, 0.05)
     group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, 0.05)
+
+    // アンテナ球の色を接続状態 × ロボット状態で更新
+    const antennaColor = getAntennaColor(isConnected, state)
+    if (antennaMatRef.current) {
+      antennaMatRef.current.emissive.set(antennaColor)
+      antennaMatRef.current.color.set(antennaColor)
+      antennaMatRef.current.emissiveIntensity = 20
+    }
+    if (antennaLightRef.current) {
+      antennaLightRef.current.color.set(antennaColor)
+    }
   })
 
-  return <primitive ref={group} object={scene} scale={0.6} />
+  const p = antennaPosRef.current
+  return (
+    <>
+      <primitive ref={group} object={scene} scale={0.6} />
+      <pointLight
+        ref={antennaLightRef}
+        position={[p.x, p.y, p.z]}
+        color={getAntennaColor(isConnected, state)}
+        intensity={12}
+        distance={4}
+      />
+    </>
+  )
 }
 
 // ========== Robot content (Suspense を使わず即座に表示) ==========
 
-function RobotContent({ state }: { state: RobotState }) {
+function RobotContent({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
   const [glbReady, setGlbReady] = useState(false)
 
   return (
     <>
       {/* GLBロード完了まで PlaceholderRobot を即座に表示 */}
-      {!glbReady && <PlaceholderRobot state={state} />}
+      {!glbReady && <PlaceholderRobot state={state} isConnected={isConnected} />}
       <Suspense fallback={null}>
-        <GLBRobot state={state} onReady={() => setGlbReady(true)} />
+        <GLBRobot state={state} isConnected={isConnected} onReady={() => setGlbReady(true)} />
       </Suspense>
     </>
   )
@@ -173,7 +247,7 @@ function RobotContent({ state }: { state: RobotState }) {
 
 // ========== Main Scene ==========
 
-export function RobotScene({ state }: { state: RobotState }) {
+export function RobotScene({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
   return (
     <Canvas
       camera={{ position: [-6.11, 1.8, -2.22], fov: 35 }}
@@ -208,7 +282,7 @@ export function RobotScene({ state }: { state: RobotState }) {
         rotationIntensity={0}
         floatIntensity={state === 'idle' ? 0.5 : 0.1}
       >
-        <RobotContent state={state} />
+        <RobotContent state={state} isConnected={isConnected} />
       </Float>
 
     </Canvas>
