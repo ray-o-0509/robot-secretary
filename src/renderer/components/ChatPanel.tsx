@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { FONT_MONO, CYAN, MAGENTA, CYBER_STYLES } from '../display/styles'
 import { CloseButton } from '../display/TopButtons'
 import type { ConnectionError } from '../hooks/useGeminiLive'
@@ -11,20 +11,11 @@ export type ChatMessage = {
 
 interface Props {
   messages: ChatMessage[]
-  languageCode?: string
-  onLanguageChange?: (lang: string) => void
   connectionError?: ConnectionError | null
   onRetry?: () => void
 }
 
-const LANGUAGES: { code: string; label: string }[] = [
-  { code: 'ja-JP', label: '日本語' },
-  { code: 'en-US', label: 'English' },
-  { code: 'zh-CN', label: '中文' },
-  { code: 'ko-KR', label: '한국어' },
-]
-
-export function ChatPanel({ messages, languageCode, onLanguageChange, connectionError, onRetry }: Props) {
+export function ChatPanel({ messages, connectionError, onRetry }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -135,11 +126,6 @@ export function ChatPanel({ messages, languageCode, onLanguageChange, connection
         ◢ NEURAL_LINK // CHANNEL_01
       </div>
 
-      {/* 言語セレクター */}
-      {onLanguageChange && (
-        <LanguageSelector value={languageCode ?? 'ja-JP'} onChange={onLanguageChange} />
-      )}
-
       {/* 接続エラーバナー */}
       {connectionError && (
         <ConnectionErrorBanner error={connectionError} onRetry={onRetry} />
@@ -238,15 +224,12 @@ function ConnectionErrorBanner({ error, onRetry }: { error: ConnectionError; onR
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
     >
-      {/* タイプラベル */}
       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: RED, textShadow: `0 0 6px ${RED}`, marginBottom: 5 }}>
         {icon} CONNECTION_ERROR // {error.type.toUpperCase()}
       </div>
-      {/* メッセージ */}
       <div style={{ fontSize: 11, color: 'rgba(255, 180, 180, 0.9)', lineHeight: 1.5, marginBottom: canRetry ? 8 : 0 }}>
         {error.message}
       </div>
-      {/* リトライボタン */}
       {canRetry && onRetry && (
         <button
           onClick={onRetry}
@@ -271,121 +254,6 @@ function ConnectionErrorBanner({ error, onRetry }: { error: ConnectionError; onR
   )
 }
 
-function LanguageSelector({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (lang: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  const current = LANGUAGES.find((l) => l.code === value) ?? LANGUAGES[0]
-
-  const handleEnter = () => window.electronAPI?.setChatInteractive(true)
-  const handleLeave = () => {
-    // ドロップダウンが開いているときは interactive を解除しない
-    // （解除するとリストにカーソルが届く前にクリックスルーになる）
-    if (!open) window.electronAPI?.setChatInteractive(false)
-  }
-
-  const close = () => {
-    setOpen(false)
-    window.electronAPI?.setChatInteractive(false)
-  }
-
-  // ドロップダウン外クリックで閉じる
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        close()
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div
-      ref={wrapperRef}
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-      style={{
-        position: 'absolute',
-        top: 14,
-        right: 16,
-        fontFamily: FONT_MONO,
-        zIndex: 20,
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}
-    >
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          background: 'rgba(8, 12, 24, 0.95)',
-          border: `1px solid ${MAGENTA}`,
-          color: MAGENTA,
-          padding: '3px 8px',
-          fontFamily: FONT_MONO,
-          fontSize: 9.5,
-          fontWeight: 700,
-          letterSpacing: 1.5,
-          textShadow: `0 0 6px ${MAGENTA}`,
-          boxShadow: '0 0 10px rgba(255, 43, 214, 0.3)',
-          cursor: 'pointer',
-          textTransform: 'uppercase',
-        }}
-      >
-        ◢ {current.code} {open ? '▴' : '▾'}
-      </button>
-      {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '100%',
-            right: 0,
-            minWidth: 110,
-            background: 'rgba(8, 12, 24, 0.97)',
-            border: `1px solid ${MAGENTA}`,
-            boxShadow: '0 0 14px rgba(255, 43, 214, 0.35)',
-          }}
-        >
-          {LANGUAGES.map((lang) => {
-            const active = lang.code === value
-            return (
-              <div
-                key={lang.code}
-                onClick={() => {
-                  onChange(lang.code)
-                  setOpen(false)
-                }}
-                style={{
-                  padding: '6px 10px',
-                  fontSize: 10.5,
-                  letterSpacing: 1,
-                  color: active ? CYAN : '#e8f6ff',
-                  textShadow: active ? `0 0 6px ${CYAN}` : 'none',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid rgba(255, 43, 214, 0.15)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 43, 214, 0.18)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                {lang.label}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function CornerBrackets() {
   const size = 14
   const thickness = 2
@@ -405,30 +273,10 @@ function CornerBrackets() {
   )
   return (
     <>
-      {bracket({
-        top: 56,
-        left: 16,
-        borderTop: `${thickness}px solid ${color}`,
-        borderLeft: `${thickness}px solid ${color}`,
-      })}
-      {bracket({
-        top: 56,
-        right: 16,
-        borderTop: `${thickness}px solid ${color}`,
-        borderRight: `${thickness}px solid ${color}`,
-      })}
-      {bracket({
-        bottom: 16,
-        left: 16,
-        borderBottom: `${thickness}px solid ${color}`,
-        borderLeft: `${thickness}px solid ${color}`,
-      })}
-      {bracket({
-        bottom: 16,
-        right: 16,
-        borderBottom: `${thickness}px solid ${color}`,
-        borderRight: `${thickness}px solid ${color}`,
-      })}
+      {bracket({ top: 56, left: 16, borderTop: `${thickness}px solid ${color}`, borderLeft: `${thickness}px solid ${color}` })}
+      {bracket({ top: 56, right: 16, borderTop: `${thickness}px solid ${color}`, borderRight: `${thickness}px solid ${color}` })}
+      {bracket({ bottom: 16, left: 16, borderBottom: `${thickness}px solid ${color}`, borderLeft: `${thickness}px solid ${color}` })}
+      {bracket({ bottom: 16, right: 16, borderBottom: `${thickness}px solid ${color}`, borderRight: `${thickness}px solid ${color}` })}
     </>
   )
 }

@@ -217,9 +217,6 @@ function ChatWindowApp() {
   const [robotState, setRobotState] = useState<RobotState>('idle')
   const [processor, setProcessor] = useState<RobotProcessor | undefined>(undefined)
   const [connectionError, setConnectionError] = useState<unknown>(null)
-  const [languageCode, setLanguageCode] = useState<string>(
-    () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
-  )
 
   useEffect(() => {
     window.electronAPI?.onChatMessages((msgs) => setMessages(msgs))
@@ -227,27 +224,14 @@ function ChatWindowApp() {
       setRobotState(s as RobotState)
       setProcessor(p)
     })
-    window.electronAPI?.onLanguageChange((lang) => {
-      localStorage.setItem('LANGUAGE_CODE', lang)
-      setLanguageCode(lang)
-    })
     window.electronAPI?.onConnectionError((err) => setConnectionError(err))
   }, [])
-
-  const handleLanguageChange = (lang: string) => {
-    if (lang === languageCode) return
-    localStorage.setItem('LANGUAGE_CODE', lang)
-    setLanguageCode(lang)
-    window.electronAPI?.setLanguage(lang)
-  }
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <StatusBanner state={robotState} processor={processor} />
       <ChatPanel
         messages={messages}
-        languageCode={languageCode}
-        onLanguageChange={handleLanguageChange}
         connectionError={connectionError as import('./hooks/useGeminiLive').ConnectionError | null}
         onRetry={() => window.electronAPI?.sendGeminiRetry()}
       />
