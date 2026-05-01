@@ -109,7 +109,7 @@ export function SetupApp() {
       {/* Header — ドラッグ可能 */}
       <div style={{ padding: '20px 24px 16px', flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: '#6366f1', letterSpacing: '0.15em', fontFamily: 'monospace', marginBottom: 6 }}>
-          ROBOT SECRETARY // SETUP
+          VEGA // SETUP
         </div>
         <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>
           起動前チェック

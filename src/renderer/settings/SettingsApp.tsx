@@ -30,7 +30,7 @@ export function SettingsApp() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 10, color: '#6366f1', letterSpacing: '0.15em', fontFamily: 'monospace', marginBottom: 4 }}>
-              ROBOT SECRETARY // SETTINGS
+              VEGA // SETTINGS
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>設定</div>
           </div>
