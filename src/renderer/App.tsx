@@ -63,6 +63,7 @@ declare global {
       onNotification: (cb: (notifs: { bundleId: string; appName: string; title?: string; body?: string; ts: string }[]) => void) => () => void
 
       // Settings window
+      chatClose: () => void
       settingsClose: () => void
       settingsGetProfile: () => Promise<Record<string, string>>
       settingsUpsertProfile: (key: string, value: string) => Promise<Record<string, string>>

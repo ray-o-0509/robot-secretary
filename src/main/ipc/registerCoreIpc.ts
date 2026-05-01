@@ -250,6 +250,11 @@ export function registerCoreIpc(deps: Deps): void {
     }
   })
 
+  ipcMain.on('chat:close', () => {
+    const chat = deps.getChatWindow()
+    if (chat && !chat.isDestroyed()) chat.hide()
+  })
+
   ipcMain.on('chat-set-interactive', (_event, enabled: boolean) => {
     const chat = deps.getChatWindow()
     if (!chat) return

@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onNotification: (cb: (notifs: unknown[]) => void) => on('notification:incoming', cb),
 
   // Settings window
+  chatClose: () => ipcRenderer.send('chat:close'),
   settingsClose: () => ipcRenderer.send('settings:close'),
   settingsGetProfile: () => ipcRenderer.invoke('settings:get-profile'),
   settingsUpsertProfile: (key: string, value: string) => ipcRenderer.invoke('settings:upsert-profile', key, value),
