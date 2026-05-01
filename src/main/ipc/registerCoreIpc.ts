@@ -32,6 +32,17 @@ export function registerCoreIpc(deps: Deps): void {
     initConfirmation(deps.getMainWindow)
   })
 
+  // タイマー期限コールバック設定
+  import('../skills/timer/index').then(({ setOnExpire, getTimerSnapshot }) => {
+    setOnExpire(async () => {
+      const { pushPayload } = await import('../display/show-panel')
+      const w = deps.getDisplayWindow()
+      if (w && !w.isDestroyed()) {
+        pushPayload(w, { type: 'timer', data: getTimerSnapshot(), fetchedAt: Date.now() }, deps.isDisplayReady())
+      }
+    })
+  })
+
   ipcMain.on('confirmation:respond', (_event, id: string, confirmed: boolean) => {
     import('../skills/confirmation/index').then(({ respondToConfirmation }) => {
       respondToConfirmation(id, confirmed)
@@ -144,6 +155,41 @@ export function registerCoreIpc(deps: Deps): void {
         const { win, ready } = await deps.getOrCreateDisplayWindow()
         win.show()
         pushPayload(win, { type: 'terminal_output', data: { command: `claude -p "${args.prompt}"`, stdout: String(result.result ?? ''), stderr: '', cwd }, fetchedAt: Date.now() }, ready)
+        return { result }
+      }
+      if (
+        toolName === 'start_timer' ||
+        toolName === 'pause_timer' ||
+        toolName === 'resume_timer' ||
+        toolName === 'cancel_timer' ||
+        toolName === 'start_stopwatch' ||
+        toolName === 'pause_stopwatch' ||
+        toolName === 'resume_stopwatch' ||
+        toolName === 'stop_stopwatch'
+      ) {
+        const timerMod = await import('../skills/timer/index')
+        const { pushPayload } = await import('../display/show-panel')
+        let result: unknown
+        if (toolName === 'start_timer') {
+          result = timerMod.startTimer(String(args.name ?? ''), Number(args.duration_seconds))
+        } else if (toolName === 'pause_timer') {
+          result = timerMod.pauseTimer(String(args.id ?? ''))
+        } else if (toolName === 'resume_timer') {
+          result = timerMod.resumeTimer(String(args.id ?? ''))
+        } else if (toolName === 'cancel_timer') {
+          result = timerMod.cancelTimer(String(args.id ?? ''))
+        } else if (toolName === 'start_stopwatch') {
+          result = timerMod.startStopwatch(String(args.name ?? ''))
+        } else if (toolName === 'pause_stopwatch') {
+          result = timerMod.pauseStopwatch(String(args.id ?? ''))
+        } else if (toolName === 'resume_stopwatch') {
+          result = timerMod.resumeStopwatch(String(args.id ?? ''))
+        } else {
+          result = timerMod.stopStopwatch(String(args.id ?? ''))
+        }
+        const { win, ready } = await deps.getOrCreateDisplayWindow()
+        win.show()
+        pushPayload(win, { type: 'timer', data: timerMod.getTimerSnapshot(), fetchedAt: Date.now() }, ready)
         return { result }
       }
       return { error: `Unknown tool: ${toolName}` }

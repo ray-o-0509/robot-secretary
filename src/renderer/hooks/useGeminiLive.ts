@@ -160,7 +160,7 @@ const secretaryTools = [
   {
     name: 'show_panel',
     description:
-      'Display email, calendar, tasks, AI news, tools, or movies in a dedicated panel. Only call when the user explicitly asks to show or display something. For checks like "any new mail?" use delegate_task instead. The response data field contains raw data — summarize it verbally as usual and note that it is also shown on screen.',
+      'Display email, calendar, tasks, AI news, tools, movies, or timers in a dedicated panel. Only call when the user explicitly asks to show or display something. For checks like "any new mail?" use delegate_task instead. The response data field contains raw data — summarize it verbally as usual and note that it is also shown on screen.',
     parameters: {
       type: 'object',
       properties: {
@@ -175,12 +175,101 @@ const secretaryTools = [
             'news',
             'tools',
             'movies',
+            'timer',
           ],
           description:
-            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies',
+            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies, timer=active timers and stopwatches',
         },
       },
       required: ['type'],
+    },
+  },
+  {
+    name: 'start_timer',
+    description: 'Start a countdown timer. Opens the timer panel automatically. Multiple timers can run simultaneously.',
+    parameters: {
+      type: 'object',
+      properties: {
+        duration_seconds: { type: 'number', description: 'Duration in seconds (e.g. 180 for 3 minutes)' },
+        name: { type: 'string', description: 'Optional label for this timer (e.g. "ポモドーロ", "cooking")' },
+      },
+      required: ['duration_seconds'],
+    },
+  },
+  {
+    name: 'pause_timer',
+    description: 'Pause a running countdown timer by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Timer ID (e.g. "timer-1")' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'resume_timer',
+    description: 'Resume a paused countdown timer by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Timer ID (e.g. "timer-1")' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'cancel_timer',
+    description: 'Cancel and remove a countdown timer by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Timer ID (e.g. "timer-1")' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'start_stopwatch',
+    description: 'Start a stopwatch. Opens the timer panel automatically. Multiple stopwatches can run simultaneously.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Optional label for this stopwatch' },
+      },
+    },
+  },
+  {
+    name: 'pause_stopwatch',
+    description: 'Pause a running stopwatch by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Stopwatch ID (e.g. "sw-1")' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'resume_stopwatch',
+    description: 'Resume a paused stopwatch by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Stopwatch ID (e.g. "sw-1")' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'stop_stopwatch',
+    description: 'Stop and finalize a stopwatch by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Stopwatch ID (e.g. "sw-1")' },
+      },
+      required: ['id'],
     },
   },
   {

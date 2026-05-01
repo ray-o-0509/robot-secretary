@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LuTimer, LuStopCircle, LuPause, LuPlay, LuCheckCircle } from 'react-icons/lu'
+import { LuTimer, LuCircleStop, LuPause, LuPlay, LuCircleCheck } from 'react-icons/lu'
 import { CYAN, MAGENTA, FONT_MONO } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
@@ -87,7 +87,7 @@ function StopwatchCard({ entry }: { entry: TimerEntry }) {
   return (
     <Card accent={stopped ? 'magenta' : 'cyan'}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <LuStopCircle size={13} color={color} style={{ flexShrink: 0 }} />
+        <LuCircleStop size={13} color={color} style={{ flexShrink: 0 }} />
         <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: 'rgba(232,246,255,0.6)', letterSpacing: 1, flex: 1 }}>
           {entry.name}
         </span>
@@ -114,8 +114,8 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 const STATE_ICONS = {
   running: LuPlay,
   paused: LuPause,
-  done: LuCheckCircle,
-  stopped: LuStopCircle,
+  done: LuCircleCheck,
+  stopped: LuCircleStop,
 }
 const STATE_LABELS: Record<string, string> = {
   running: 'RUN',

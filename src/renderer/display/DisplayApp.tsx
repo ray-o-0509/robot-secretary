@@ -91,5 +91,7 @@ function renderView(payload: PanelPayload) {
       return <MoviesView payload={payload} />
     case 'terminal_output':
       return <TerminalView payload={payload} />
+    case 'timer':
+      return <TimerView payload={payload} />
   }
 }
