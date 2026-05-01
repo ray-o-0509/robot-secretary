@@ -139,7 +139,7 @@ codesign -d --entitlements - "/Applications/Robot Secretary.app" 2>/dev/null | g
 
 ## Architecture
 
-This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Slack / Gmail / Google Calendar / TickTick.
+This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Gmail / Google Calendar / TickTick.
 
 ### Three processes (electron-vite layout)
 
@@ -152,11 +152,11 @@ Build outputs land in `out/{main,preload,renderer}/` and are referenced by `pack
 ### Voice loop (`src/renderer/hooks/useGeminiLive.ts`)
 
 This is the central piece. On startup the renderer:
-1. Opens a Gemini Live session (`gemini-2.0-flash-live-001`, audio modality, voice `Kore`) with a Japanese system prompt and a static `secretaryTools` function-declaration list.
+1. Opens a Gemini Live session (`gemini-2.0-flash-live-001`, audio modality, voice `Kore`) with a system prompt built by `buildPrompt(languageCode)` (see Prompts section) and a static `secretaryTools` function-declaration list.
 2. Opens the mic at 16 kHz via `getUserMedia` and pipes PCM into `sendRealtimeInput` — but **only when `isPTTActiveRef.current` is true**. The mic stream is always live; PTT just gates upload.
 3. PTT is driven by main-process events `ptt-start` / `ptt-stop`. On release, the renderer sends a small silence buffer so Gemini's VAD detects end-of-utterance.
 4. Incoming `serverContent.modelTurn.parts[].inlineData` is base64 PCM at 24 kHz, scheduled sequentially on `playbackCtxRef` using `nextPlayTimeRef` so chunks don't overlap.
-5. `toolCall.functionCalls` are forwarded to the main process via `electronAPI.callTool(name, args)` and the result is sent back with `sendToolResponse`. Tool names must match between `secretaryTools` (renderer) and the `switch` in `ipcMain.handle('call-tool', ...)` (main) — these two lists are the source of truth and are kept in sync manually.
+5. `toolCall.functionCalls` are forwarded to the main process via `electronAPI.callTool(name, args)` and the result is sent back with `sendToolResponse`. Tool names must match between `secretaryTools` (renderer) and `src/main/skills/dispatcher.ts` (main) — these two lists are the source of truth and are kept in sync manually.
 6. Robot state (`idle | listening | speaking | thinking`) is mirrored to the main process via `sendRobotState` so wandering pauses during conversation.
 
 ### Global hotkey & permissions (macOS-specific)
@@ -167,21 +167,22 @@ PTT uses `uiohook-napi` to capture the left Option key globally. This requires m
 
 The window is `transparent: true, frame: false, alwaysOnTop: true, hasShadow: false`, and uses `setIgnoreMouseEvents(true, { forward: true })` so clicks pass through except for right-click (custom context menu in `setupContextMenu`). The wandering interval lerps `currentX/Y` toward random targets at 50ms ticks; pausing/resuming wandering toggles `isWandering`.
 
-### Tool modules (`src/main/tools/*.ts`)
+### Skill modules (`src/main/skills/`)
 
-Each tool reads its credentials from `process.env` at call time and constructs its client lazily. Important quirks:
+各スキルは `src/main/skills/<name>/index.ts` に独立。共通コードは `src/main/skills/shared/` に集約。`dispatcher.ts` がスキル一覧を束ねて Claude に渡す。
 
-- **Gmail and Calendar** use Google OAuth2 tokens via `src/main/tools/googleAuth.ts`. トークンは **`~/.config/robot-secretary/google-tokens/<email>.json`** に置く（プロジェクト専用ディレクトリ）。このディレクトリがなければ旧 `~/.config/gmail-triage/tokens/` にフォールバックする。各トークン JSON には `client_id` / `client_secret` / `refresh_token` / `scopes` (gmail.readonly + gmail.send + calendar) が含まれる。`gmail.ts` と `calendar.ts` は `listAccounts()` で全トークンを自動検出しファンアウト。`GMAIL_ACCOUNT` env で絞り込み可能。refresh token は有効期限なし（手動失効しない限り）のでコピーするだけで再認証不要。トークンを再発行する場合は `node scripts/auth-google.mjs <email>` を実行し出力を `~/.config/robot-secretary/google-tokens/<email>.json` に保存する。
-- **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/tools/tickTickAuth.ts`). Obtain the token via TickTick's OAuth flow and place it in `.env.local`.
-- **Slack is currently NOT wired** — `slack.ts` exists but `.env.local` only has placeholder `xoxb-...` / `xoxp-...` values. To enable, create a Slack App, install to the workspace, then drop the bot token into `SLACK_BOT_TOKEN`. Note: `getUnreadMessages` without a channel iterates every joined channel and is slow for users in many workspaces — fix before relying on it.
-- **Dashboard** (`dashboard.ts`) reads daily summary entries from a Turso (libSQL) DB via `@libsql/client`. Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local`. Read-only; the `entries` table is expected to have rows keyed by skill name. `getDashboardEntry(skill, id?)` resolves `id` to the latest row when omitted; supported skills are `ai-news` / `best-tools` / `movies` / `spending`.
+Each skill reads its credentials from `process.env` at call time and constructs its client lazily. Important quirks:
+
+- **Gmail and Calendar** use Google OAuth2 tokens via `src/main/skills/shared/googleAuth.ts`. トークンは **`~/.config/robot-secretary/google-tokens/<email>.json`** に置く（プロジェクト専用ディレクトリ）。このディレクトリがなければ旧 `~/.config/gmail-triage/tokens/` にフォールバックする。各トークン JSON には `client_id` / `client_secret` / `refresh_token` / `scopes` (gmail.readonly + gmail.send + calendar) が含まれる。`gmail/index.ts` と `calendar/index.ts` は `listAccounts()` で全トークンを自動検出しファンアウト。`GMAIL_ACCOUNT` env で絞り込み可能。refresh token は有効期限なし（手動失効しない限り）のでコピーするだけで再認証不要。トークンを再発行する場合は `node scripts/auth-google.mjs <email>` を実行し出力を `~/.config/robot-secretary/google-tokens/<email>.json` に保存する。
+- **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/skills/shared/tickTickAuth.ts`). Obtain the token via TickTick's OAuth flow and place it in `.env.local`.
+- **Dashboard / ai-news / movies / best-tools** は private サブモジュール（`src/private`）に切り出されている。Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local`. private サブモジュールがない環境でも `dispatcher.ts` が動的ロードを試みて失敗しても無視するので、ビルド・起動は正常に動く。
 
 ### Configuration: split between two stores
 
 Two separate configuration mechanisms exist and they are not unified:
 
-- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Tool modules in `src/main/tools/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Slack / Turso / TickTick) live; Google instead reads from external token files (see Tool modules above).
-- **`localStorage`** in the renderer — written by `SettingsPanel.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). The Slack field in the settings panel is written but never read — main-process tools only see `process.env`. Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the tool calls will keep using `.env`.
+- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Skill modules in `src/main/skills/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Turso / TickTick) live; Google instead reads from external token files (see Skill modules above).
+- **`localStorage`** in the renderer — written by `SettingsApp.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the skill calls will keep using `.env`.
 
 ### TypeScript configs
 
@@ -191,6 +192,29 @@ Two separate configuration mechanisms exist and they are not unified:
 
 `RobotScene.tsx` loads `/assets/robot.glb` via `useGLTF`. The actual file lives at `src/renderer/public/assets/robot.glb` and is served by Vite's public-dir convention. `hasGLB` is hard-coded `true`; the `PlaceholderRobot` is the Suspense fallback. All embedded animations are auto-played in a loop, and emissive materials get `emissiveIntensity = 6` + `toneMapped = false` so bloom reads them as HDR.
 
+### Prompts
+
+システムプロンプトはすべて `.md` ファイルで管理し、Vite の `?raw` インポートでビルド時にインライン化される。TSを触らずMDを編集するだけでプロンプト変更が完結する。
+
+| ファイル | 用途 |
+|---|---|
+| `src/main/agent/prompt.md` | Claude エージェントのシステムプロンプト |
+| `src/renderer/hooks/prompts/core.md` | Gemini Live の共通コアプロンプト |
+| `src/renderer/hooks/prompts/persona/{en,ja,zh,ko}.md` | 言語別ペルソナ定義 |
+| `src/renderer/display/prompt.md` | ディスプレイパネルへの表示指示 |
+| `src/renderer/skills/*/prompt.md` | 各スキルの補足プロンプト |
+
+`buildPrompt(languageCode)` が persona + core + 全スキルの prompt.md を結合して Gemini Live に渡す（`src/renderer/hooks/prompts/index.ts`）。
+
+### スキルの追加方法
+
+1. **main**: `src/main/skills/<name>/index.ts` に関数実装 → `dispatcher.ts` の `publicToolSchemas` にスキーマを追加し `executeTool` の switch に case を追加
+2. **renderer**: `src/renderer/skills/<name>/View.tsx` に UI を実装 → `App.tsx` の panel ルーティングに追加
+3. **prompt**: `src/renderer/skills/<name>/prompt.md` を作成 → `src/renderer/hooks/prompts/index.ts` の SKILLS 配列に追加
+4. **Gemini tool list**: `useGeminiLive.ts` の `secretaryTools` 配列にも同じツール定義を追加（main と renderer の両方に宣言が必要）
+
 ## Notes on user-facing strings
 
-UI labels, the Gemini system prompt, and console warnings are all in Japanese. Keep new user-facing strings consistent with that unless explicitly asked otherwise.
+設定画面・セットアップ画面の UI ラベルは i18n（react-i18next）で管理している。翻訳リソースは `src/renderer/locales/{en,ja,zh}.json`。新しい UI 文字列を追加するときはこれらのファイルに追記すること。
+
+Gemini のシステムプロンプトと Claude エージェントのプロンプトは日本語で書かれている。コンソールの警告も日本語で統一。
