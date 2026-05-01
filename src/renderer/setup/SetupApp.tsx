@@ -7,7 +7,6 @@ interface SetupStatus {
   accessibilityPermission: boolean
   geminiApiKey: boolean
   ticktickToken: boolean
-  slackToken: boolean
   gmailAccounts: string[]
 }
 
@@ -164,12 +163,6 @@ export function SetupApp() {
             ok={status.ticktickToken}
             required={false}
             detail={status.ticktickToken ? '設定済み' : '.env.local に TICKTICK_ACCESS_TOKEN を設定してください'}
-          />
-          <CheckRow
-            label="Slack"
-            ok={status.slackToken}
-            required={false}
-            detail={status.slackToken ? '設定済み' : '.env.local に SLACK_BOT_TOKEN を設定してください'}
           />
         </Section>
 

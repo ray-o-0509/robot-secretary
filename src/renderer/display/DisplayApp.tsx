@@ -6,7 +6,6 @@ import { EmailView } from '../skills/gmail/View'
 import { EmailSearchView } from '../skills/gmail/SearchView'
 import { CalendarView } from '../skills/calendar/View'
 import { TasksView } from '../skills/tasks/View'
-import { SlackView } from '../skills/slack/View'
 import { NewsView } from '../skills/ai-news/View'
 import { ToolsView } from '../skills/best-tools/View'
 import { MoviesView } from '../skills/movies/View'
@@ -83,8 +82,6 @@ function renderView(payload: PanelPayload) {
       return <CalendarView payload={payload} />
     case 'tasks':
       return <TasksView payload={payload} />
-    case 'slack':
-      return <SlackView payload={payload} />
     case 'news':
       return <NewsView payload={payload} />
     case 'tools':

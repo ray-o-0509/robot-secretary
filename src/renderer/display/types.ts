@@ -5,7 +5,6 @@ export type PanelType =
   | 'calendar_tomorrow'
   | 'calendar_week'
   | 'tasks'
-  | 'slack'
   | 'news'
   | 'tools'
   | 'movies'
@@ -26,7 +25,6 @@ export const PANEL_LABELS: Record<PanelType, string> = {
   calendar_tomorrow: '◢ AGENDA // TOMORROW',
   calendar_week: '◢ AGENDA // WEEK',
   tasks: '◢ TASKS // TICKTICK',
-  slack: '◢ SLACK // UNREAD',
   news: '◢ FEED // AI_NEWS',
   tools: '◢ ARSENAL // BEST_TOOLS',
   movies: '◢ CINEMA // RELEASES',

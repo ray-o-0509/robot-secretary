@@ -31,6 +31,9 @@ yarn-error.log*
 # Claude Code harness state (per-machine)
 .claude/
 
+# Private local skill submodule/worktree
+src/private/
+
 # Blender autosaves / locks
 *.blend1
 *.blend@

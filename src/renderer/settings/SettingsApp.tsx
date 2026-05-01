@@ -237,7 +237,7 @@ function AppsTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 4px' }}>
         「メール開いて」「ブラウザ開いて」のようにカテゴリで言われた場合に開くアプリを設定します。
-        固有名（"Slack"など）で指定された場合はそのまま開きます。
+        固有名（"Google Chrome"など）で指定された場合はそのまま開きます。
       </p>
 
       {APP_ROWS.map(({ key, label, placeholder }) => (

@@ -6,17 +6,12 @@ interface Props {
 
 export function SettingsPanel({ onClose }: Props) {
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
-  const [slackToken, setSlackToken] = useState(localStorage.getItem('SLACK_BOT_TOKEN') ?? '')
 
   function save() {
     const trimmedGeminiKey = geminiKey.trim()
-    const trimmedSlackToken = slackToken.trim()
 
     if (trimmedGeminiKey) localStorage.setItem('GEMINI_API_KEY', trimmedGeminiKey)
     else localStorage.removeItem('GEMINI_API_KEY')
-
-    if (trimmedSlackToken) localStorage.setItem('SLACK_BOT_TOKEN', trimmedSlackToken)
-    else localStorage.removeItem('SLACK_BOT_TOKEN')
 
     onClose()
   }
@@ -39,7 +34,6 @@ export function SettingsPanel({ onClose }: Props) {
 
       {[
         { label: 'Gemini API Key', value: geminiKey, set: setGeminiKey },
-        { label: 'Slack Bot Token', value: slackToken, set: setSlackToken },
       ].map(({ label, value, set }) => (
         <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ fontSize: 11, color: '#999' }}>{label}</label>

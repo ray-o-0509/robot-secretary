@@ -11,7 +11,7 @@ const secretaryTools = [
   {
     name: 'delegate_task',
     description:
-      'Slack・Gmail・Googleカレンダー・画面の確認、複雑な要約・横断調査などをClaudeエージェントに委任する。タスク管理(get_tasks/create_task/complete_task)以外の作業はこれを使う。',
+      'Gmail・Googleカレンダー・画面の確認、複雑な要約・横断調査などをClaudeエージェントに委任する。タスク管理(get_tasks/create_task/complete_task)以外の作業はこれを使う。',
     parameters: {
       type: 'object',
       properties: {
@@ -144,13 +144,13 @@ const secretaryTools = [
   {
     name: 'open_app',
     description:
-      'macOS のアプリケーションを起動する。app_name は必ず英語の正式名（例: "Slack", "Safari", "Finder", "Google Chrome"）で渡せ。',
+      'macOS のアプリケーションを起動する。app_name は必ず英語の正式名（例: "Safari", "Finder", "Google Chrome"）で渡せ。',
     parameters: {
       type: 'object',
       properties: {
         app_name: {
           type: 'string',
-          description: '起動するアプリの英語正式名（例: "Slack", "Notion", "Spotify"）',
+          description: '起動するアプリの英語正式名（例: "Notion", "Spotify", "Google Chrome"）',
         },
       },
       required: ['app_name'],
@@ -159,7 +159,7 @@ const secretaryTools = [
   {
     name: 'show_panel',
     description:
-      'メール・カレンダー・タスク・Slack・AIニュース・ツール・映画の内容を専用パネルで画面表示する。ユーザーが「見せて」「表示して」「出して」「一覧」「画面に」など明示的に表示を求めた時のみ呼ぶ。「メールチェックして」「届いてる?」のような確認は delegate_task を使う。返り値の data に生データが入っているので、普段通り音声で内容を要約しつつ「画面にも出した」と添えろ。',
+      'メール・カレンダー・タスク・AIニュース・ツール・映画の内容を専用パネルで画面表示する。ユーザーが「見せて」「表示して」「出して」「一覧」「画面に」など明示的に表示を求めた時のみ呼ぶ。「メールチェックして」「届いてる?」のような確認は delegate_task を使う。返り値の data に生データが入っているので、普段通り音声で内容を要約しつつ「画面にも出した」と添えろ。',
     parameters: {
       type: 'object',
       properties: {
@@ -171,13 +171,12 @@ const secretaryTools = [
             'calendar_tomorrow',
             'calendar_week',
             'tasks',
-            'slack',
             'news',
             'tools',
             'movies',
           ],
           description:
-            'email=Gmailインボックス, calendar_today=今日の予定, calendar_tomorrow=明日, calendar_week=今後7日, tasks=TickTick未完了, slack=Slack未読, news=AIニュース日次まとめ, tools=おすすめツール, movies=今月公開/来月注目映画',
+            'email=Gmailインボックス, calendar_today=今日の予定, calendar_tomorrow=明日, calendar_week=今後7日, tasks=TickTick未完了, news=AIニュース日次まとめ, tools=おすすめツール, movies=今月公開/来月注目映画',
         },
       },
       required: ['type'],

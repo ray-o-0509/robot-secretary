@@ -7,7 +7,6 @@ export type PanelType =
   | 'calendar_tomorrow'
   | 'calendar_week'
   | 'tasks'
-  | 'slack'
   | 'news'
   | 'tools'
   | 'movies'
@@ -28,7 +27,6 @@ const VALID_TYPES = new Set<PanelType>([
   'calendar_tomorrow',
   'calendar_week',
   'tasks',
-  'slack',
   'news',
   'tools',
   'movies',
@@ -62,10 +60,6 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
       case 'tasks': {
         const { getTodos } = await import('../skills/tasks/index')
         return { type, data: await getTodos(), fetchedAt }
-      }
-      case 'slack': {
-        const { getUnreadMessages } = await import('../skills/slack/index')
-        return { type, data: await getUnreadMessages(), fetchedAt }
       }
       case 'news': {
         const { getDashboardEntry } = await import('../skills/shared/turso')
@@ -117,11 +111,6 @@ export function buildSummary(payload: PanelPayload): string {
       if (!d) return '0件'
       const todos = d.tasks.filter((t) => t.status === 'todo')
       return `${todos.length}件のタスク`
-    }
-    case 'slack': {
-      const d = payload.data as Array<{ channel: string; messages: unknown[] }> | null
-      if (!d) return '0件'
-      return `${d.length}チャンネルに未読あり`
     }
     case 'news': {
       const d = payload.data as { error?: string; subtitle?: string; data?: { items?: unknown[] } } | null

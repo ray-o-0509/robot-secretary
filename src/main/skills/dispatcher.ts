@@ -3,28 +3,6 @@ import { optString, reqString } from './shared/validation'
 
 export const toolSchemas: Anthropic.Tool[] = [
   {
-    name: 'get_slack_unread',
-    description: 'Slackの未読メッセージを取得する',
-    input_schema: {
-      type: 'object',
-      properties: {
-        channel: { type: 'string', description: 'チャンネルID（省略時は全チャンネル）' },
-      },
-    },
-  },
-  {
-    name: 'send_slack_message',
-    description: 'Slackにメッセージを送信する',
-    input_schema: {
-      type: 'object',
-      properties: {
-        channel: { type: 'string', description: 'チャンネルID' },
-        text: { type: 'string', description: '送信するテキスト' },
-      },
-      required: ['channel', 'text'],
-    },
-  },
-  {
     name: 'get_gmail_inbox',
     description: 'Gmailのインボックスにあるメール（既読・未読問わず）を取得する。スパム・ゴミ箱は除外。デフォルトで登録されている全アカウントを横断して取得する。返り値の各メッセージには id と account フィールドが付く（trash/archive で使う）。',
     input_schema: {
@@ -223,14 +201,6 @@ export const toolSchemas: Anthropic.Tool[] = [
 
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
-    case 'get_slack_unread': {
-      const { getUnreadMessages } = await import('./slack/index')
-      return await getUnreadMessages(args.channel as string | undefined)
-    }
-    case 'send_slack_message': {
-      const { sendMessage } = await import('./slack/index')
-      return await sendMessage(reqString(args, 'channel'), reqString(args, 'text'))
-    }
     case 'get_gmail_inbox': {
       const { getInboxEmails } = await import('./gmail/index')
       return await getInboxEmails(args.maxResults as number | undefined, optString(args, 'account'))

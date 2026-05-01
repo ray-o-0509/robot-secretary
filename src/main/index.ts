@@ -224,7 +224,6 @@ function registerSetupIpc() {
       accessibilityPermission,
       geminiApiKey: !!(process.env.GEMINI_API_KEY),
       ticktickToken: !!(process.env.TICKTICK_ACCESS_TOKEN),
-      slackToken: !!(process.env.SLACK_BOT_TOKEN),
       gmailAccounts: getGmailAccounts(),
     }
   })
@@ -642,7 +641,6 @@ function setupContextMenu() {
                 { label: 'カレンダー (明日)', click: () => triggerDebugPanel('calendar_tomorrow') },
                 { label: 'カレンダー (今週)', click: () => triggerDebugPanel('calendar_week') },
                 { label: 'タスク', click: () => triggerDebugPanel('tasks') },
-                { label: 'Slack', click: () => triggerDebugPanel('slack') },
                 { label: 'AIニュース', click: () => triggerDebugPanel('news') },
                 { label: 'ツール', click: () => triggerDebugPanel('tools') },
                 { label: '映画', click: () => triggerDebugPanel('movies') },
