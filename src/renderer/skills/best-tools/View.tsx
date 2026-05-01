@@ -1,8 +1,8 @@
-import { CYAN, FONT_MONO } from '../styles'
-import { Card } from '../components/Card'
-import { EmptyState } from '../components/EmptyState'
-import { ErrorState } from '../components/ErrorState'
-import type { DashboardPayload, PanelPayload, ToolsData } from '../types'
+import { CYAN, FONT_MONO } from '../../display/styles'
+import { Card } from '../../display/components/Card'
+import { EmptyState } from '../../display/components/EmptyState'
+import { ErrorState } from '../../display/components/ErrorState'
+import type { DashboardPayload, PanelPayload, ToolsData } from '../../display/types'
 
 const TAG_COLORS: Record<string, string> = {
   AI: '#b08aff',

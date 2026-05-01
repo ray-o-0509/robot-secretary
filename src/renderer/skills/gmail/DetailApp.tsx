@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CYAN, FONT_MONO, MAGENTA } from './styles'
-import { DisplayShell } from './DisplayShell'
+import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
+import { DisplayShell } from '../../display/DisplayShell'
 
 type EmailDetail = {
   id: string
@@ -221,4 +221,3 @@ function ErrorBlock({ message }: { message: string }) {
     </div>
   )
 }
-

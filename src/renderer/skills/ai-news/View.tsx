@@ -1,8 +1,8 @@
-import { CYAN, FONT_MONO, MAGENTA } from '../styles'
-import { Card } from '../components/Card'
-import { EmptyState } from '../components/EmptyState'
-import { ErrorState } from '../components/ErrorState'
-import type { DashboardPayload, NewsData, PanelPayload } from '../types'
+import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
+import { Card } from '../../display/components/Card'
+import { EmptyState } from '../../display/components/EmptyState'
+import { ErrorState } from '../../display/components/ErrorState'
+import type { DashboardPayload, NewsData, PanelPayload } from '../../display/types'
 
 const TAG_COLORS: Record<string, string> = {
   Model: '#5aa6ff',
