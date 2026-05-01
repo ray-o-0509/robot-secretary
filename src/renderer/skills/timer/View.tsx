@@ -11,13 +11,15 @@ interface Props {
 
 export function TimerView({ payload }: Props) {
   const [, setTick] = useState(0)
+  const entries = (payload.data as TimerEntry[] | null) ?? []
+  const hasRunning = entries.some((e) => e.state === 'running')
 
   useEffect(() => {
+    if (!hasRunning) return
     const id = setInterval(() => setTick((n) => n + 1), 100)
     return () => clearInterval(id)
-  }, [])
+  }, [hasRunning])
 
-  const entries = (payload.data as TimerEntry[] | null) ?? []
   if (entries.length === 0) {
     return <EmptyState message="タイマーなし" />
   }
@@ -66,7 +68,7 @@ function TimerCard({ entry }: { entry: TimerEntry }) {
         <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: 'rgba(232,246,255,0.6)', letterSpacing: 1, flex: 1 }}>
           {entry.name}
         </span>
-        <StateChip state={entry.state} done={done} />
+        <StateChip state={entry.state} />
       </div>
       <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, color, textShadow: `0 0 12px ${color}80`, letterSpacing: 2, textAlign: 'center', marginBottom: 8 }}>
         {done ? 'DONE' : formatMs(remaining)}
@@ -91,7 +93,7 @@ function StopwatchCard({ entry }: { entry: TimerEntry }) {
         <span style={{ fontFamily: FONT_MONO, fontSize: 10, color: 'rgba(232,246,255,0.6)', letterSpacing: 1, flex: 1 }}>
           {entry.name}
         </span>
-        <StateChip state={entry.state} done={false} />
+        <StateChip state={entry.state} />
       </div>
       <div style={{ fontFamily: FONT_MONO, fontSize: 28, fontWeight: 700, color, textShadow: `0 0 12px ${color}80`, letterSpacing: 2, textAlign: 'center', marginBottom: 4 }}>
         {formatMs(elapsed)}
@@ -124,8 +126,8 @@ const STATE_LABELS: Record<string, string> = {
   stopped: 'STOP',
 }
 
-function StateChip({ state, done }: { state: string; done: boolean }) {
-  const color = (done || state === 'stopped') ? MAGENTA : state === 'paused' ? '#ffc83c' : CYAN
+function StateChip({ state }: { state: string }) {
+  const color = (state === 'done' || state === 'stopped') ? MAGENTA : state === 'paused' ? '#ffc83c' : CYAN
   const Icon = STATE_ICONS[state as keyof typeof STATE_ICONS] ?? LuPlay
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontFamily: FONT_MONO, fontSize: 9, letterSpacing: 1, color, background: `${color}18`, border: `1px solid ${color}50`, padding: '1px 5px' }}>

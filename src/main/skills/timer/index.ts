@@ -16,6 +16,14 @@ let swCounter = 0
 let onExpire: ((entry: TimerEntry) => void) | null = null
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 
+function stopTickIfIdle() {
+  const hasRunning = Array.from(entries.values()).some((e) => e.state === 'running')
+  if (!hasRunning && intervalHandle) {
+    clearInterval(intervalHandle)
+    intervalHandle = null
+  }
+}
+
 function startTick() {
   if (intervalHandle) return
   intervalHandle = setInterval(() => {
@@ -33,6 +41,7 @@ function startTick() {
         onExpire?.(done)
       }
     }
+    stopTickIfIdle()
   }, 1000)
 }
 
@@ -80,6 +89,7 @@ export function cancelTimer(id: string): TimerEntry | null {
   const entry = entries.get(id)
   if (!entry || entry.kind !== 'timer') return null
   entries.delete(id)
+  stopTickIfIdle()
   return entry
 }
 
@@ -130,6 +140,7 @@ export function stopStopwatch(id: string): TimerEntry | null {
       : entry.accumulatedMs,
   }
   entries.set(id, stopped)
+  stopTickIfIdle()
   return stopped
 }
 

@@ -241,14 +241,12 @@ function GLBRobot({
       antennaLightRef.current.color.set(antennaColor)
     }
 
-    // スラスター（feet ノード）: 進行方向と逆に傾く + 速度に応じて回転
+    // スラスター（feet ノード）: 進行方向と逆に傾くのみ（回転はBlenderアニメに任せる）
     if (feetRef.current) {
       const thrustTiltX = vel.speed > 5 ?  THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * 0.3 : 0
       const thrustTiltZ = vel.speed > 5 ? -THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * 0.3 : 0
       feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, thrustTiltX, 0.06)
       feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, thrustTiltZ, 0.06)
-      const spinSpeed = 0.5 + (vel.speed / MAX_SPEED) * 3.0
-      feetRef.current.rotation.y += spinSpeed * delta
     }
   })
 
