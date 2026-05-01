@@ -12,28 +12,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm run dev` — start electron-vite dev (main, preload, renderer with HMR; Renderer URL is injected as `ELECTRON_RENDERER_URL`)
 - `npm run build` — `electron-vite build` then `electron-builder` (produces a macOS DMG)
-- `npm run build:app` — **日常使い用**。ビルド → `dist/mac-arm64/Robot Secretary.app` を `/Applications/` に上書きコピーする。署名済み（要: `Apple Development` 証明書）。コード変更後はこれを実行して `/Applications/Robot Secretary.app` を起動すること。
+- `npm run build:app` — **daily use**. Builds the app and overwrites `dist/mac-arm64/Robot Secretary.app` into `/Applications/`. Requires an `Apple Development` certificate. Run this after code changes, then launch `/Applications/Robot Secretary.app`.
 - `npm run preview` — preview the production build without packaging
 
 There is no test runner, linter, or formatter configured. Don't fabricate one; ask before adding tooling.
 
 ## Build & Deploy workflow
 
-コードを変更したら：
+After changing code:
 
 ```bash
-npm run build:app          # ビルド + /Applications に自動インストール
-pkill -x "Robot Secretary" # 旧プロセスを終了（起動中の場合）
+npm run build:app          # build + auto-install to /Applications
+pkill -x "Robot Secretary" # kill the old process if running
 open "/Applications/Robot Secretary.app"
 ```
 
-`build:app` は内部で `electron-builder --config.mac.target=dir` を使い DMG を作らないので高速。
+`build:app` uses `electron-builder --config.mac.target=dir` internally so it skips DMG creation and is fast.
 
-### ⚠️ /Applications へのコピーが反映されない場合
+### ⚠️ Stale renderer after install
 
-`cp -r` は **コピー先が既に存在すると中に入れてしまう**（`cp -r dist/.../Robot\ Secretary.app /Applications/` → `/Applications/Robot Secretary.app/Robot Secretary.app` になる）。`build:app` スクリプトの `cp -r` が失敗なく終わっても古いrendererが残ることがある。
+`cp -r` nests the source inside the destination if the destination already exists (`cp -r dist/.../Robot Secretary.app /Applications/` → `/Applications/Robot Secretary.app/Robot Secretary.app`). The `build:app` script can silently leave the old renderer in place.
 
-インストール後は必ずrendererのハッシュで確認：
+Verify the renderer hash after install:
 
 ```bash
 node -e "
@@ -43,50 +43,50 @@ files.filter(f => f.includes('renderer') && f.includes('index')).forEach(f => co
 "
 ```
 
-古いハッシュが出たら手動で上書き：
+If the hash is stale, overwrite manually:
 
 ```bash
 rm -rf "/Applications/Robot Secretary.app"
 cp -r "$(pwd)/dist/mac-arm64/Robot Secretary.app" "/Applications/Robot Secretary.app"
 ```
 
-## macOS permissions (重要)
+## macOS permissions
 
-### Bundle ID と署名
+### Bundle ID and signing
 
-- **appId**: `package.json` の `build.mac.appId` で設定（例: `com.yourname.robot-secretary`）
-- **署名 identity**: `security find-identity -v -p codesigning` で手元の証明書名を確認し `package.json` の `build.mac.identity` に指定する
-- ad-hoc 署名アプリは macOS TCC が CDHash で識別するため、**ビルドのたびに CDHash が変わり TCC エントリが無効化される → アクセシビリティ権限がリセット**される。Apple Developer 証明書での署名を推奨。
+- **appId**: set in `package.json` at `build.mac.appId` (e.g. `com.yourname.robot-secretary`)
+- **signing identity**: run `security find-identity -v -p codesigning` to find your cert name and set it in `package.json` at `build.mac.identity`
+- Ad-hoc signed apps are identified by CDHash, which changes on every build, so macOS TCC invalidates the entry and **resets Accessibility permission** on each rebuild. Use an Apple Developer certificate to avoid this.
 
-### ⚠️ 起動するたびにアクセシビリティ権限がリセットされる問題
+### ⚠️ Accessibility permission resets on every launch
 
-**根本原因**：Claude Code（非インタラクティブな Bash）から `build:app` を実行すると、electron-builder が Keychain にアクセスできず署名が失敗してアドホック署名（`Signature=adhoc`）になる。アドホック署名アプリは macOS TCC が CDHash で識別するため、**ビルドのたびに CDHash が変わり TCC エントリが無効化される → アクセシビリティ権限がリセット**される。
+**Root cause**: when `build:app` runs from Claude Code (non-interactive Bash), electron-builder cannot access the Keychain, signing fails, and the app gets an ad-hoc signature (`Signature=adhoc`). macOS TCC identifies ad-hoc apps by CDHash, so **every rebuild changes the CDHash and invalidates the TCC entry**.
 
-確認コマンド（`adhoc` と出たら署名失敗）：
+Check the signature (if `adhoc` appears, signing failed):
 ```bash
 codesign -d --verbose=2 "/Applications/Robot Secretary.app" 2>&1 | grep "Signature="
 ```
 
-**対処法**：`build:app` はユーザー自身がインタラクティブなターミナルから実行すること。Claude Code に実行させると署名が壊れる。Claude Code にビルドさせた後は、ユーザーが自分のターミナルで以下を実行して再ビルド・インストールする：
+**Fix**: always run `build:app` from an interactive terminal yourself. After Claude Code modifies files, run the build from your own terminal:
 
 ```bash
 cd <path-to-project>
 npm run build:app
 ```
 
-再ビルド後にアクセシビリティを一度付与すれば、次回以降は（再ビルドしない限り）持続する。
+Once you grant Accessibility after a proper build, it persists until the next rebuild.
 
-### prod環境の .env 配置
+### .env placement for production builds
 
-prod ビルドはプロジェクトルートの `.env.local` を読まない。`~/Library/Application Support/robot-secretary/` に配置する：
+Production builds do not read `.env.local` from the project root. Place it in the app support directory:
 
 ```bash
 cp .env.local ~/Library/Application\ Support/robot-secretary/.env.local
 ```
 
-`.env.local` を更新したら毎回このコピーが必要。
+This copy is required every time `.env.local` is updated.
 
-### 権限リセット（bundle ID 変更後など）
+### Resetting permissions (e.g. after bundle ID change)
 
 ```bash
 tccutil reset Microphone <your-app-id>
@@ -94,36 +94,36 @@ tccutil reset Accessibility <your-app-id>
 tccutil reset ScreenCapture <your-app-id>
 ```
 
-### セットアップ画面
+### Setup screen
 
-起動時に必須権限（マイク + Gemini API Key）をチェックする。問題があれば自動的にセットアップウィンドウ（`#setup` ルート）を表示し、問題なければ直接ロボットを起動する。セットアップ画面の実装は `src/renderer/setup/SetupApp.tsx`、IPC ハンドラは `src/main/index.ts` の `registerSetupIpc()`。
+On launch, the app checks for required permissions (microphone + Gemini API key). If anything is missing it automatically opens the setup window (`#setup` route); otherwise it starts the robot directly. The setup screen is implemented in `src/renderer/setup/SetupApp.tsx`; IPC handlers live in `registerSetupIpc()` in `src/main/index.ts`.
 
-### Renderer の getUserMedia 権限
+### Renderer getUserMedia permission
 
-`session.defaultSession.setPermissionRequestHandler` で `media` を明示的に許可している（`src/main/index.ts` の `app.whenReady`）。これがないと renderer の `getUserMedia` が常に拒否される。
+`session.defaultSession.setPermissionRequestHandler` explicitly allows `media` in `app.whenReady` (`src/main/index.ts`). Without this, `getUserMedia` in the renderer is always denied.
 
-### `DefaultTransporter is not a constructor` エラー
+### `DefaultTransporter is not a constructor` error
 
-`googleapis-common` が `google-auth-library` の `DefaultTransporter` を使うが、pnpm パッチは top-level `node_modules/google-auth-library/` にのみ適用される。electron-builder は pnpm virtual store (`node_modules/.pnpm/google-auth-library@10.6.2/`) から asar を作るため、**パッチなしの版が asar に入る**。
+`googleapis-common` uses `DefaultTransporter` from `google-auth-library`, but the pnpm patch only applies to the top-level `node_modules/google-auth-library/`. electron-builder builds the asar from the pnpm virtual store (`node_modules/.pnpm/google-auth-library@10.6.2/`), so **the unpatched version ends up in the asar**.
 
-`build:app` の冒頭に `patch:pnpm` スクリプトを実行してvirtual storeのファイルを上書きする：
+`build:app` runs the `patch:pnpm` script at the start to overwrite the virtual store file:
 
 ```bash
-npm run patch:pnpm  # node_modules/.pnpm/.../ に patched index.js をコピー
+npm run patch:pnpm  # copies patched index.js into node_modules/.pnpm/.../
 ```
 
-確認コマンド：
+Verify:
 ```bash
 node -e "const asar = require('@electron/asar'); const c = asar.extractFile('dist/mac-arm64/Robot Secretary.app/Contents/Resources/app.asar', 'node_modules/google-auth-library/build/src/index.js').toString(); console.log('patched:', c.includes('DefaultTransporter'), 'size:', c.length)"
 ```
 
-`pnpm install` を実行すると virtual store が上書きされてパッチが消えるので、再度 `npm run build:app` でリビルドすること。
+Running `pnpm install` overwrites the virtual store and removes the patch — rebuild with `npm run build:app` afterwards.
 
-### マイクがシステム設定に表示されない問題
+### Microphone not appearing in System Settings
 
-Hardened Runtime（署名済みアプリ）では `NSMicrophoneUsageDescription` が Info.plist にあっても、**`com.apple.security.device.audio-input` エンタイトルメントがないとmacOSのマイクリストに載らない**。ダイアログも出ない。
+With Hardened Runtime, even if `NSMicrophoneUsageDescription` is in Info.plist, macOS will not list the app in the microphone settings and will show no dialog unless **`com.apple.security.device.audio-input`** is in the entitlements.
 
-`build/entitlements.mac.plist` に以下が必要：
+Required in `build/entitlements.mac.plist`:
 ```xml
 <key>com.apple.security.device.audio-input</key>
 <true/>
@@ -131,14 +131,14 @@ Hardened Runtime（署名済みアプリ）では `NSMicrophoneUsageDescription`
 <true/>
 ```
 
-`package.json` の `build.mac` に以下が必要：
+Required in `package.json` under `build.mac`:
 ```json
 "hardenedRuntime": true,
 "entitlements": "build/entitlements.mac.plist",
 "entitlementsInherit": "build/entitlements.mac.plist"
 ```
 
-確認コマンド：
+Verify:
 ```bash
 codesign -d --entitlements - "/Applications/Robot Secretary.app" 2>/dev/null | grep -E "audio-input|microphone"
 ```
@@ -175,13 +175,13 @@ The window is `transparent: true, frame: false, alwaysOnTop: true, hasShadow: fa
 
 ### Skill modules (`src/main/skills/`)
 
-各スキルは `src/main/skills/<name>/index.ts` に独立。共通コードは `src/main/skills/shared/` に集約。`dispatcher.ts` がスキル一覧を束ねて Claude に渡す。
+Each skill lives in `src/main/skills/<name>/index.ts` as a standalone module. Shared utilities (auth helpers, validation) are in `src/main/skills/shared/`. `dispatcher.ts` aggregates all skill schemas and routes tool calls to the correct implementation.
 
 Each skill reads its credentials from `process.env` at call time and constructs its client lazily. Important quirks:
 
-- **Gmail and Calendar** use Google OAuth2 tokens via `src/main/skills/shared/googleAuth.ts`. トークンは **`~/.config/robot-secretary/google-tokens/<email>.json`** に置く（プロジェクト専用ディレクトリ）。このディレクトリがなければ旧 `~/.config/gmail-triage/tokens/` にフォールバックする。各トークン JSON には `client_id` / `client_secret` / `refresh_token` / `scopes` (gmail.readonly + gmail.send + calendar) が含まれる。`gmail/index.ts` と `calendar/index.ts` は `listAccounts()` で全トークンを自動検出しファンアウト。`GMAIL_ACCOUNT` env で絞り込み可能。refresh token は有効期限なし（手動失効しない限り）のでコピーするだけで再認証不要。トークンを再発行する場合は `node scripts/auth-google.mjs <email>` を実行し出力を `~/.config/robot-secretary/google-tokens/<email>.json` に保存する。
+- **Gmail and Calendar** use Google OAuth2 tokens via `src/main/skills/shared/googleAuth.ts`. Tokens live at **`~/.config/robot-secretary/google-tokens/<email>.json`** (falls back to `~/.config/gmail-triage/tokens/` if not found). Each token JSON contains `client_id`, `client_secret`, `refresh_token`, and `scopes` (gmail.readonly + gmail.send + calendar). `gmail/index.ts` and `calendar/index.ts` use `listAccounts()` to auto-discover all tokens and fan out. Filter to one account with the `GMAIL_ACCOUNT` env var. Refresh tokens do not expire unless manually revoked — copy the file to reuse without re-auth. To issue a new token: run `node scripts/auth-google.mjs <email>` and save the output to `~/.config/robot-secretary/google-tokens/<email>.json`.
 - **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/skills/shared/tickTickAuth.ts`). Obtain the token via TickTick's OAuth flow and place it in `.env.local`.
-- **Dashboard / ai-news / movies / best-tools** は private サブモジュール（`src/private`）に切り出されている。Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local`. private サブモジュールがない環境でも `dispatcher.ts` が動的ロードを試みて失敗しても無視するので、ビルド・起動は正常に動く。
+- **Dashboard / ai-news / movies / best-tools** are in the private submodule (`src/private`). Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local`. If the private submodule is absent, `dispatcher.ts` attempts a dynamic import, silently ignores the failure, and the app builds and runs normally with only the public skills.
 
 ### Configuration: split between two stores
 
@@ -200,27 +200,20 @@ Two separate configuration mechanisms exist and they are not unified:
 
 ### Prompts
 
-システムプロンプトはすべて `.md` ファイルで管理し、Vite の `?raw` インポートでビルド時にインライン化される。TSを触らずMDを編集するだけでプロンプト変更が完結する。
+All system prompts are managed as `.md` files and inlined at build time via Vite's `?raw` import. Prompt changes require only editing the `.md` file — no TypeScript changes needed.
 
-| ファイル | 用途 |
+| File | Purpose |
 |---|---|
-| `src/main/agent/prompt.md` | Claude エージェントのシステムプロンプト |
-| `src/renderer/hooks/prompts/core.md` | Gemini Live の共通コアプロンプト |
-| `src/renderer/hooks/prompts/persona/{en,ja,zh,ko}.md` | 言語別ペルソナ定義 |
-| `src/renderer/display/prompt.md` | ディスプレイパネルへの表示指示 |
-| `src/renderer/skills/*/prompt.md` | 各スキルの補足プロンプト |
+| `src/main/agent/prompt.md` | Claude agent system prompt |
+| `src/renderer/hooks/prompts/core.md` | Gemini Live shared core prompt |
+| `src/renderer/hooks/prompts/persona/{en,ja,zh,ko}.md` | Per-language persona definitions |
+| `src/renderer/display/prompt.md` | Display panel rendering instructions |
+| `src/renderer/skills/*/prompt.md` | Per-skill supplementary prompts |
 
-`buildPrompt(languageCode)` が persona + core + 全スキルの prompt.md を結合して Gemini Live に渡す（`src/renderer/hooks/prompts/index.ts`）。
-
-### スキルの追加方法
-
-1. **main**: `src/main/skills/<name>/index.ts` に関数実装 → `dispatcher.ts` の `publicToolSchemas` にスキーマを追加し `executeTool` の switch に case を追加
-2. **renderer**: `src/renderer/skills/<name>/View.tsx` に UI を実装 → `App.tsx` の panel ルーティングに追加
-3. **prompt**: `src/renderer/skills/<name>/prompt.md` を作成 → `src/renderer/hooks/prompts/index.ts` の SKILLS 配列に追加
-4. **Gemini tool list**: `useGeminiLive.ts` の `secretaryTools` 配列にも同じツール定義を追加（main と renderer の両方に宣言が必要）
+`buildPrompt(languageCode)` concatenates persona + core + all skill prompts and passes the result to Gemini Live (`src/renderer/hooks/prompts/index.ts`).
 
 ## Notes on user-facing strings
 
-設定画面・セットアップ画面の UI ラベルは i18n（react-i18next）で管理している。翻訳リソースは `src/renderer/locales/{en,ja,zh}.json`。新しい UI 文字列を追加するときはこれらのファイルに追記すること。
+UI labels in the settings and setup screens are managed with i18n (react-i18next). Translation resources live in `src/renderer/locales/{en,ja,zh}.json`. Add new UI strings there.
 
-Gemini のシステムプロンプトと Claude エージェントのプロンプトは日本語で書かれている。コンソールの警告も日本語で統一。
+The Gemini system prompt and Claude agent prompt are written in Japanese. Keep console warnings in Japanese for consistency.
