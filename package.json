@@ -61,13 +61,13 @@
     }
   },
   "build": {
-    "appId": "com.rayotsuka.robot-secretary",
+    "appId": "com.yourname.robot-secretary",
     "productName": "Robot Secretary",
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
       "icon": "assets/icon.icns",
-      "identity": "Apple Development: Ray Otsuka (HDVKHZKZ9M)",
+      "identity": null,
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist"
