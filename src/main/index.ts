@@ -556,6 +556,7 @@ function startWandering() {
   let lastSentX = Number.NaN
   let lastSentY = Number.NaN
   let nextTargetPending = false
+  let lastVelSend = 0
 
   wanderInterval = setInterval(() => {
     const now = Date.now()
@@ -575,6 +576,7 @@ function startWandering() {
       // 目標到達。次の目的地を一度だけ予約する
       if (!nextTargetPending) {
         nextTargetPending = true
+        win.webContents.send('robot-velocity', { vx: 0, vy: 0, speed: 0 })
         setTimeout(() => {
           nextTargetPending = false
           pickNewTarget()
@@ -601,6 +603,15 @@ function startWandering() {
       win.setPosition(ix, iy)
       lastSentX = ix
       lastSentY = iy
+    }
+
+    // 移動速度・方向をレンダラーへ送信（10Hz throttle）
+    const nowVel = Date.now()
+    if (nowVel - lastVelSend >= 100) {
+      lastVelSend = nowVel
+      const vx = (dx / dist) * (moveAmount / dt)
+      const vy = (dy / dist) * (moveAmount / dt)
+      win.webContents.send('robot-velocity', { vx, vy, speed: Math.hypot(vx, vy) })
     }
   }, 16) // ≒ 60fps
 }

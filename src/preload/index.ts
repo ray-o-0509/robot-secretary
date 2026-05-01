@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onNotification: (cb: (notifs: unknown[]) => void) => on('notification:incoming', cb),
 
   // Settings window
+  onRobotVelocity: (cb: (v: { vx: number; vy: number; speed: number }) => void) =>
+    on('robot-velocity', cb),
   chatClose: () => ipcRenderer.send('chat:close'),
   settingsClose: () => ipcRenderer.send('settings:close'),
   settingsGetProfile: () => ipcRenderer.invoke('settings:get-profile'),

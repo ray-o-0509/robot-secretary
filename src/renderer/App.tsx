@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import i18n, { toLng } from './i18n'
 import { RobotScene } from './components/RobotScene'
 import { StatusBanner } from './components/StatusBanner'
@@ -63,6 +63,7 @@ declare global {
       onNotification: (cb: (notifs: { bundleId: string; appName: string; title?: string; body?: string; ts: string }[]) => void) => () => void
 
       // Settings window
+      onRobotVelocity: (cb: (v: { vx: number; vy: number; speed: number }) => void) => () => void
       chatClose: () => void
       settingsClose: () => void
       settingsGetProfile: () => Promise<Record<string, string>>
@@ -106,6 +107,7 @@ export default function App() {
 
 function RobotWindowApp() {
   const [robotState, setRobotState] = useState<RobotState>('idle')
+  const velocityRef = useRef({ vx: 0, vy: 0, speed: 0 })
   const [showSettings, setShowSettings] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [interactive, setInteractive] = useState(false)
@@ -122,6 +124,11 @@ function RobotWindowApp() {
     isMuted,
     languageCode,
   })
+
+  useEffect(() => {
+    const offVel = window.electronAPI?.onRobotVelocity((v) => { velocityRef.current = v })
+    return () => offVel?.()
+  }, [])
 
   useEffect(() => {
     const offMute = window.electronAPI?.onMuteChanged((muted) => setIsMuted(muted))
@@ -199,7 +206,7 @@ function RobotWindowApp() {
 
   return (
     <div style={wrapperStyle} onMouseLeave={handleLeave}>
-      <RobotScene state={robotState} isConnected={isConnected} />
+      <RobotScene state={robotState} isConnected={isConnected} velocityRef={velocityRef} />
       {showSettings && (
         <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <SettingsPanel onClose={() => setShowSettings(false)} />

@@ -9,6 +9,7 @@ export type PanelType =
   | 'tools'
   | 'movies'
   | 'terminal_output'
+  | 'timer'
 
 export type PanelPayload = {
   type: PanelType
@@ -29,6 +30,17 @@ export const PANEL_LABELS: Record<PanelType, string> = {
   tools: '◢ ARSENAL // BEST_TOOLS',
   movies: '◢ CINEMA // RELEASES',
   terminal_output: '◢ TERMINAL // OUTPUT',
+  timer: '◢ TIMER // STOPWATCH',
+}
+
+export type TimerEntry = {
+  id: string
+  name: string
+  kind: 'timer' | 'stopwatch'
+  durationMs: number
+  startedAt: number
+  accumulatedMs: number
+  state: 'running' | 'paused' | 'done' | 'stopped'
 }
 
 export type TerminalOutputData = {

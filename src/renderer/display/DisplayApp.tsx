@@ -10,6 +10,7 @@ import { NewsView } from '../skills/ai-news/View'
 import { ToolsView } from '../skills/best-tools/View'
 import { MoviesView } from '../skills/movies/View'
 import { TerminalView } from './views/TerminalView'
+import { TimerView } from '../skills/timer/View'
 import { PANEL_LABELS, type PanelPayload } from './types'
 
 export function DisplayApp() {

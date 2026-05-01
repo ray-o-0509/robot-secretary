@@ -11,6 +11,7 @@ export type PanelType =
   | 'tools'
   | 'movies'
   | 'terminal_output'
+  | 'timer'
 
 export type PanelPayload = {
   type: PanelType
@@ -31,6 +32,7 @@ const VALID_TYPES = new Set<PanelType>([
   'tools',
   'movies',
   'terminal_output',
+  'timer',
 ])
 
 export function isPanelType(v: unknown): v is PanelType {
@@ -72,6 +74,10 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
       case 'movies': {
         const { getDashboardEntry } = await import('../skills/shared/turso')
         return { type, data: await getDashboardEntry('movies'), fetchedAt }
+      }
+      case 'timer': {
+        const { getTimerSnapshot } = await import('../skills/timer/index')
+        return { type, data: getTimerSnapshot(), fetchedAt }
       }
     }
   } catch (err) {
@@ -135,6 +141,11 @@ export function buildSummary(payload: PanelPayload): string {
       const d = payload.data as { command: string; stdout: string; stderr: string } | null
       if (!d) return 'no output'
       return `Command executed: ${d.command}`
+    }
+    case 'timer': {
+      const d = payload.data as { id: string; kind: string; state: string }[] | null
+      if (!d) return '0 entries'
+      return `${d.filter((e) => e.kind === 'timer').length} timers, ${d.filter((e) => e.kind === 'stopwatch').length} stopwatches`
     }
   }
 }

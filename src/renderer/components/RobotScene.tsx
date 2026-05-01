@@ -15,6 +15,8 @@ function getAntennaColor(isConnected: boolean, state: RobotState): string {
   }[state]
 }
 
+type Velocity = { vx: number; vy: number; speed: number }
+
 // ========== Placeholder robot ==========
 
 function PlaceholderRobot({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
@@ -96,13 +98,24 @@ function PlaceholderRobot({ state, isConnected }: { state: RobotState; isConnect
 
 // ========== GLB robot ==========
 
-function GLBRobot({ state, isConnected, onReady }: { state: RobotState; isConnected: boolean; onReady?: () => void }) {
+function GLBRobot({
+  state,
+  isConnected,
+  onReady,
+  velocityRef,
+}: {
+  state: RobotState
+  isConnected: boolean
+  onReady?: () => void
+  velocityRef?: React.RefObject<Velocity>
+}) {
   const group = useRef<THREE.Group>(null)
   const { scene, animations } = useGLTF('./assets/robot.glb')
   const { actions, mixer } = useAnimations(animations, group)
   const antennaMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
   const antennaLightRef = useRef<THREE.PointLight>(null)
   const antennaPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1.5, 0))
+  const feetRef = useRef<THREE.Object3D | null>(null)
 
   useEffect(() => {
     // バウンディングボックスで自動センタリング
@@ -121,6 +134,11 @@ function GLBRobot({ state, isConnected, onReady }: { state: RobotState; isConnec
 
     const hsl = { h: 0, s: 0, l: 0 }
     scene.traverse((obj) => {
+      // feet ノードを取得（スラスター4つをまとめたノード）
+      if (obj.name === 'feet') {
+        feetRef.current = obj
+      }
+
       if (!(obj instanceof THREE.Mesh)) return
       const isEyeMesh = EYE_MESH_NAMES.has(obj.name)
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
@@ -191,16 +209,26 @@ function GLBRobot({ state, isConnected, onReady }: { state: RobotState; isConnec
     return () => mixer.stopAllAction()
   }, [actions, mixer])
 
-  // state別エフェクト
+  // state別エフェクト + 移動アニメーション
   useFrame((_, delta) => {
     if (!group.current) return
+
+    const vel = velocityRef?.current ?? { vx: 0, vy: 0, speed: 0 }
+    const MAX_SPEED = 400
+    const MAX_TILT = 0.2
+
+    // 胴体を進行方向へ傾ける
+    const targetRotX = vel.speed > 5 ? -THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * MAX_TILT : 0
+    const targetRotZ = vel.speed > 5 ?  THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * MAX_TILT : 0
+    const lerpFactor = vel.speed > 5 ? 0.06 : 0.04
+    group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, targetRotX, lerpFactor)
+    group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, targetRotZ, lerpFactor)
+
     if (state === 'speaking') {
       group.current.position.y = Math.sin(Date.now() * 0.02) * 0.05
     } else {
       group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0, 0.05)
     }
-    group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, 0.05)
-    group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, 0.05)
 
     // アンテナ球の色を接続状態 × ロボット状態で更新
     const antennaColor = getAntennaColor(isConnected, state)
@@ -211,6 +239,16 @@ function GLBRobot({ state, isConnected, onReady }: { state: RobotState; isConnec
     }
     if (antennaLightRef.current) {
       antennaLightRef.current.color.set(antennaColor)
+    }
+
+    // スラスター（feet ノード）: 進行方向と逆に傾く + 速度に応じて回転
+    if (feetRef.current) {
+      const thrustTiltX = vel.speed > 5 ?  THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * 0.3 : 0
+      const thrustTiltZ = vel.speed > 5 ? -THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * 0.3 : 0
+      feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, thrustTiltX, 0.06)
+      feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, thrustTiltZ, 0.06)
+      const spinSpeed = 0.5 + (vel.speed / MAX_SPEED) * 3.0
+      feetRef.current.rotation.y += spinSpeed * delta
     }
   })
 
@@ -231,7 +269,15 @@ function GLBRobot({ state, isConnected, onReady }: { state: RobotState; isConnec
 
 // ========== Robot content (Suspense を使わず即座に表示) ==========
 
-function RobotContent({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
+function RobotContent({
+  state,
+  isConnected,
+  velocityRef,
+}: {
+  state: RobotState
+  isConnected: boolean
+  velocityRef?: React.RefObject<Velocity>
+}) {
   const [glbReady, setGlbReady] = useState(false)
 
   return (
@@ -239,7 +285,12 @@ function RobotContent({ state, isConnected }: { state: RobotState; isConnected: 
       {/* GLBロード完了まで PlaceholderRobot を即座に表示 */}
       {!glbReady && <PlaceholderRobot state={state} isConnected={isConnected} />}
       <Suspense fallback={null}>
-        <GLBRobot state={state} isConnected={isConnected} onReady={() => setGlbReady(true)} />
+        <GLBRobot
+          state={state}
+          isConnected={isConnected}
+          onReady={() => setGlbReady(true)}
+          velocityRef={velocityRef}
+        />
       </Suspense>
     </>
   )
@@ -247,7 +298,24 @@ function RobotContent({ state, isConnected }: { state: RobotState; isConnected: 
 
 // ========== Main Scene ==========
 
-export function RobotScene({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
+export function RobotScene({
+  state,
+  isConnected,
+  velocityRef,
+}: {
+  state: RobotState
+  isConnected: boolean
+  velocityRef?: React.RefObject<Velocity>
+}) {
+  const [floatBoost, setFloatBoost] = useState(0)
+
+  useEffect(() => {
+    const off = window.electronAPI?.onRobotVelocity?.((v) => {
+      setFloatBoost(Math.min(v.speed / 400, 1))
+    })
+    return () => off?.()
+  }, [])
+
   return (
     <Canvas
       camera={{ position: [-6.11, 1.8, -2.22], fov: 35 }}
@@ -278,11 +346,11 @@ export function RobotScene({ state, isConnected }: { state: RobotState; isConnec
       <pointLight position={[0, -1, 0]} intensity={2} color="#ff6633" distance={3} />
 
       <Float
-        speed={state === 'idle' ? 1.5 : 0.5}
+        speed={state === 'idle' ? 1.5 + floatBoost * 2.0 : 0.5 + floatBoost * 1.0}
         rotationIntensity={0}
-        floatIntensity={state === 'idle' ? 0.5 : 0.1}
+        floatIntensity={state === 'idle' ? 0.5 + floatBoost * 0.4 : 0.1 + floatBoost * 0.2}
       >
-        <RobotContent state={state} isConnected={isConnected} />
+        <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
       </Float>
 
     </Canvas>
