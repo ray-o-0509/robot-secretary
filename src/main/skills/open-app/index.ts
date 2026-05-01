@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { resolveAppName } from './defaultApps'
+import { resolveAppName } from '../default-apps/index'
 
 export async function openApp(appName: string): Promise<{ ok: boolean; error?: string }> {
   const resolved = await resolveAppName(appName)

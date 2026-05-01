@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { toolSchemas, executeTool } from '../tools/dispatcher'
+import { toolSchemas, executeTool } from '../skills/dispatcher'
 import { captureScreen } from '../screenshot'
 import { LIMITS, MODELS } from '../../config/models'
 

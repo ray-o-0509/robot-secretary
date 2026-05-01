@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { optString, reqString } from './validation'
+import { optString, reqString } from './shared/validation'
 
 export const toolSchemas: Anthropic.Tool[] = [
   {
@@ -202,7 +202,7 @@ export const toolSchemas: Anthropic.Tool[] = [
   {
     name: 'get_dashboard_entry',
     description:
-      "daily-dashboard の Turso DB から日次まとめエントリを取得する。skill='ai-news' でAIニュース、'best-tools' でおすすめツール、'movies' で映画、'spending' で支出分析。id 省略で最新を返す。",
+      "Turso DB から日次まとめエントリを取得する。skill='ai-news' でAIニュース、'best-tools' でおすすめツール、'movies' で映画、'spending' で支出分析。id 省略で最新を返す。",
     input_schema: {
       type: 'object',
       properties: {
@@ -224,38 +224,38 @@ export const toolSchemas: Anthropic.Tool[] = [
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case 'get_slack_unread': {
-      const { getUnreadMessages } = await import('./slack')
+      const { getUnreadMessages } = await import('./slack/index')
       return await getUnreadMessages(args.channel as string | undefined)
     }
     case 'send_slack_message': {
-      const { sendMessage } = await import('./slack')
+      const { sendMessage } = await import('./slack/index')
       return await sendMessage(reqString(args, 'channel'), reqString(args, 'text'))
     }
     case 'get_gmail_inbox': {
-      const { getInboxEmails } = await import('./gmail')
+      const { getInboxEmails } = await import('./gmail/index')
       return await getInboxEmails(args.maxResults as number | undefined, optString(args, 'account'))
     }
     case 'trash_gmail': {
-      const { trashEmails } = await import('./gmail')
+      const { trashEmails } = await import('./gmail/index')
       return await trashEmails(reqString(args, 'account'), args.ids as string[])
     }
     case 'archive_gmail': {
-      const { archiveEmails } = await import('./gmail')
+      const { archiveEmails } = await import('./gmail/index')
       return await archiveEmails(reqString(args, 'account'), args.ids as string[])
     }
     case 'get_calendar_events': {
-      const { getTodayEvents, getTomorrowEvents, getUpcomingEvents } = await import('./calendar')
+      const { getTodayEvents, getTomorrowEvents, getUpcomingEvents } = await import('./calendar/index')
       const range = (args.range as string | undefined) ?? 'today'
       if (range === 'tomorrow') return await getTomorrowEvents()
       if (range === 'upcoming') return await getUpcomingEvents((args.days as number | undefined) ?? 7)
       return await getTodayEvents()
     }
     case 'get_tasks': {
-      const { getTodos } = await import('./ticktick')
+      const { getTodos } = await import('./tasks/index')
       return await getTodos()
     }
     case 'create_task': {
-      const { createTask } = await import('./ticktick')
+      const { createTask } = await import('./tasks/index')
       return await createTask({
         title: reqString(args, 'title'),
         due: args.due as string | undefined,
@@ -264,14 +264,14 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       })
     }
     case 'complete_task': {
-      const { completeTask } = await import('./ticktick')
+      const { completeTask } = await import('./tasks/index')
       return await completeTask({
         taskId: reqString(args, 'taskId'),
         projectId: reqString(args, 'projectId'),
       })
     }
     case 'complete_subtask': {
-      const { completeSubtask } = await import('./ticktick')
+      const { completeSubtask } = await import('./tasks/index')
       return await completeSubtask({
         taskId: reqString(args, 'taskId'),
         projectId: reqString(args, 'projectId'),
@@ -279,15 +279,15 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       })
     }
     case 'get_email_detail': {
-      const { getEmailDetail } = await import('./gmail')
+      const { getEmailDetail } = await import('./gmail/index')
       return await getEmailDetail(reqString(args, 'account'), reqString(args, 'id'))
     }
     case 'web_search': {
-      const { webSearch } = await import('./search')
+      const { webSearch } = await import('./web-search/index')
       return await webSearch(reqString(args, 'query'))
     }
     case 'update_task': {
-      const { updateTask } = await import('./ticktick')
+      const { updateTask } = await import('./tasks/index')
       return await updateTask({
         taskId: reqString(args, 'taskId'),
         projectId: reqString(args, 'projectId'),
@@ -297,7 +297,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       })
     }
     case 'reply_gmail': {
-      const { replyToEmail } = await import('./gmail')
+      const { replyToEmail } = await import('./gmail/index')
       return await replyToEmail({
         account: reqString(args, 'account'),
         messageId: reqString(args, 'messageId'),
@@ -305,7 +305,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       })
     }
     case 'create_calendar_event': {
-      const { createCalendarEvent } = await import('./calendar')
+      const { createCalendarEvent } = await import('./calendar/index')
       return await createCalendarEvent({
         title: reqString(args, 'title'),
         startDateTime: reqString(args, 'startDateTime'),
@@ -319,11 +319,11 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       })
     }
     case 'get_weather': {
-      const { getWeather } = await import('./weather')
+      const { getWeather } = await import('./weather/index')
       return await getWeather(reqString(args, 'location'))
     }
     case 'get_dashboard_entry': {
-      const { getDashboardEntry } = await import('./dashboard')
+      const { getDashboardEntry } = await import('./shared/turso')
       return await getDashboardEntry(
         args.skill as 'ai-news' | 'best-tools' | 'movies' | 'spending',
         args.id as string | undefined,

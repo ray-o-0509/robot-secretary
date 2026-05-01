@@ -44,39 +44,39 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
   try {
     switch (type) {
       case 'email': {
-        const { getInboxEmails } = await import('../tools/gmail')
+        const { getInboxEmails } = await import('../skills/gmail/index')
         return { type, data: await getInboxEmails(30), fetchedAt }
       }
       case 'calendar_today': {
-        const { getTodayEvents } = await import('../tools/calendar')
+        const { getTodayEvents } = await import('../skills/calendar/index')
         return { type, data: await getTodayEvents(), fetchedAt }
       }
       case 'calendar_tomorrow': {
-        const { getTomorrowEvents } = await import('../tools/calendar')
+        const { getTomorrowEvents } = await import('../skills/calendar/index')
         return { type, data: await getTomorrowEvents(), fetchedAt }
       }
       case 'calendar_week': {
-        const { getUpcomingEvents } = await import('../tools/calendar')
+        const { getUpcomingEvents } = await import('../skills/calendar/index')
         return { type, data: await getUpcomingEvents(7), fetchedAt }
       }
       case 'tasks': {
-        const { getTodos } = await import('../tools/ticktick')
+        const { getTodos } = await import('../skills/tasks/index')
         return { type, data: await getTodos(), fetchedAt }
       }
       case 'slack': {
-        const { getUnreadMessages } = await import('../tools/slack')
+        const { getUnreadMessages } = await import('../skills/slack/index')
         return { type, data: await getUnreadMessages(), fetchedAt }
       }
       case 'news': {
-        const { getDashboardEntry } = await import('../tools/dashboard')
+        const { getDashboardEntry } = await import('../skills/shared/turso')
         return { type, data: await getDashboardEntry('ai-news'), fetchedAt }
       }
       case 'tools': {
-        const { getDashboardEntry } = await import('../tools/dashboard')
+        const { getDashboardEntry } = await import('../skills/shared/turso')
         return { type, data: await getDashboardEntry('best-tools'), fetchedAt }
       }
       case 'movies': {
-        const { getDashboardEntry } = await import('../tools/dashboard')
+        const { getDashboardEntry } = await import('../skills/shared/turso')
         return { type, data: await getDashboardEntry('movies'), fetchedAt }
       }
     }

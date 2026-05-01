@@ -1,5 +1,5 @@
 import { google, type gmail_v1 } from 'googleapis'
-import { getGoogleAuth, listAccounts } from './googleAuth'
+import { getGoogleAuth, listAccounts } from '../shared/googleAuth'
 
 type InboxEmail = {
   id: string
@@ -193,7 +193,7 @@ export async function replyToEmail(opts: {
   messageId: string
   body: string
 }) {
-  const { requireConfirmation } = await import('./confirmation')
+  const { requireConfirmation } = await import('../confirmation/index')
   const auth = getGoogleAuth(opts.account)
   const gmail = google.gmail({ version: 'v1', auth })
 

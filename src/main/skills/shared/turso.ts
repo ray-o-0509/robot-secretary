@@ -4,7 +4,7 @@ export type DashboardSkill = 'ai-news' | 'best-tools' | 'movies' | 'spending'
 
 let cached: Client | null = null
 
-function getClient(): Client {
+export function getTursoClient(): Client {
   if (cached) return cached
   const url = process.env.TURSO_DATABASE_URL
   const authToken = process.env.TURSO_AUTH_TOKEN
@@ -13,7 +13,7 @@ function getClient(): Client {
   return cached
 }
 
-type EntryResult =
+export type EntryResult =
   | { skill: DashboardSkill; id: string; subtitle: string; data: unknown }
   | { error: string }
 
@@ -21,7 +21,7 @@ export async function getDashboardEntry(
   skill: DashboardSkill,
   id?: string,
 ): Promise<EntryResult> {
-  const client = getClient()
+  const client = getTursoClient()
 
   let resolvedId = id
   if (!resolvedId || resolvedId === 'latest') {

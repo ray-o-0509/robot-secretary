@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { getGoogleAuth, listAccounts } from './googleAuth'
+import { getGoogleAuth, listAccounts } from '../shared/googleAuth'
 
 type CalendarEvent = {
   id: string
@@ -97,7 +97,7 @@ export async function createCalendarEvent(opts: {
   attendees?: string[]
   timeZone?: string
 }) {
-  const { requireConfirmation } = await import('./confirmation')
+  const { requireConfirmation } = await import('../confirmation/index')
   const account = opts.account ?? listAccounts()[0]
   if (!account) throw new Error('Googleアカウントが登録されていない')
 

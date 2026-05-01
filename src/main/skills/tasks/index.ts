@@ -1,4 +1,4 @@
-import { getTickTickToken } from './tickTickAuth'
+import { getTickTickToken } from '../shared/tickTickAuth'
 
 const BASE = 'https://api.ticktick.com/open/v1'
 

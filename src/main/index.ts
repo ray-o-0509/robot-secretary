@@ -146,14 +146,14 @@ function registerSettingsIpc() {
   })
 
   ipcMain.handle('settings:get-default-apps', async () => {
-    const { loadDefaultApps } = await import('./tools/defaultApps')
+    const { loadDefaultApps } = await import('./skills/default-apps/index')
     return await loadDefaultApps()
   })
 
   ipcMain.handle('settings:save-default-apps', async (_event, apps: unknown) => {
-    const { saveDefaultApps } = await import('./tools/defaultApps')
+    const { saveDefaultApps } = await import('./skills/default-apps/index')
     if (apps && typeof apps === 'object') {
-      await saveDefaultApps(apps as import('./tools/defaultApps').DefaultApps)
+      await saveDefaultApps(apps as import('./skills/default-apps/index').DefaultApps)
     }
     return { ok: true }
   })
