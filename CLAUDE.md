@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Rules
+
+- [Architecture & directory layout](.claude/rules/architecture.md)
+- [Private / public boundary](.claude/rules/private-public-boundary.md)
+- [Skill conventions](.claude/rules/skills.md)
+
 ## Commands
 
 - `npm run dev` — start electron-vite dev (main, preload, renderer with HMR; Renderer URL is injected as `ELECTRON_RENDERER_URL`)
