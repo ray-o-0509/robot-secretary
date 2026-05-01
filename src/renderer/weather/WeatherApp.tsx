@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   LuSun, LuCloudSun, LuCloud, LuCloudRain, LuCloudSnow,
-  LuCloudLightning, LuWind, LuDroplets,
+  LuCloudLightning, LuCloudFog, LuDroplets,
 } from 'react-icons/lu'
 import { CYAN, FONT_MONO } from '../display/styles'
 import { DisplayShell } from '../display/DisplayShell'
@@ -57,7 +57,7 @@ const CONDITION_ICON: Record<string, IconComponent> = {
   rain:          LuCloudRain,
   showers:       LuDroplets,
   snow:          LuCloudSnow,
-  fog:           LuWind,
+  fog:           LuCloudFog,
   thunderstorm:  LuCloudLightning,
 }
 
