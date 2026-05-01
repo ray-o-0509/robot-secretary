@@ -62,15 +62,15 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
         return { type, data: await getTodos(), fetchedAt }
       }
       case 'news': {
-        const { getDashboardEntry } = await import('../skills/shared/turso')
+        const { getDashboardEntry } = await import('../../private/main-skills/shared/turso')
         return { type, data: await getDashboardEntry('ai-news'), fetchedAt }
       }
       case 'tools': {
-        const { getDashboardEntry } = await import('../skills/shared/turso')
+        const { getDashboardEntry } = await import('../../private/main-skills/shared/turso')
         return { type, data: await getDashboardEntry('best-tools'), fetchedAt }
       }
       case 'movies': {
-        const { getDashboardEntry } = await import('../skills/shared/turso')
+        const { getDashboardEntry } = await import('../../private/main-skills/shared/turso')
         return { type, data: await getDashboardEntry('movies'), fetchedAt }
       }
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { DisplayShell } from './DisplayShell'
 import { TopButtons } from './TopButtons'
@@ -6,11 +6,32 @@ import { EmailView } from '../skills/gmail/View'
 import { EmailSearchView } from '../skills/gmail/SearchView'
 import { CalendarView } from '../skills/calendar/View'
 import { TasksView } from '../skills/tasks/View'
-import { NewsView } from '../../private/renderer-skills/ai-news/View'
-import { ToolsView } from '../../private/renderer-skills/best-tools/View'
-import { MoviesView } from '../../private/renderer-skills/movies/View'
 import { TerminalView } from './views/TerminalView'
 import { PANEL_LABELS, type PanelPayload } from './types'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const UnavailableView = (_props: any) => (
+  <div style={{ padding: 24, color: CYAN, fontFamily: FONT_MONO, fontSize: 12, opacity: 0.6 }}>
+    この機能は利用できません
+  </div>
+)
+const fallbackModule = { default: UnavailableView }
+
+const NewsView = lazy(() =>
+  import('../../private/renderer-skills/ai-news/View')
+    .then((m) => ({ default: m.NewsView }))
+    .catch(() => fallbackModule),
+)
+const ToolsView = lazy(() =>
+  import('../../private/renderer-skills/best-tools/View')
+    .then((m) => ({ default: m.ToolsView }))
+    .catch(() => fallbackModule),
+)
+const MoviesView = lazy(() =>
+  import('../../private/renderer-skills/movies/View')
+    .then((m) => ({ default: m.MoviesView }))
+    .catch(() => fallbackModule),
+)
 
 export function DisplayApp() {
   const [payload, setPayload] = useState<PanelPayload | null>(null)
@@ -83,11 +104,11 @@ function renderView(payload: PanelPayload) {
     case 'tasks':
       return <TasksView payload={payload} />
     case 'news':
-      return <NewsView payload={payload} />
+      return <Suspense fallback={null}><NewsView payload={payload} /></Suspense>
     case 'tools':
-      return <ToolsView payload={payload} />
+      return <Suspense fallback={null}><ToolsView payload={payload} /></Suspense>
     case 'movies':
-      return <MoviesView payload={payload} />
+      return <Suspense fallback={null}><MoviesView payload={payload} /></Suspense>
     case 'terminal_output':
       return <TerminalView payload={payload} />
   }

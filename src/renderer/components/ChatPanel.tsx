@@ -20,7 +20,6 @@ const LANGUAGES: { code: string; label: string }[] = [
   { code: 'ja-JP', label: '日本語' },
   { code: 'en-US', label: 'English' },
   { code: 'zh-CN', label: '中文' },
-  { code: 'ko-KR', label: '한국어' },
 ]
 
 export function ChatPanel({ messages, languageCode, onLanguageChange, connectionError, onRetry }: Props) {

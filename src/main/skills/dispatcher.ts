@@ -7,7 +7,7 @@ let _privateExecute: ((name: string, args: Record<string, unknown>) => Promise<u
 async function loadPrivate() {
   if (_privateExecute) return
   try {
-    const priv = await import('../private/main-skills/dispatcher')
+    const priv = await import('../../private/main-skills/dispatcher')
     _privateSchemas = priv.toolSchemas
     _privateExecute = priv.executeTool
   } catch {
