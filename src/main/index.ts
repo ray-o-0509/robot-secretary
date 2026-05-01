@@ -578,7 +578,7 @@ function startWandering() {
         setTimeout(() => {
           nextTargetPending = false
           pickNewTarget()
-        }, 3000 + Math.random() * 5000)
+        }, 300 + Math.random() * 700)
       }
       return
     }
