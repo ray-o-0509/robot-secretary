@@ -583,11 +583,16 @@ function startWandering() {
       return
     }
 
-    // 時間ベースの指数イージング: フレームレートに依らず同じ感覚で寄っていく
-    const rate = 0.5 // 1秒あたりの追従係数（大きいほど早く寄る）
+    // 時間ベースの指数イージング + 最低速度フロア
+    // rate=0.5 でふわふわ感を維持しつつ、目標付近で止まって見えないよう
+    // 最低 60px/s を保証する
+    const rate = 0.5
     const factor = 1 - Math.exp(-rate * dt)
-    currentX += dx * factor
-    currentY += dy * factor
+    const expMove = dist * factor        // 指数収束の移動量
+    const minMove = 60 * dt              // 最低速度: 60px/s
+    const moveAmount = Math.min(Math.max(expMove, minMove), dist)
+    currentX += (dx / dist) * moveAmount
+    currentY += (dy / dist) * moveAmount
 
     // 整数化した位置が前回と同じなら setPosition は呼ばない（透過ウィンドウのIPCコストを節約）
     const ix = Math.round(currentX)
