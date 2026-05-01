@@ -736,8 +736,8 @@ registerCoreIpc({
   getOrCreateDisplayWindow,
   getOrCreateSearchWindow,
   showWeatherData,
-  setWanderingByState: (_state: string) => {
-    // wandering continues regardless of animation state
+  setWanderingByState: (state: string) => {
+    isWandering = state !== 'listening' && state !== 'speaking' && state !== 'thinking'
   },
   onClickthroughChanged: (enabled: boolean) => {
     if (!win) return
