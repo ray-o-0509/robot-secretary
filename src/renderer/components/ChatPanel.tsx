@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FONT_MONO, CYAN, MAGENTA, CYBER_STYLES } from '../display/styles'
+import { CloseButton } from '../display/TopButtons'
 import type { ConnectionError } from '../hooks/useGeminiLive'
 
 export type ChatMessage = {
@@ -66,39 +67,11 @@ export function ChatPanel({ messages, languageCode, onLanguageChange, connection
           ⠿ DRAG
         </span>
 
-        {/* Close button */}
-        <button
+        <CloseButton
           onClick={() => window.electronAPI?.chatClose()}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 14,
-            width: 24,
-            height: 24,
-            background: 'transparent',
-            border: '1px solid rgba(0, 240, 255, 0.2)',
-            borderRadius: 4,
-            color: 'rgba(0, 240, 255, 0.4)',
-            fontSize: 12,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            lineHeight: 1,
-            WebkitAppRegion: 'no-drag',
-            transition: 'color 0.15s, border-color 0.15s',
-          } as React.CSSProperties}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'rgba(0, 240, 255, 0.9)'
-            e.currentTarget.style.borderColor = 'rgba(0, 240, 255, 0.6)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'rgba(0, 240, 255, 0.4)'
-            e.currentTarget.style.borderColor = 'rgba(0, 240, 255, 0.2)'
-          }}
-        >
-          ✕
-        </button>
+          label="✕"
+          style={{ position: 'absolute', top: 12, right: 14 }}
+        />
       </div>
 
       {/* HUDフレーム */}
