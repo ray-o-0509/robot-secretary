@@ -6,16 +6,25 @@ import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
 import type { PanelPayload } from '../../display/types'
 
+type EmailMessage = {
+  id: string
+  threadId: string
+  account: string
+  from: string
+  subject: string
+  date: string
+  snippet: string | null | undefined
+}
+
 type EmailData = {
   accounts: Array<{ account: string; error: string | null; count: number }>
-  messages: Array<{
-    id: string
-    account: string
-    from: string
-    subject: string
-    date: string
-    snippet: string | null | undefined
-  }>
+  messages: EmailMessage[]
+}
+
+type Thread = {
+  threadId: string
+  messages: EmailMessage[]
+  latest: EmailMessage
 }
 
 interface Props {
@@ -26,12 +35,7 @@ export function EmailView({ payload }: Props) {
   const { t } = useTranslation()
 
   if (payload.error) {
-    return (
-      <ErrorState
-        message={payload.error}
-        hint={t('gmail.tokenExpiredHint')}
-      />
-    )
+    return <ErrorState message={payload.error} hint={t('gmail.tokenExpiredHint')} />
   }
 
   const data = payload.data as EmailData
@@ -44,97 +48,134 @@ export function EmailView({ payload }: Props) {
     )
   }
 
-  // アカウントごとにグループ化
-  const groups = new Map<string, EmailData['messages']>()
+  // アカウントごとにグループ化 → 各アカウント内でスレッドまとめ
+  const accountGroups = new Map<string, EmailMessage[]>()
   for (const m of data.messages) {
-    if (!groups.has(m.account)) groups.set(m.account, [])
-    groups.get(m.account)!.push(m)
+    if (!accountGroups.has(m.account)) accountGroups.set(m.account, [])
+    accountGroups.get(m.account)!.push(m)
   }
 
   return (
     <>
       <AccountStatus accounts={data.accounts} />
-      {Array.from(groups.entries()).map(([account, messages]) => (
-        <div key={account} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div
-            style={{
-              fontFamily: FONT_MONO,
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 1.5,
-              color: CYAN,
-              textShadow: `0 0 6px ${CYAN}80`,
-              opacity: 0.9,
-              marginTop: 6,
-            }}
-          >
-            ▸ {account} ({messages.length})
+      {Array.from(accountGroups.entries()).map(([account, messages]) => {
+        const threads = groupByThread(messages)
+        return (
+          <div key={account} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{
+              fontFamily: FONT_MONO, fontSize: 10, fontWeight: 700,
+              letterSpacing: 1.5, color: CYAN, textShadow: `0 0 6px ${CYAN}80`,
+              opacity: 0.9, marginTop: 6,
+            }}>
+              ▸ {account} ({threads.length})
+            </div>
+            {threads.map((thread) => (
+              <ThreadCard key={thread.threadId} thread={thread} />
+            ))}
           </div>
-          {messages.map((m, i) => (
-            <button
-              key={`${account}-${m.id ?? i}`}
-              onClick={() => window.electronAPI?.openEmailDetail(m.account, m.id)}
-              title={t('gmail.clickForDetail')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                margin: 0,
-                textAlign: 'left',
-                cursor: 'pointer',
-                width: '100%',
-                display: 'block',
-              }}
-            >
-              <Card accent="cyan">
-                <div
-                  style={{
-                    fontFamily: FONT_MONO,
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    color: '#e8f6ff',
-                    marginBottom: 4,
-                  }}
-                >
-                  {m.subject || t('gmail.noSubject')}
-                </div>
-                <div
-                  style={{
-                    fontFamily: FONT_MONO,
-                    fontSize: 10,
-                    color: 'rgba(232, 246, 255, 0.7)',
-                    marginBottom: 6,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                  }}
-                >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {parseFrom(m.from)}
-                  </span>
-                  <span style={{ flexShrink: 0, color: MAGENTA, opacity: 0.85 }}>
-                    {formatDate(m.date)}
-                  </span>
-                </div>
-                {m.snippet && (
-                  <div
-                    style={{
-                      fontFamily: FONT_MONO,
-                      fontSize: 10.5,
-                      color: 'rgba(232, 246, 255, 0.55)',
-                      lineHeight: 1.55,
-                    }}
-                  >
-                    {m.snippet}
-                  </div>
-                )}
-              </Card>
-            </button>
-          ))}
-        </div>
-      ))}
+        )
+      })}
     </>
   )
+}
+
+function groupByThread(messages: EmailMessage[]): Thread[] {
+  const map = new Map<string, EmailMessage[]>()
+  for (const m of messages) {
+    const key = m.threadId ?? m.id
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(m)
+  }
+  return Array.from(map.values()).map((msgs) => {
+    // APIは新しい順で返ってくるので最初が最新
+    const latest = msgs[0]
+    return { threadId: latest.threadId ?? latest.id, messages: msgs, latest }
+  })
+}
+
+function ThreadCard({ thread }: { thread: Thread }) {
+  const { t } = useTranslation()
+  const { latest, messages } = thread
+  const count = messages.length
+  const isThread = count > 1
+
+  return (
+    <button
+      onClick={() => window.electronAPI?.openEmailDetail(latest.account, latest.id)}
+      title={t('gmail.clickForDetail')}
+      style={{
+        background: 'transparent', border: 'none',
+        padding: 0, margin: 0, textAlign: 'left',
+        cursor: 'pointer', width: '100%', display: 'block',
+      }}
+    >
+      <Card accent="cyan">
+        {/* 件名 + スレッドカウントバッジ */}
+        <div style={{
+          display: 'flex', alignItems: 'flex-start',
+          justifyContent: 'space-between', gap: 8, marginBottom: 4,
+        }}>
+          <div style={{
+            fontFamily: FONT_MONO, fontSize: 11.5, fontWeight: 700,
+            color: '#e8f6ff', flex: 1, minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {latest.subject || t('gmail.noSubject')}
+          </div>
+          {isThread && (
+            <span style={{
+              flexShrink: 0,
+              fontFamily: FONT_MONO,
+              fontSize: 9.5,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              color: CYAN,
+              background: `${CYAN}18`,
+              border: `1px solid ${CYAN}50`,
+              borderRadius: 10,
+              padding: '1px 7px',
+              textShadow: `0 0 6px ${CYAN}80`,
+            }}>
+              {count}
+            </span>
+          )}
+        </div>
+
+        {/* 送信者 + 日時 */}
+        <div style={{
+          fontFamily: FONT_MONO, fontSize: 10,
+          color: 'rgba(232, 246, 255, 0.7)',
+          marginBottom: latest.snippet ? 6 : 0,
+          display: 'flex', justifyContent: 'space-between', gap: 8,
+        }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isThread
+              ? formatParticipants(messages)
+              : parseFrom(latest.from)}
+          </span>
+          <span style={{ flexShrink: 0, color: MAGENTA, opacity: 0.85 }}>
+            {formatDate(latest.date)}
+          </span>
+        </div>
+
+        {/* スニペット */}
+        {latest.snippet && (
+          <div style={{
+            fontFamily: FONT_MONO, fontSize: 10.5,
+            color: 'rgba(232, 246, 255, 0.55)', lineHeight: 1.55,
+          }}>
+            {latest.snippet}
+          </div>
+        )}
+      </Card>
+    </button>
+  )
+}
+
+function formatParticipants(messages: EmailMessage[]): string {
+  const names = [...new Set(messages.map((m) => parseFrom(m.from)))]
+  if (names.length <= 2) return names.join(', ')
+  return `${names[0]}, ${names[1]} +${names.length - 2}`
 }
 
 function AccountStatus({

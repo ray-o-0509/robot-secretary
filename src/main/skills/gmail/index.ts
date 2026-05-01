@@ -3,6 +3,7 @@ import { getGoogleAuth, listAccounts } from '../shared/googleAuth'
 
 type InboxEmail = {
   id: string
+  threadId: string
   account: string
   from: string
   subject: string
@@ -45,6 +46,7 @@ async function getInboxFor(account: string, maxResults: number): Promise<{ actua
 
     results.push({
       id: msg.id,
+      threadId: detail.data.threadId ?? msg.id,
       account: actualAccount,
       from: get('From'),
       subject: get('Subject'),
