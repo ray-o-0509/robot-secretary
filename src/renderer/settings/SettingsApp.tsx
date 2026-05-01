@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n, { toLng } from '../i18n'
 
-type Tab = 'profile' | 'apps' | 'api'
+type Tab = 'profile' | 'apps' | 'api' | 'language'
 
 type ProfileItems = Record<string, string>
 
@@ -41,9 +42,10 @@ export function SettingsApp() {
         {/* Tab bar */}
         <div style={{ ...noDrag, display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           {([
-            { id: 'profile', label: t('settings.tabs.profile') },
-            { id: 'apps',    label: t('settings.tabs.apps') },
-            { id: 'api',     label: t('settings.tabs.api') },
+            { id: 'profile',  label: t('settings.tabs.profile') },
+            { id: 'apps',     label: t('settings.tabs.apps') },
+            { id: 'api',      label: t('settings.tabs.api') },
+            { id: 'language', label: t('settings.tabs.language') },
           ] as { id: Tab; label: string }[]).map(({ id, label }) => (
             <button
               key={id}
@@ -69,9 +71,10 @@ export function SettingsApp() {
 
       {/* Scrollable body — no-drag */}
       <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
-        {tab === 'profile' && <ProfileTab />}
-        {tab === 'apps'    && <AppsTab appRows={APP_ROWS} />}
-        {tab === 'api'     && <ApiTab />}
+        {tab === 'profile'  && <ProfileTab />}
+        {tab === 'apps'     && <AppsTab appRows={APP_ROWS} />}
+        {tab === 'api'      && <ApiTab />}
+        {tab === 'language' && <LanguageTab />}
       </div>
     </div>
   )
@@ -299,6 +302,72 @@ function ApiTab() {
       <p style={{ fontSize: 10, color: '#334155', margin: 0 }}>
         {t('settings.api.googleAuthNote')}
       </p>
+    </div>
+  )
+}
+
+// ── Language Tab ─────────────────────────────────────────────────────────────
+
+const LANGUAGE_OPTIONS = [
+  { code: 'ja-JP', label: '日本語' },
+  { code: 'en-US', label: 'English' },
+  { code: 'zh-CN', label: '中文' },
+  { code: 'ko-KR', label: '한국어' },
+]
+
+function LanguageTab() {
+  const { t } = useTranslation()
+  const [current, setCurrent] = useState(
+    () => localStorage.getItem('LANGUAGE_CODE') ?? 'ja-JP',
+  )
+
+  const select = (code: string) => {
+    localStorage.setItem('LANGUAGE_CODE', code)
+    setCurrent(code)
+    i18n.changeLanguage(toLng(code))
+    window.electronAPI?.setLanguage(code)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px' }}>
+        {t('settings.language.description')}
+      </p>
+      {LANGUAGE_OPTIONS.map(({ code, label }) => {
+        const active = current === code
+        return (
+          <button
+            key={code}
+            onClick={() => select(code)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 14px',
+              background: active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${active ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.08)'}`,
+              borderRadius: 8,
+              cursor: 'pointer',
+              textAlign: 'left',
+              color: active ? '#a5b4fc' : '#94a3b8',
+              fontSize: 14,
+              fontWeight: active ? 600 : 400,
+              transition: 'all 0.15s',
+            }}
+          >
+            <span style={{
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              border: `2px solid ${active ? '#6366f1' : '#475569'}`,
+              background: active ? '#6366f1' : 'transparent',
+              flexShrink: 0,
+              display: 'inline-block',
+            }} />
+            {label}
+          </button>
+        )
+      })}
     </div>
   )
 }

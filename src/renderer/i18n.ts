@@ -4,7 +4,11 @@ import en from './locales/en.json'
 import ja from './locales/ja.json'
 
 const stored = typeof localStorage !== 'undefined' ? (localStorage.getItem('LANGUAGE_CODE') ?? '') : ''
-const lng = stored.startsWith('en') ? 'en' : 'ja'
+
+export function toLng(langCode: string): string {
+  if (langCode.startsWith('en')) return 'en'
+  return 'ja'
+}
 
 i18n
   .use(initReactI18next)
@@ -13,7 +17,7 @@ i18n
       en: { translation: en },
       ja: { translation: ja },
     },
-    lng,
+    lng: toLng(stored),
     fallbackLng: 'ja',
     interpolation: { escapeValue: false },
   })

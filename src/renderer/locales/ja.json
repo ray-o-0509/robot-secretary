@@ -60,7 +60,11 @@
     "tabs": {
       "profile": "プロフィール",
       "apps": "デフォルトアプリ",
-      "api": "APIキー"
+      "api": "APIキー",
+      "language": "言語"
+    },
+    "language": {
+      "description": "UIとベガの会話言語を切り替えます。"
     },
     "profile": {
       "description": "ベガが会話中に参照するあなたの情報。「名前は○○だ」と話しかけると自動で更新されます。",

@@ -60,7 +60,11 @@
     "tabs": {
       "profile": "Profile",
       "apps": "Default Apps",
-      "api": "API Keys"
+      "api": "API Keys",
+      "language": "Language"
+    },
+    "language": {
+      "description": "Switch the UI and Vega's conversation language."
     },
     "profile": {
       "description": "Your information Vega references during conversation. Say 'My name is ...' to update automatically.",

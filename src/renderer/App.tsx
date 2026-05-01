@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import i18n, { toLng } from './i18n'
 import { RobotScene } from './components/RobotScene'
 import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -84,6 +85,14 @@ const isSetupWindow = hash === '#setup'
 const isSettingsWindow = hash === '#settings'
 
 export default function App() {
+  useEffect(() => {
+    const off = window.electronAPI?.onLanguageChange((lang) => {
+      localStorage.setItem('LANGUAGE_CODE', lang)
+      i18n.changeLanguage(toLng(lang))
+    })
+    return () => off?.()
+  }, [])
+
   if (isSetupWindow) return <SetupApp />
   if (isSettingsWindow) return <SettingsApp />
   if (isChatWindow) return <ChatWindowApp />
