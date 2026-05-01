@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LuCheck, LuX, LuAlertTriangle } from 'react-icons/lu'
+import { LuCheck, LuX, LuTriangleAlert } from 'react-icons/lu'
 
 type PermissionStatus = 'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'
 
@@ -24,7 +24,7 @@ interface CheckRowProps {
 function CheckRow({ label, ok, required, detail, actionLabel, onAction }: CheckRowProps) {
   const { t } = useTranslation()
   const color = ok ? '#4ade80' : required ? '#f87171' : '#facc15'
-  const Icon = ok ? LuCheck : required ? LuX : LuAlertTriangle
+  const Icon = ok ? LuCheck : required ? LuX : LuTriangleAlert
 
   return (
     <div style={{
