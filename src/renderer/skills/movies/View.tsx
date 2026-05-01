@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { LuStar } from 'react-icons/lu'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
@@ -156,7 +157,7 @@ function MovieCard({ movie, showRating }: { movie: Movie; showRating?: boolean }
                 textShadow: '0 0 6px rgba(255, 200, 60, 0.6)',
               }}
             >
-              ★ {Number(movie.rating).toFixed(1)}
+              <LuStar size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />{Number(movie.rating).toFixed(1)}
             </span>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { LuCheck, LuX, LuAlertTriangle } from 'react-icons/lu'
 
 type PermissionStatus = 'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'
 
@@ -23,7 +24,7 @@ interface CheckRowProps {
 function CheckRow({ label, ok, required, detail, actionLabel, onAction }: CheckRowProps) {
   const { t } = useTranslation()
   const color = ok ? '#4ade80' : required ? '#f87171' : '#facc15'
-  const icon = ok ? '✓' : required ? '✗' : '⚠'
+  const Icon = ok ? LuCheck : required ? LuX : LuAlertTriangle
 
   return (
     <div style={{
@@ -35,7 +36,9 @@ function CheckRow({ label, ok, required, detail, actionLabel, onAction }: CheckR
       borderRadius: 8,
       border: `1px solid ${ok ? 'rgba(74,222,128,0.2)' : required ? 'rgba(248,113,113,0.2)' : 'rgba(250,204,21,0.2)'}`,
     }}>
-      <span style={{ fontSize: 16, color, width: 20, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+      <span style={{ color, width: 20, textAlign: 'center', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={16} />
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500 }}>{label}</div>
         {detail && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{detail}</div>}

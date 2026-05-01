@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { LuMapPin } from 'react-icons/lu'
 import { CYAN, FONT_MONO, MAGENTA } from '../styles'
 import { EmptyState } from '../components/EmptyState'
 import type { PanelPayload, TerminalOutputData } from '../types'
@@ -42,7 +43,7 @@ export function TerminalView({ payload }: Props) {
           paddingLeft: 2,
         }}
       >
-        📍 {d.cwd}
+        <LuMapPin size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />{d.cwd}
       </div>
 
       {d.stdout ? (

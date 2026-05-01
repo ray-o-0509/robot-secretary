@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  LuSun, LuCloudSun, LuCloud, LuCloudRain, LuCloudSnow,
+  LuCloudLightning, LuWind, LuDroplets,
+} from 'react-icons/lu'
 import { CYAN, FONT_MONO } from '../display/styles'
 import { DisplayShell } from '../display/DisplayShell'
 
@@ -42,29 +46,24 @@ type WeatherData = {
   daily: DailyItem[]
 }
 
-// U+FE0F でカラー emoji 表示を強制する
-const CONDITION_ICON: Record<string, string> = {
-  clear:        '☀️',
-  sunny:        '🌤️',
-  partly_cloudy:'⛅️',
-  cloudy:       '☁️',
-  overcast:     '☁️',
-  rain:         '🌧️',
-  showers:      '🌦️',
-  snow:         '❄️',
-  fog:          '🌫️',
-  thunderstorm: '⛈️',
+type IconComponent = React.ComponentType<{ size?: number; style?: React.CSSProperties }>
+
+const CONDITION_ICON: Record<string, IconComponent> = {
+  clear:         LuSun,
+  sunny:         LuCloudSun,
+  partly_cloudy: LuCloudSun,
+  cloudy:        LuCloud,
+  overcast:      LuCloud,
+  rain:          LuCloudRain,
+  showers:       LuDroplets,
+  snow:          LuCloudSnow,
+  fog:           LuWind,
+  thunderstorm:  LuCloudLightning,
 }
 
-// emoji が FONT_MONO を継承しないよう専用 fontFamily を指定
-const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'
-
 function Icon({ cond, size }: { cond: string; size: number }) {
-  return (
-    <span style={{ fontFamily: EMOJI_FONT, fontSize: size, lineHeight: 1, fontStyle: 'normal' }}>
-      {CONDITION_ICON[cond] ?? '☁️'}
-    </span>
-  )
+  const C = CONDITION_ICON[cond] ?? LuCloud
+  return <C size={size} />
 }
 
 export function WeatherApp() {

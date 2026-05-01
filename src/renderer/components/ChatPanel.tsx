@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { LuKey, LuRadio, LuMic, LuZap, LuSettings, LuRefreshCw } from 'react-icons/lu'
 import { FONT_MONO, CYAN, MAGENTA, CYBER_STYLES } from '../display/styles'
 import { CloseButton } from '../display/TopButtons'
 import type { ConnectionError } from '../hooks/useGeminiLive'
@@ -194,18 +195,18 @@ export function ChatPanel({ messages, connectionError, onRetry }: Props) {
   )
 }
 
-const ERROR_ICON: Record<string, string> = {
-  no_api_key: '⚙',
-  auth:        '🔑',
-  network:     '📡',
-  max_retries: '↺',
-  mic_permission: '🎙',
-  connect_error: '⚡',
+const ERROR_ICON: Record<string, React.ReactNode> = {
+  no_api_key:    <LuSettings size={14} />,
+  auth:          <LuKey size={14} />,
+  network:       <LuRadio size={14} />,
+  max_retries:   <LuRefreshCw size={14} />,
+  mic_permission:<LuMic size={14} />,
+  connect_error: <LuZap size={14} />,
 }
 
 function ConnectionErrorBanner({ error, onRetry }: { error: ConnectionError; onRetry?: () => void }) {
   const RED = '#ff4444'
-  const icon = ERROR_ICON[error.type] ?? '!'
+  const icon = ERROR_ICON[error.type] ?? <LuZap size={14} />
   const canRetry = error.type !== 'no_api_key' && error.type !== 'auth' && error.type !== 'mic_permission'
 
   return (
@@ -224,7 +225,7 @@ function ConnectionErrorBanner({ error, onRetry }: { error: ConnectionError; onR
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
     >
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: RED, textShadow: `0 0 6px ${RED}`, marginBottom: 5 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, color: RED, textShadow: `0 0 6px ${RED}`, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 6 }}>
         {icon} CONNECTION_ERROR // {error.type.toUpperCase()}
       </div>
       <div style={{ fontSize: 11, color: 'rgba(255, 180, 180, 0.9)', lineHeight: 1.5, marginBottom: canRetry ? 8 : 0 }}>
@@ -247,7 +248,7 @@ function ConnectionErrorBanner({ error, onRetry }: { error: ConnectionError; onR
             textTransform: 'uppercase',
           }}
         >
-          ↺ RETRY
+          <LuRefreshCw size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> RETRY
         </button>
       )}
     </div>
