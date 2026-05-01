@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
+import i18next from 'i18next'
 import { LIMITS, MODELS } from '../../config/models'
 import type { RobotState, RobotProcessor } from '../App'
 import type { ChatMessage } from '../components/ChatPanel'
@@ -11,17 +12,17 @@ const secretaryTools = [
   {
     name: 'delegate_task',
     description:
-      'Gmail・Googleカレンダー・画面の確認、複雑な要約・横断調査などをClaudeエージェントに委任する。タスク管理(get_tasks/create_task/complete_task)以外の作業はこれを使う。',
+      'Delegate tasks to a Claude agent: checking Gmail, Google Calendar, screen contents, complex summarization, or cross-cutting research. Use this for everything except task management (get_tasks/create_task/complete_task).',
     parameters: {
       type: 'object',
       properties: {
         task: {
           type: 'string',
-          description: 'やってほしい作業の詳細な指示（必要な情報を漏れなく日本語で）',
+          description: 'Detailed instructions for the task to perform (include all necessary information)',
         },
         includeScreenshot: {
           type: 'boolean',
-          description: '画面の内容を見て判断する必要があるとき true',
+          description: 'Set true when the decision requires seeing the current screen contents',
         },
       },
       required: ['task'],
@@ -29,114 +30,114 @@ const secretaryTools = [
   },
   {
     name: 'get_tasks',
-    description: 'TickTickの未完了タスクを全プロジェクト横断で取得する。「やること」「ToDo」「タスク」と聞かれたら直接これを呼ぶ。',
+    description: 'Retrieve all incomplete tasks from TickTick across all projects. Call this directly when asked about tasks or to-dos.',
     parameters: { type: 'object', properties: {} },
   },
   {
     name: 'create_task',
-    description: 'TickTickに新しいタスクを作成する。projectId 未指定で inbox に入る。',
+    description: 'Create a new task in TickTick. If projectId is omitted, the task goes to inbox.',
     parameters: {
       type: 'object',
       properties: {
-        title: { type: 'string', description: 'タスクのタイトル' },
-        due: { type: 'string', description: '期限（YYYY-MM-DD、任意）' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high'], description: '優先度（任意。「重要」「急ぎ」と言われたら high）' },
-        projectId: { type: 'string', description: 'プロジェクトID（任意、未指定で inbox）' },
+        title: { type: 'string', description: 'Task title' },
+        due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional; use "high" for urgent/important)' },
+        projectId: { type: 'string', description: 'Project ID (optional; omit to use inbox)' },
       },
       required: ['title'],
     },
   },
   {
     name: 'complete_task',
-    description: 'TickTickのタスクを完了にする。事前に get_tasks で taskId と projectId を取得しておく必要がある。',
+    description: 'Mark a TickTick task as complete. Requires taskId and projectId obtained beforehand via get_tasks.',
     parameters: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'タスクID（get_tasks の返り値の taskId）' },
-        projectId: { type: 'string', description: 'プロジェクトID（get_tasks の返り値の projectId）' },
+        taskId: { type: 'string', description: 'Task ID (from get_tasks result)' },
+        projectId: { type: 'string', description: 'Project ID (from get_tasks result)' },
       },
       required: ['taskId', 'projectId'],
     },
   },
   {
     name: 'update_profile',
-    description: 'ユーザーが自分の情報を教えてくれたり「覚えておいて」と言ったらこれを呼ぶ。key=項目名（例:「名前」「職業」「趣味」）、value=その内容で永続保存する。',
+    description: 'Call this when the user shares personal information or says "remember this". key = field name (e.g. "name", "job", "hobby"), value = the content to persist.',
     parameters: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: '項目名（例: "名前", "職業", "住所", "趣味"）' },
-        value: { type: 'string', description: '内容' },
+        key: { type: 'string', description: 'Field name (e.g. "name", "job", "address", "hobby")' },
+        value: { type: 'string', description: 'Content to store' },
       },
       required: ['key', 'value'],
     },
   },
   {
     name: 'delete_profile',
-    description: 'プロファイルの特定項目を削除する。「〜の情報を消して」「〜を忘れて」と言われたら呼ぶ。',
+    description: 'Delete a specific field from the profile. Call when asked to remove or forget a piece of information.',
     parameters: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: '削除する項目名' },
+        key: { type: 'string', description: 'Field name to delete' },
       },
       required: ['key'],
     },
   },
   {
     name: 'update_task',
-    description: 'TickTickのタスクの期限・タイトル・優先度を変更する。「〜の期限を〇日に変えて」「〜のタスク名を変更して」など。事前に get_tasks で taskId と projectId を確認してから呼ぶ。',
+    description: 'Update the due date, title, or priority of a TickTick task. Confirm taskId and projectId via get_tasks before calling.',
     parameters: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'タスクID（get_tasks の返り値）' },
-        projectId: { type: 'string', description: 'プロジェクトID（get_tasks の返り値）' },
-        title: { type: 'string', description: '新しいタイトル（変更する場合）' },
-        due: { type: 'string', description: '新しい期限 YYYY-MM-DD。期限を消す場合は null' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: '新しい優先度' },
+        taskId: { type: 'string', description: 'Task ID (from get_tasks result)' },
+        projectId: { type: 'string', description: 'Project ID (from get_tasks result)' },
+        title: { type: 'string', description: 'New title (if changing)' },
+        due: { type: 'string', description: 'New due date YYYY-MM-DD. Pass null to clear the due date.' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority' },
       },
       required: ['taskId', 'projectId'],
     },
   },
   {
     name: 'get_weather',
-    description: '天気予報を取得する。「天気」「今日の天気」「〜の天気」「明日傘いる？」などの質問に直接呼ぶ。',
+    description: 'Get a weather forecast. Call directly when asked about weather or whether to bring an umbrella.',
     parameters: {
       type: 'object',
       properties: {
-        location: { type: 'string', description: '地名（例: "東京", "大阪", "札幌"）' },
+        location: { type: 'string', description: 'Place name (e.g. "Tokyo", "Osaka", "Sapporo")' },
       },
       required: ['location'],
     },
   },
   {
     name: 'analyze_screen',
-    description: '現在の画面をキャプチャして内容を分析する。「画面に何が表示されてる？」「今見てるのは何？」「これ何のアプリ？」など。',
+    description: 'Capture and analyze the current screen. Use when asked what is on screen or what app is open.',
     parameters: {
       type: 'object',
       properties: {
-        question: { type: 'string', description: '画面について知りたいこと（省略可）' },
+        question: { type: 'string', description: 'What you want to know about the screen (optional)' },
       },
     },
   },
   {
     name: 'web_search',
-    description: 'Webを検索して最新情報・ニュース・調べ物を取得する。「〜を調べて」「〜って何？」「最新の〜」「〜のニュース」と言われたら使う。',
+    description: 'Search the web for the latest information, news, or general lookups.',
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '検索クエリ' },
+        query: { type: 'string', description: 'Search query' },
       },
       required: ['query'],
     },
   },
   {
     name: 'search_gmail',
-    description: 'Gmailメールをキーワード・送信者・件名などで検索する。全アカウント横断で検索し、受信トレイ以外も含む。結果はディスプレイに表示される。「〜さんからのメール」「〜について来たメール」「〜の件名のメール」と言われたら使う。',
+    description: 'Search Gmail messages by keyword, sender, subject, etc. Searches across all accounts including non-inbox. Results are shown on the display.',
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Gmail検索クエリ（例: "from:hoge@example.com"、"subject:請求書"、"山田"）' },
-        account: { type: 'string', description: '特定アカウントのみ検索する場合に指定（省略で全アカウント横断）' },
-        maxResults: { type: 'number', description: '各アカウントの取得上限（デフォルト20）' },
+        query: { type: 'string', description: 'Gmail search query (e.g. "from:hoge@example.com", "subject:invoice", "John")' },
+        account: { type: 'string', description: 'Restrict to a specific account (omit to search all accounts)' },
+        maxResults: { type: 'number', description: 'Max results per account (default 20)' },
       },
       required: ['query'],
     },
@@ -144,13 +145,13 @@ const secretaryTools = [
   {
     name: 'open_app',
     description:
-      'macOS のアプリケーションを起動する。app_name は必ず英語の正式名（例: "Safari", "Finder", "Google Chrome"）で渡せ。',
+      'Launch a macOS application. app_name must be the official English name (e.g. "Safari", "Finder", "Google Chrome").',
     parameters: {
       type: 'object',
       properties: {
         app_name: {
           type: 'string',
-          description: '起動するアプリの英語正式名（例: "Notion", "Spotify", "Google Chrome"）',
+          description: 'Official English app name (e.g. "Notion", "Spotify", "Google Chrome")',
         },
       },
       required: ['app_name'],
@@ -159,7 +160,7 @@ const secretaryTools = [
   {
     name: 'show_panel',
     description:
-      'メール・カレンダー・タスク・AIニュース・ツール・映画の内容を専用パネルで画面表示する。ユーザーが「見せて」「表示して」「出して」「一覧」「画面に」など明示的に表示を求めた時のみ呼ぶ。「メールチェックして」「届いてる?」のような確認は delegate_task を使う。返り値の data に生データが入っているので、普段通り音声で内容を要約しつつ「画面にも出した」と添えろ。',
+      'Display email, calendar, tasks, AI news, tools, or movies in a dedicated panel. Only call when the user explicitly asks to show or display something. For checks like "any new mail?" use delegate_task instead. The response data field contains raw data — summarize it verbally as usual and note that it is also shown on screen.',
     parameters: {
       type: 'object',
       properties: {
@@ -176,7 +177,7 @@ const secretaryTools = [
             'movies',
           ],
           description:
-            'email=Gmailインボックス, calendar_today=今日の予定, calendar_tomorrow=明日, calendar_week=今後7日, tasks=TickTick未完了, news=AIニュース日次まとめ, tools=おすすめツール, movies=今月公開/来月注目映画',
+            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies',
         },
       },
       required: ['type'],
@@ -185,13 +186,13 @@ const secretaryTools = [
   {
     name: 'cd',
     description:
-      '俺（ベガ）の作業ディレクトリを変更する。「〜に移動して」「〜のディレクトリに行って」と言われたらこれを呼べ。以降の run_command / run_claude はここで実行される。',
+      'Change the working directory. Subsequent run_command and run_claude calls will execute here.',
     parameters: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
-          description: '移動先のパス（~/... 形式も可）',
+          description: 'Destination path (~/... format is accepted)',
         },
       },
       required: ['path'],
@@ -200,17 +201,17 @@ const secretaryTools = [
   {
     name: 'run_command',
     description:
-      'シェルコマンドを実行して結果を画面に表示する。git, ls, cat, npm など何でも叩ける。cwd 未指定なら俺の今いる場所で実行。結果はパネルに出るので「画面に出した」と添えろ。',
+      'Run a shell command and display the output on screen. Supports git, ls, cat, npm, and anything else. If cwd is omitted, runs in the current working directory. Results appear in the panel.',
     parameters: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description: '実行するシェルコマンド（zsh）',
+          description: 'Shell command to execute (zsh)',
         },
         cwd: {
           type: 'string',
-          description: '一時的に別のディレクトリで実行したい場合のみ指定',
+          description: 'Override directory for this run only',
         },
       },
       required: ['command'],
@@ -219,17 +220,17 @@ const secretaryTools = [
   {
     name: 'run_claude',
     description:
-      'Claude Code CLIにプロンプトを渡して実行する。「Claudeに〜してもらって」「コードを〜して」と言われたらこれを使え。cwd 未指定なら俺の今いる場所で実行。',
+      'Pass a prompt to the Claude Code CLI and execute it. Use when asked to have Claude write or modify code. If cwd is omitted, runs in the current working directory.',
     parameters: {
       type: 'object',
       properties: {
         prompt: {
           type: 'string',
-          description: 'Claudeへの指示（日本語可）',
+          description: 'Instructions for Claude',
         },
         cwd: {
           type: 'string',
-          description: '一時的に別のディレクトリで実行したい場合のみ指定',
+          description: 'Override directory for this run only',
         },
       },
       required: ['prompt'],
@@ -279,7 +280,7 @@ function getSystemPrompt(languageCode: string, location: string): string {
 }
 
 async function resolveLocation(): Promise<string> {
-  const tzFallback = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? '不明'
+  const tzFallback = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Unknown'
   return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(tzFallback); return }
     navigator.geolocation.getCurrentPosition(
@@ -317,12 +318,12 @@ interface Options {
   languageCode: string
 }
 
-// 連続して再接続に失敗したら諦める閾値。長文プロンプトを永久に再送し続けるのを防ぐ
+// Threshold after which consecutive reconnect failures are abandoned, preventing infinite re-sends of long prompts
 const MAX_RECONNECT_ATTEMPTS = LIMITS.geminiMaxReconnectAttempts
-// resumption handle 付きで何回失敗したら handle を捨てて素のセッションで再開するか。
-// handle は 2 時間で失効するので長時間スリープ復帰時にここで救う
+// How many handle-based failures before discarding the handle and starting a fresh session.
+// Handles expire after 2 hours, so this recovers from long sleep/resume scenarios.
 const HANDLE_RETRY_THRESHOLD = 3
-// PTT 押下がこの長さ未満なら誤爆扱いして音声を捨てる
+// PTT presses shorter than this are treated as accidental taps and discarded
 const PTT_MIN_DURATION_MS = 1000
 
 export type ConnectionError = {
@@ -343,8 +344,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const pttActivityStartedRef = useRef(false)
   const pttAudioSentRef = useRef(false)
   const pttStartTimeRef = useRef(0)
-  // PTT 開始から PTT_MIN_DURATION_MS 未満のあいだに収集したチャンクを溜めておく置き場。
-  // 閾値を超えた瞬間に flush、閾値未満のまま PTT が離されたら丸ごと破棄する
+  // Staging area for chunks collected within PTT_MIN_DURATION_MS of PTT start.
+  // Flushed the moment the threshold is exceeded; discarded entirely if PTT is released before threshold.
   const pttPendingChunksRef = useRef<string[]>([])
   const isMutedRef = useRef(isMuted)
   const languageCodeRef = useRef(languageCode)
@@ -361,7 +362,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   const sessionHandleRef = useRef<string | null>(null)
   const connectRef = useRef<() => Promise<void>>(async () => {})
   const locationRef = useRef<string>(
-    Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? '不明'
+    Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Unknown'
   )
   const sessionEpochRef = useRef(0)
 
@@ -381,12 +382,12 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }
   }, [])
 
-  // 起動時に実際の位置情報を取得してシステムプロンプトに使う
+  // Fetch actual location on startup and use it in the system prompt
   useEffect(() => {
     resolveLocation().then((loc) => { locationRef.current = loc })
   }, [])
 
-  // 通知監視を開始し、incoming 通知を現在のセッションに注入する
+  // Start notification watch and inject incoming notifications into the current session
   useEffect(() => {
     void window.electronAPI?.startNotificationWatch?.()
     const off = window.electronAPI?.onNotification?.((notifs) => {
@@ -418,7 +419,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     resetSessionState()
   }, [resetSessionState])
 
-  // 言語が変わったら既存セッションを閉じて再接続。onclose 経由で scheduleReconnect が走る
+  // When the language changes, close the existing session and reconnect via onclose → scheduleReconnect
   useEffect(() => {
     languageCodeRef.current = languageCode
     if (isFirstLanguageRunRef.current) {
@@ -427,26 +428,26 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }
     if (!sessionRef.current) {
       if (connectingRef.current) {
-        console.log('[Gemini] 接続中に言語変更', languageCode, '→ 接続試行を差し替え')
+        console.log('[Gemini] Language changed while connecting', languageCode, '— replacing pending connect')
         sessionHandleRef.current = null
         pendingConnectRef.current = true
         invalidateSession()
       }
       return
     }
-    console.log('[Gemini] 言語変更', languageCode, '→ 再接続')
-    sessionHandleRef.current = null // 旧言語のコンテキストを引き継がない
+    console.log('[Gemini] Language changed', languageCode, '— reconnecting')
+    sessionHandleRef.current = null // do not carry over old language context
     const session = sessionRef.current
     invalidateSession()
     try {
       session?.close?.()
     } catch {
-      // すでに閉じている場合は無視
+      // already closed — ignore
     }
     void connectRef.current()
   }, [invalidateSession, languageCode])
 
-  // ========== マイク初期化（プロセス内で1度きり） ==========
+  // ========== Mic initialization (once per process) ==========
 
   const setupMic = useCallback(async () => {
     if (micSetupRef.current) return
@@ -455,7 +456,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       const audioCtx = new AudioContext()
       micAudioCtxRef.current = audioCtx
       const nativeSR = audioCtx.sampleRate
-      console.log('[Gemini] マイク AudioContext sampleRate:', nativeSR)
+      console.log('[Gemini] Mic AudioContext sampleRate:', nativeSR)
       const source = audioCtx.createMediaStreamSource(stream)
       const processor = audioCtx.createScriptProcessor(4096, 1, 1)
 
@@ -465,7 +466,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         try {
           const inputData = e.inputBuffer.getChannelData(0)
 
-          // ネイティブレートから16000Hzへダウンサンプル
+          // Downsample from native rate to 16000 Hz
           const ratio = nativeSR / 16000
           const outLen = Math.floor(inputData.length / ratio)
           const int16 = new Int16Array(outLen)
@@ -475,8 +476,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           }
           const data = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)))
 
-          // PTT 開始直後の規定時間は溜めておくだけ。閾値未満で離されたら丸ごと捨てるので
-          // 誤爆プチタップで音声が API に届かない
+          // Buffer chunks for the minimum hold duration; discard all if PTT is released before threshold
+          // so accidental short taps never reach the API
           const elapsed = performance.now() - pttStartTimeRef.current
           if (elapsed < PTT_MIN_DURATION_MS) {
             pttPendingChunksRef.current.push(data)
@@ -487,7 +488,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             pttActivityStartedRef.current = true
           }
           if (pttPendingChunksRef.current.length) {
-            console.log('[Gemini] 保留音声を送信:', pttPendingChunksRef.current.length)
+            console.log('[Gemini] Flushing buffered audio chunks:', pttPendingChunksRef.current.length)
             for (const buffered of pttPendingChunksRef.current) {
               sessionRef.current.sendRealtimeInput({
                 audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' },
@@ -497,13 +498,13 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             pttPendingChunksRef.current = []
           }
 
-          if (audioSendCount++ % 20 === 0) console.log('[Gemini] 音声送信中...', audioSendCount)
+          if (audioSendCount++ % 20 === 0) console.log('[Gemini] Sending audio...', audioSendCount)
           sessionRef.current.sendRealtimeInput({
             audio: { data, mimeType: 'audio/pcm;rate=16000' },
           })
           pttAudioSentRef.current = true
         } catch {
-          // WebSocketが既に閉じている場合は無視
+          // WebSocket already closed — ignore
         }
       }
 
@@ -513,12 +514,12 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     } catch (err) {
       micSetupRef.current = false
       const e = err as { name?: string; message?: string }
-      console.error('[Gemini] マイク初期化失敗:', e?.name ?? String(err), e?.message ?? '')
+      console.error('[Gemini] Mic initialization failed:', e?.name ?? String(err), e?.message ?? '')
       throw err
     }
   }, [])
 
-  // ========== 再接続スケジューリング ==========
+  // ========== Reconnect scheduling ==========
 
   const scheduleReconnect = useCallback(() => {
     if (intentionalCloseRef.current) return
@@ -526,19 +527,19 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
 
     const attempt = reconnectAttemptsRef.current
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-      console.error(`[Gemini] 再接続を ${MAX_RECONNECT_ATTEMPTS} 回試して失敗。諦める。`)
+      console.error(`[Gemini] Reconnect failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Giving up.`)
       intentionalCloseRef.current = true
-      setConnectionError({ type: 'max_retries', message: `${MAX_RECONNECT_ATTEMPTS}回の再接続に失敗しました。接続状況を確認してください。` })
+      setConnectionError({ type: 'max_retries', message: i18next.t('connection.maxRetries') })
       return
     }
     // resumption handle で連続失敗したら handle を破棄してフレッシュなセッションを試す
     if (attempt >= HANDLE_RETRY_THRESHOLD && sessionHandleRef.current) {
-      console.warn('[Gemini] resumption handle を破棄して新規セッションで再接続する')
+      console.warn('[Gemini] Discarding resumption handle and reconnecting with a fresh session')
       sessionHandleRef.current = null
     }
     // 1s, 2s, 4s, 8s, 16s, 30s, 30s, ... (30sで上限固定)
     const delay = Math.min(1000 * 2 ** attempt, 30000)
-    console.log(`[Gemini] ${delay / 1000}秒後に再接続を試みます (attempt ${attempt + 1})`)
+    console.log(`[Gemini] Retrying in ${delay / 1000}s (attempt ${attempt + 1})`)
 
     reconnectTimerRef.current = setTimeout(() => {
       reconnectTimerRef.current = null
@@ -547,10 +548,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }, delay)
   }, [])
 
-  // ========== メッセージ処理 ==========
+  // ========== Message handling ==========
 
   const handleMessage = useCallback(async (msg: unknown) => {
-    console.log('[Gemini] メッセージ受信:', JSON.stringify(msg).slice(0, 300))
+    console.log('[Gemini] Message received:', JSON.stringify(msg).slice(0, 300))
     const m = msg as {
       serverContent?: {
         modelTurn?: { parts: { inlineData?: { data: string; mimeType: string } }[] }
@@ -563,18 +564,18 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       goAway?: { timeLeft?: string }
     }
 
-    // resumption handle を保存。次回再接続時にこれを渡せばコンテキストごと resume されるので
-    // 長文システムプロンプトの再送と過去 turn の再課金が抑えられる
+    // Save the resumption handle. Passing it on the next reconnect resumes context,
+    // avoiding resending the long system prompt and re-billing past turns.
     if (m.sessionResumptionUpdate?.resumable && m.sessionResumptionUpdate.newHandle) {
       sessionHandleRef.current = m.sessionResumptionUpdate.newHandle
     }
 
-    // サーバが切断予告を出したらログだけ。実際の再接続は onclose 経由で動く
+    // Server sent a disconnect notice — just log it. Actual reconnect happens via onclose.
     if (m.goAway) {
-      console.log('[Gemini] サーバ切断予告 timeLeft:', m.goAway.timeLeft)
+      console.log('[Gemini] Server going away, timeLeft:', m.goAway.timeLeft)
     }
 
-    // 音声トランスクリプト
+    // Audio transcription
     const inputT = m.serverContent?.inputTranscription?.text
     if (inputT) {
       appendTranscript('user', inputT)
@@ -582,13 +583,13 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }
     const outputT = m.serverContent?.outputTranscription?.text
     if (outputT) {
-      // モデルが応答を始めたらユーザー側のターンを締める
+      // Close out the user turn once the model starts responding
       userMsgIdRef.current = null
       appendTranscript('assistant', outputT)
       window.electronAPI?.memoryRecordTranscript('assistant', outputT)
     }
 
-    // ツール呼び出し
+    // Tool call
     if (m.toolCall?.functionCalls?.length) {
       const hasDelegate = m.toolCall.functionCalls.some(
         (c: { name?: string }) => c.name === 'delegate_task',
@@ -603,7 +604,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       return
     }
 
-    // 音声チャンクをシーケンシャルに再生
+    // Play audio chunks sequentially
     const parts = m.serverContent?.modelTurn?.parts ?? []
     for (const part of parts) {
       if (!part.inlineData?.data) continue
@@ -639,7 +640,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     }
   }, [appendTranscript])
 
-  // ========== 通知注入ヘルパー ==========
+  // ========== Notification injection helper ==========
 
   function injectNotifications(
     session: LiveSession,
@@ -647,8 +648,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
   ) {
     const text = notifs.map((n) =>
       n.title
-        ? `[通知] ${n.appName}「${n.title}」${n.body ? '：' + n.body : ''}`
-        : `[通知] ${n.appName}から通知が来た`
+        ? `[NOTIFICATION] ${n.appName}: "${n.title}"${n.body ? ' — ' + n.body : ''}`
+        : `[NOTIFICATION] New notification from ${n.appName}`
     ).join('\n')
     try {
       ;(session as unknown as {
@@ -658,11 +659,11 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         turnComplete: true,
       })
     } catch (e) {
-      console.warn('[notification] sendClientContent 失敗:', e)
+      console.warn('[notification] sendClientContent failed:', e)
     }
   }
 
-  // ========== 接続（自動再接続あり） ==========
+  // ========== Connection (with auto-reconnect) ==========
 
   const connect = useCallback(async () => {
     intentionalCloseRef.current = false
@@ -679,26 +680,26 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const envApiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim()
     const apiKey = storedApiKey || envApiKey
     if (!apiKey) {
-      console.warn('[Gemini] API Key が未設定。右クリック→設定から入力してください。')
+      console.warn('[Gemini] API Key is not set. Enter it via right-click → Settings.')
       intentionalCloseRef.current = true
       connectingRef.current = false
-      setConnectionError({ type: 'no_api_key', message: 'Gemini API キーが未設定です。右クリック→設定から入力してください。' })
+      setConnectionError({ type: 'no_api_key', message: i18next.t('connection.noApiKey') })
       return
     }
 
     try {
-      console.log('[Gemini] 接続中...')
+      console.log('[Gemini] Connecting...')
       const { GoogleGenAI } = await import('@google/genai')
       const ai = new GoogleGenAI({ apiKey })
 
       if (!playbackCtxRef.current) playbackCtxRef.current = new AudioContext()
 
-      // 過去の会話メモリをシステムプロンプトに注入。失敗しても接続は続行
+      // Inject past conversation memory into the system prompt. Connection proceeds even on failure.
       let memoryInjection = ''
       try {
         memoryInjection = (await window.electronAPI?.memoryGetInjection?.()) ?? ''
       } catch (err) {
-        console.warn('[Gemini] メモリ注入の取得失敗:', err)
+        console.warn('[Gemini] Failed to retrieve memory injection:', err)
       }
       const systemText = getSystemPrompt(languageCodeRef.current, locationRef.current) + memoryInjection
 
@@ -720,27 +721,27 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           realtimeInputConfig: {
             automaticActivityDetection: { disabled: true },
           },
-          // 過去 turn の累積トークンが毎ターン再課金されるのを抑える
+          // Prevent accumulated past-turn tokens from being billed on every turn
           contextWindowCompression: { slidingWindow: {} },
-          // 切断時にコンテキストを引き継いで再開できるようにする。
-          // handle があればそれで resume、なければ新規セッション
+          // Enable resuming with context on reconnect.
+          // Use handle if available; otherwise start a fresh session.
           sessionResumption: handle ? { handle } : {},
         },
         callbacks: {
           onopen: () => {
             if (sessionEpochRef.current !== sessionEpoch) return
-            console.log('[Gemini] 接続完了 ✓', handle ? '(resumed)' : '(fresh)')
+            console.log('[Gemini] Connected ✓', handle ? '(resumed)' : '(fresh)')
             reconnectAttemptsRef.current = 0
             setIsConnected(true)
             setConnectionError(null)
             onStateChangeRef.current('idle')
 
-            // セッション接続完了 → 接続前に来た通知を flush してベガに注入
+            // Session connected — flush any notifications that arrived before the session was ready
             void window.electronAPI?.notificationSessionReady?.().then((pending) => {
               if (pending && pending.length > 0) {
                 injectNotifications(session, pending)
               }
-            }).catch(() => {/* 通知機能が使えない場合は無視 */})
+            }).catch(() => {/* ignore if notifications are unavailable */})
           },
           onmessage: (msg: unknown) => {
             if (sessionEpochRef.current !== sessionEpoch) return
@@ -748,23 +749,23 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           },
           onerror: (e: unknown) => {
             if (sessionEpochRef.current !== sessionEpoch) return
-            console.error('[Gemini] エラー:', e)
+            console.error('[Gemini] Error:', e)
             resetSessionState()
-            // onclose も大抵続いて呼ばれるが、scheduleReconnect 側で二重スケジュールガード済
+            // onclose usually follows, but scheduleReconnect guards against double-scheduling
             scheduleReconnect()
           },
           onclose: (e?: { code?: number; reason?: string }) => {
             const code = e?.code
             const reason = e?.reason
-            console.log('[Gemini] 接続終了 code:', code, 'reason:', reason)
+            console.log('[Gemini] Connection closed — code:', code, 'reason:', reason)
             if (sessionEpochRef.current !== sessionEpoch) return
             resetSessionState()
-            // 認証/ポリシー違反は再試行しても同じ結果なので即停止。
-            // 1008=policy violation, 4401/4403=auth 系のアプリ定義
+            // Auth/policy errors won't recover on retry — stop immediately.
+            // 1008=policy violation, 4401/4403=app-defined auth errors
             if (code === 1008 || code === 4401 || code === 4403) {
-              console.error('[Gemini] 恒久エラー、再接続中止:', code, reason)
+              console.error('[Gemini] Permanent error, stopping reconnect:', code, reason)
               intentionalCloseRef.current = true
-              setConnectionError({ type: 'auth', message: `認証エラー (${code})。APIキーが無効または期限切れです。設定を確認してください。` })
+              setConnectionError({ type: 'auth', message: i18next.t('connection.authError', { code }) })
               return
             }
             scheduleReconnect()
@@ -776,21 +777,21 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         try {
           session.close?.()
         } catch {
-          // close できないなら捨てる
+          // cannot close — discard
         }
         return
       }
       sessionRef.current = session
       await setupMic()
     } catch (err) {
-      console.error('[Gemini] 接続エラー:', err)
+      console.error('[Gemini] Connection error:', err)
       resetSessionState()
       const domErr = err as { name?: string; message?: string }
       if (domErr?.name === 'NotAllowedError' || domErr?.name === 'PermissionDeniedError') {
         intentionalCloseRef.current = true
         setConnectionError({
           type: 'mic_permission',
-          message: 'マイク権限が拒否されています。システム設定で Robot Secretary のマイク使用を許可して、アプリを再起動してください。',
+          message: i18next.t('connection.micDenied'),
         })
         return
       }
@@ -799,7 +800,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       const isNetworkErr = isOffline || msg.includes('Failed to fetch') || msg.includes('ERR_INTERNET') || msg.includes('ERR_NAME_NOT_RESOLVED') || msg.includes('NetworkError')
       setConnectionError({
         type: isNetworkErr ? 'network' : 'connect_error',
-        message: isNetworkErr ? 'インターネット接続を確認してください。' : `接続に失敗しました。(${msg.slice(0, 80)})`,
+        message: isNetworkErr ? i18next.t('connection.network') : i18next.t('connection.connectError', { msg: msg.slice(0, 80) }),
       })
       scheduleReconnect()
     } finally {
@@ -813,7 +814,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
 
   useEffect(() => { connectRef.current = connect }, [connect])
 
-  // アンマウント時に再接続を止め、開いているセッションを閉じる（HMR/再マウント対策）
+  // On unmount, stop reconnecting and close any open session (HMR / remount safety)
   useEffect(() => {
     return () => {
       intentionalCloseRef.current = true
@@ -827,12 +828,12 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       try {
         session?.close?.()
       } catch {
-        // 既に閉じている場合は無視
+        // already closed — ignore
       }
     }
   }, [invalidateSession])
 
-  // ========== PTT イベント登録 ==========
+  // ========== PTT event registration ==========
 
   useEffect(() => {
     const api = window.electronAPI
@@ -842,10 +843,10 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       console.log('[PTT] Start — session:', !!sessionRef.current, 'muted:', isMutedRef.current)
       if (isMutedRef.current) return
 
-      // セッションが切れていたら再接続を試みる（今回の PTT には間に合わないが次回から使える）
+      // If the session is gone, attempt to reconnect (won't be ready for this PTT but will help next time)
       if (!sessionRef.current) {
         if (!connectingRef.current) {
-          console.log('[PTT] セッションなし — 再接続を開始')
+          console.log('[PTT] No session — starting reconnect')
           intentionalCloseRef.current = false
           reconnectAttemptsRef.current = 0
           void connectRef.current()
@@ -853,9 +854,9 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         return
       }
 
-      // speaking中なら再生を即停止して割り込む
+      // If currently speaking, stop playback immediately and interrupt
       if (activeSourcesRef.current.length > 0) {
-        console.log('[PTT] 割り込み: 再生中の音声を停止')
+        console.log('[PTT] Interrupt: stopping active audio playback')
         for (const src of activeSourcesRef.current) {
           try { src.stop() } catch { /* already stopped */ }
         }
@@ -878,15 +879,15 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       if (!isPTTActiveRef.current) return
       isPTTActiveRef.current = false
 
-      // 短すぎる押下は誤爆扱い。バッファに溜めただけのチャンクを捨てて idle に戻る
+      // Too short — treat as accidental tap. Discard buffered chunks and return to idle.
       const duration = performance.now() - pttStartTimeRef.current
       if (duration < PTT_MIN_DURATION_MS) {
-        console.log(`[PTT] 短すぎ (${duration.toFixed(0)}ms) — 録音を破棄`)
+        console.log(`[PTT] Too short (${duration.toFixed(0)}ms) — discarding recording`)
         if (pttActivityStartedRef.current) {
           try {
             sessionRef.current?.sendRealtimeInput({ activityEnd: {} })
           } catch {
-            // WebSocketが既に閉じている場合は無視
+            // WebSocket already closed — ignore
           }
         }
         pttActivityStartedRef.current = false
@@ -895,11 +896,11 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         return
       }
 
-      // 送信済みでGeminiの返事待ち。ツール呼び出しが来たら
-      // 改めて processor 付きの 'thinking' に上書きする
+      // Audio sent — waiting for Gemini's response. If a tool call arrives,
+      // the state will be overwritten with 'thinking' (with processor).
       onStateChangeRef.current('thinking')
 
-      // 発話終了を明示してVADタイマーを待たずに即応答させる
+      // Signal end of utterance so Gemini responds without waiting for VAD timeout
       if (sessionRef.current) {
         try {
           if (!pttActivityStartedRef.current) {
@@ -907,7 +908,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             pttActivityStartedRef.current = true
           }
           if (pttPendingChunksRef.current.length) {
-            console.log('[Gemini] release時に保留音声を送信:', pttPendingChunksRef.current.length)
+            console.log('[Gemini] Flushing buffered audio on release:', pttPendingChunksRef.current.length)
             for (const buffered of pttPendingChunksRef.current) {
               sessionRef.current.sendRealtimeInput({
                 audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' },
@@ -917,7 +918,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             pttPendingChunksRef.current = []
           }
           if (!pttAudioSentRef.current) {
-            console.warn('[PTT] 音声が送信されていないためターン終了を送らない')
+            console.warn('[PTT] No audio was sent — skipping activityEnd')
             pttActivityStartedRef.current = false
             onStateChangeRef.current('idle')
             return
@@ -925,7 +926,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
           sessionRef.current.sendRealtimeInput({ activityEnd: {} })
           pttActivityStartedRef.current = false
         } catch {
-          // WebSocketが既に閉じている場合は無視
+          // WebSocket already closed — ignore
         }
       }
     })

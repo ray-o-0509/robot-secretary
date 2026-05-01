@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { DisplayShell } from '../../display/DisplayShell'
 
@@ -16,6 +17,7 @@ type EmailDetail = {
 }
 
 export function EmailDetailApp() {
+  const { t } = useTranslation()
   const [args, setArgs] = useState<{ account: string; id: string } | null>(null)
   const [detail, setDetail] = useState<EmailDetail | null>(null)
   const [loading, setLoading] = useState(false)
@@ -40,7 +42,7 @@ export function EmailDetailApp() {
         if (cancelled) return
         if (res?.error) setError(res.error)
         else if (res?.result) setDetail(res.result)
-        else setError('レスポンスが空')
+        else setError(t('gmail.emptyResponse'))
       } catch (err) {
         if (!cancelled) setError(String(err instanceof Error ? err.message : err))
       } finally {
@@ -58,7 +60,7 @@ export function EmailDetailApp() {
       loading={loading}
       onClose={() => window.electronAPI?.closeEmailDetail()}
     >
-      {!args && <Standby text="メールをクリックすると詳細が表示される" />}
+      {!args && <Standby text={t('gmail.standby')} />}
       {args && loading && !detail && <Standby text="LOADING…" />}
       {error && <ErrorBlock message={error} />}
       {detail && <DetailBody detail={detail} />}
@@ -67,6 +69,7 @@ export function EmailDetailApp() {
 }
 
 function DetailBody({ detail }: { detail: EmailDetail }) {
+  const { t } = useTranslation()
   return (
     <>
       <div
@@ -80,7 +83,7 @@ function DetailBody({ detail }: { detail: EmailDetail }) {
           textShadow: `0 0 6px ${CYAN}40`,
         }}
       >
-        {detail.subject || '(件名なし)'}
+        {detail.subject || t('gmail.noSubject')}
       </div>
 
       <div
@@ -127,6 +130,7 @@ function Body({
   text: string | null
   snippet: string
 }) {
+  const { t } = useTranslation()
   if (html) {
     return (
       <iframe
@@ -160,7 +164,7 @@ function Body({
         flex: 1,
       }}
     >
-      {content || '(本文なし)'}
+      {content || t('gmail.noBody')}
     </pre>
   )
 }

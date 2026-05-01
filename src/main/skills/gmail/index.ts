@@ -211,12 +211,12 @@ export async function replyToEmail(opts: {
   const reSubject = originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`
 
   const confirmed = await requireConfirmation({
-    action: 'メール返信',
-    summary: `${originalFrom} への返信`,
+    action: 'Reply to email',
+    summary: `Reply to ${originalFrom}`,
     details: {
       'To': originalFrom,
-      '件名': reSubject,
-      '本文': opts.body.length > 80 ? opts.body.slice(0, 80) + '…' : opts.body,
+      'Subject': reSubject,
+      'Body': opts.body.length > 80 ? opts.body.slice(0, 80) + '…' : opts.body,
     },
   })
   if (!confirmed) return { ok: false, cancelled: true }

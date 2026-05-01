@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
@@ -8,20 +9,22 @@ interface Props {
 }
 
 export function MoviesView({ payload }: Props) {
+  const { t } = useTranslation()
+
   if (payload.error) {
-    return <ErrorState message={payload.error} hint="TURSO_DATABASE_URL を .env.local で確認" />
+    return <ErrorState message={payload.error} hint={t('movies.dbHint')} />
   }
 
   const wrap = payload.data as DashboardPayload<MoviesData> | null
   if (!wrap || 'error' in wrap) {
-    return <ErrorState message={(wrap as { error: string } | null)?.error ?? '取得失敗'} />
+    return <ErrorState message={(wrap as { error: string } | null)?.error ?? t('movies.fetchFailed')} />
   }
   const data = wrap.data
   const nowPlaying = data?.nowPlaying ?? []
   const upcoming = data?.upcoming ?? []
 
   if (nowPlaying.length === 0 && upcoming.length === 0) {
-    return <EmptyState message="映画情報なし" />
+    return <EmptyState message={t('movies.noMovies')} />
   }
 
   return (
@@ -41,7 +44,7 @@ export function MoviesView({ payload }: Props) {
       )}
 
       {nowPlaying.length > 0 && (
-        <Section title={`今月公開中 (${nowPlaying.length})`}>
+        <Section title={t('movies.nowPlaying', { count: nowPlaying.length })}>
           {nowPlaying.map((m, i) => (
             <MovieCard key={`now-${i}`} movie={m} showRating />
           ))}
@@ -49,7 +52,7 @@ export function MoviesView({ payload }: Props) {
       )}
 
       {upcoming.length > 0 && (
-        <Section title={`来月注目 (${upcoming.length})`}>
+        <Section title={t('movies.upcoming', { count: upcoming.length })}>
           {upcoming.map((m, i) => (
             <MovieCard key={`up-${i}`} movie={m} />
           ))}

@@ -87,9 +87,9 @@ export async function getWeather(location: string) {
   const geoRes = await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=ja&format=json`
   )
-  if (!geoRes.ok) throw new Error(`geocoding失敗: ${geoRes.status}`)
+  if (!geoRes.ok) throw new Error(`Geocoding failed: ${geoRes.status}`)
   const geo = (await geoRes.json()) as GeoResult
-  if (!geo.results?.length) throw new Error(`場所が見つからない: ${location}`)
+  if (!geo.results?.length) throw new Error(`Location not found: ${location}`)
   const place = geo.results[0]
   const loc = {
     name: place.name,
@@ -103,10 +103,10 @@ export async function getWeather(location: string) {
     `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${loc.latitude.toFixed(4)}&lon=${loc.longitude.toFixed(4)}`,
     { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' } }
   )
-  if (!metRes.ok) throw new Error(`met.no API失敗: ${metRes.status}`)
+  if (!metRes.ok) throw new Error(`met.no API error: ${metRes.status}`)
   const j = (await metRes.json()) as { properties?: { timeseries?: Omit<MetEntry, '_hour' | '_date'>[] } }
   const rawSeries = j.properties?.timeseries ?? []
-  if (!rawSeries.length) throw new Error('天気データが取得できなかった')
+  if (!rawSeries.length) throw new Error('No weather data returned')
 
   // 3. Group by local date
   const byDate = new Map<string, MetEntry[]>()

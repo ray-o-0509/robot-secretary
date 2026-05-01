@@ -1,0 +1,152 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "add": "Add",
+    "saved": "Saved ✓",
+    "noData": "NO DATA"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "gmail": {
+    "noSubject": "(no subject)",
+    "noBody": "(no body)",
+    "tokenExpiredHint": "Token may have expired. Re-auth with `scripts/auth-google.mjs <email>`",
+    "authExpiredHint": "If auth expired, run `scripts/auth-google.mjs`",
+    "clickForDetail": "Click to open in new window",
+    "noResults": "No emails matching \"{{query}}\"",
+    "standby": "Click an email to view details",
+    "emptyResponse": "Empty response"
+  },
+  "calendar": {
+    "allDay": "All day",
+    "noEventsToday": "No events today. Take a break",
+    "noEventsTomorrow": "No events tomorrow",
+    "noEvents": "No events",
+    "daysShort": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  },
+  "tasks": {
+    "authExpiredHint": "TickTick auth may have expired",
+    "noTasks": "No tasks. Nothing to do",
+    "markDone": "Mark as done",
+    "overdue": "OVERDUE ",
+    "today": "TODAY "
+  },
+  "news": {
+    "dbHint": "Check TURSO_DATABASE_URL in .env.local",
+    "fetchFailed": "Fetch failed",
+    "noNews": "No news"
+  },
+  "movies": {
+    "dbHint": "Check TURSO_DATABASE_URL in .env.local",
+    "fetchFailed": "Fetch failed",
+    "noMovies": "No movies",
+    "nowPlaying": "Now playing ({{count}})",
+    "upcoming": "Coming next month ({{count}})"
+  },
+  "tools": {
+    "dbHint": "Check TURSO_DATABASE_URL in .env.local",
+    "fetchFailed": "Fetch failed",
+    "noTools": "No tools"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "profile": "Profile",
+      "apps": "Default Apps",
+      "api": "API Keys"
+    },
+    "profile": {
+      "description": "Your information Vega references during conversation. Say 'My name is ...' to update automatically.",
+      "empty": "Nothing registered yet",
+      "keyPlaceholder": "Key (e.g. name)",
+      "valuePlaceholder": "Value",
+      "addItem": "+ Add item"
+    },
+    "apps": {
+      "description": "Set the app to open when you say 'open email' or 'open browser' by category. Specific names (e.g. 'Google Chrome') are opened directly.",
+      "email": "Email",
+      "browser": "Browser",
+      "terminal": "Terminal",
+      "editor": "Editor"
+    },
+    "api": {
+      "restartRequired": "Restart the app to apply changes",
+      "googleAuthNote": "Google auth (Gmail / Calendar) is configured in .env.local"
+    }
+  },
+  "setup": {
+    "header": "Pre-launch Check",
+    "subtitle": "Verify required permissions and API keys",
+    "checking": "Checking...",
+    "required": "REQUIRED",
+    "optional": "OPTIONAL",
+    "launch": "LAUNCH",
+    "launching": "LAUNCHING...",
+    "checkRequired": "Please complete required items",
+    "missingBoth": "Microphone permission and Gemini API key are required",
+    "missingMic": "Microphone permission is required",
+    "missingKey": "Gemini API key is required",
+    "mic": {
+      "label": "Microphone",
+      "denied": "Please allow in System Settings",
+      "notDetermined": "Click OK when the dialog appears",
+      "granted": "Granted"
+    },
+    "geminiKey": {
+      "set": "Configured (.env.local)",
+      "unset": "Set GEMINI_API_KEY in .env.local"
+    },
+    "accessibility": {
+      "label": "Accessibility (PTT hotkey)",
+      "granted": "Granted",
+      "denied": "Cannot use Option key for voice input"
+    },
+    "gmail": {
+      "noTokens": "No tokens in ~/.config/gmail-triage/tokens/"
+    },
+    "ticktick": {
+      "set": "Configured",
+      "unset": "Set TICKTICK_ACCESS_TOKEN in .env.local"
+    },
+    "openSettings": "Open Settings"
+  },
+  "settingsPanel": {
+    "title": "Settings",
+    "googleNote": "Google auth (Gmail/Calendar) is configured in .env file"
+  },
+  "confirmation": {
+    "title": "⚠ Confirm Action —",
+    "execute": "Execute",
+    "cancel": "Cancel"
+  },
+  "weather": {
+    "humidity": "Humidity",
+    "wind": "Wind",
+    "gust": "Gust",
+    "pressure": "Pressure",
+    "dewPoint": "Dew Point",
+    "cloudCover": "Cloud Cover"
+  },
+  "display": {
+    "fetchedAt": "fetched at {{time}}"
+  },
+  "terminal": {
+    "noOutput": "No output",
+    "emptyOutput": "(no output)"
+  },
+  "connection": {
+    "maxRetries": "Reconnection failed. Check your connection.",
+    "noApiKey": "Gemini API key is not set. Right-click → Settings to enter it.",
+    "authError": "Auth error ({{code}}). API key may be invalid or expired.",
+    "micDenied": "Microphone access denied. Grant Robot Secretary microphone access in System Settings and restart.",
+    "network": "Check your internet connection.",
+    "connectError": "Connection failed. ({{msg}})"
+  }
+}

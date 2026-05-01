@@ -4,47 +4,47 @@ import { MODELS } from '../../config/models'
 
 const MODEL = MODELS.geminiMemorySummarizer
 
-const CURATOR_PROMPT = `あなたはAI秘書「ベガ」のメモリキュレーターだ。
-既存メモリ + 直近の会話転写から、3か月後でも役に立つ情報だけを残した最新メモリをJSONで返せ。
+const CURATOR_PROMPT = `You are the memory curator for the AI assistant "Vega".
+Given the existing memory and recent conversation transcripts, return an updated memory JSON containing only information that will still be useful three months from now.
 
-【厳格な区分（外れたら絶対に入れない）】
+【Strict categories — if something does not fit, do not include it】
 
-facts: ユーザーに関する持続的な属性
-  ✓ 入れる: 名前・所属・職業・専門分野・常用ツール・家族構成・連絡先アカウントの用途分け
-    例: 「U-NEXT用アドレスは rayrayo8855@gmail.com」
-  ✗ 入れない:
-    - 画面表示・ウィンドウ配置などの一時的な状態
-    - 「Gmail認証が切れてる」のようにすぐ解決する状況
-    - 一回きりの通知やイベント
+facts: Persistent attributes about the user
+  ✓ Include: name, affiliation, occupation, area of expertise, regularly used tools, family structure, purpose of contact accounts
+    Example: "U-NEXT email address is rayrayo8855@gmail.com"
+  ✗ Exclude:
+    - Transient states such as screen layout or window arrangement
+    - Temporary situations like "Gmail auth expired" that resolve quickly
+    - One-off notifications or events
 
-preferences: ベガに対する振る舞いの指定
-  ✓ 入れる: 「タメ口で」「短く答えろ」「メール確認は朝にまとめて報告」などの対話・行動の指針
-    対話を重ねるうちにユーザーが明示的・暗黙的に示した好み
-  ✗ 入れない:
-    - ユーザーがやったタスクや確認内容（それは preferences ではなく行動ログ）
-    - ツール名そのもの（「Gmailインボックスを確認」などは preference ではない）
+preferences: Instructions for how Vega should behave
+  ✓ Include: interaction and behavioral guidelines like "be casual", "keep answers short", "summarize emails each morning"
+    Preferences the user has shown explicitly or implicitly over time
+  ✗ Exclude:
+    - Tasks the user completed or things they checked (those are activity logs, not preferences)
+    - Tool names by themselves ("checked Gmail inbox" is not a preference)
 
-ongoing_topics: 数日〜数週間スパンで継続している関心事
-  ✓ 入れる: 進行中のプロジェクト・未解決の問題・繰り返し出てくるテーマ
-  ✗ 入れない:
-    - 個別メールの件名や送信元（「ユナイテッド航空のメール」など）
-    - 1回限りの確認・操作
-    - 既に完了した作業
+ongoing_topics: Interests or concerns spanning days to weeks
+  ✓ Include: ongoing projects, unresolved issues, recurring themes
+  ✗ Exclude:
+    - Individual email subjects or senders (e.g. "email from United Airlines")
+    - One-time checks or operations
+    - Work already completed
 
-【既存メモリの扱い】
-上の基準を満たさない既存項目は容赦なく削除する。"merge" ではなく "rebuild" の意識で。
-新しい会話で得た情報も同じ基準で取捨選択する。
+【Handling existing memory】
+Remove any existing entry that does not meet the above criteria — think "rebuild", not "merge".
+Apply the same criteria to information from new conversations.
 
-【出力】
-厳密なJSONのみ。前置き・コードフェンス・コメント禁止。
+【Output】
+Strict JSON only. No preamble, no code fences, no comments.
 {
   "facts": ["..."],
   "preferences": ["..."],
   "ongoing_topics": ["..."]
 }
 
-各リスト最大10項目。日本語で簡潔に（1項目1行・40字以内目安）。
-迷ったら入れない。空リストでも構わない。`
+Maximum 10 items per list. Write concisely in Japanese (one item per line, ~40 characters).
+When in doubt, leave it out. Empty lists are fine.`
 
 type GenAIClient = {
   models: {
@@ -69,7 +69,7 @@ function buildUserPayload(
     null,
     2,
   )
-  // Gemini Live は転写を細切れで送ってくるので、連続した同 role を1ターンにまとめる
+  // Gemini Live sends transcription in small fragments; merge consecutive same-role entries into one turn
   const merged: { role: 'user' | 'assistant'; text: string }[] = []
   for (const t of transcripts) {
     const last = merged[merged.length - 1]
@@ -77,11 +77,11 @@ function buildUserPayload(
     else merged.push({ role: t.role, text: t.text })
   }
   const lines = merged.map((t) => `[${t.role}] ${t.text}`).join('\n')
-  return `# 既存メモリ\n${existingJson}\n\n# 直近の会話転写\n${lines}`
+  return `# Existing Memory\n${existingJson}\n\n# Recent Conversation Transcript\n${lines}`
 }
 
 function tryParseMemory(text: string): Partial<Memory> | null {
-  // モデルが ```json ...``` で返してきた場合を一応剥がす
+  // Strip ```json ... ``` fences in case the model wraps the response
   const stripped = text
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/, '')
@@ -106,7 +106,7 @@ export async function summarize(
   apiKey: string,
 ): Promise<Memory> {
   if (transcripts.length === 0) {
-    // 会話が無いセッション（即落ちなど）は既存メモリをそのまま返す
+    // Sessions with no conversation (e.g. immediate crash) — return existing memory as-is
     return existing
   }
 
@@ -127,7 +127,7 @@ export async function summarize(
   const text = res.text ?? ''
   const parsed = tryParseMemory(text)
   if (!parsed) {
-    throw new Error(`要約結果のJSONパースに失敗: ${text.slice(0, 200)}`)
+    throw new Error(`Failed to parse summarizer JSON response: ${text.slice(0, 200)}`)
   }
 
   return {

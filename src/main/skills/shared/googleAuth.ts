@@ -9,10 +9,10 @@ const TOKENS_DIR = fs.existsSync(PRIMARY_TOKENS_DIR) ? PRIMARY_TOKENS_DIR : FALL
 
 export function listAccounts(): string[] {
   if (!fs.existsSync(TOKENS_DIR)) {
-    throw new Error(`Googleトークンディレクトリがありません: ${PRIMARY_TOKENS_DIR}`)
+    throw new Error(`Google token directory not found: ${PRIMARY_TOKENS_DIR}`)
   }
   const files = fs.readdirSync(TOKENS_DIR).filter((f) => f.endsWith('.json')).sort()
-  if (files.length === 0) throw new Error(`トークンが ${TOKENS_DIR} に1つもありません`)
+  if (files.length === 0) throw new Error(`No token files found in ${TOKENS_DIR}`)
   return files.map((f) => f.replace(/\.json$/, ''))
 }
 
@@ -20,7 +20,7 @@ export function getGoogleAuth(email?: string) {
   const account = email ?? process.env.GMAIL_ACCOUNT ?? listAccounts()[0]
   const tokenPath = path.join(TOKENS_DIR, `${account}.json`)
   if (!fs.existsSync(tokenPath)) {
-    throw new Error(`トークンが見つかりません: ${tokenPath}`)
+    throw new Error(`Token not found: ${tokenPath}`)
   }
 
   const data = JSON.parse(fs.readFileSync(tokenPath, 'utf-8')) as {

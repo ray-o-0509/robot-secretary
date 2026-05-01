@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 export type ConfirmationRequest = {
   id: string
   action: string
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export function ConfirmationCard({ request, onRespond }: Props) {
+  const { t } = useTranslation()
   return (
     <div
       style={{
@@ -31,7 +34,7 @@ export function ConfirmationCard({ request, onRespond }: Props) {
       } as React.CSSProperties}
     >
       <div style={{ color: '#ffb340', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', marginBottom: 6, textTransform: 'uppercase' }}>
-        ⚠ 実行確認 — {request.action}
+        {t('confirmation.title')} {request.action}
       </div>
       <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>{request.summary}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 12 }}>
@@ -52,7 +55,7 @@ export function ConfirmationCard({ request, onRespond }: Props) {
             color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
           }}
         >
-          実行
+          {t('confirmation.execute')}
         </button>
         <button
           onClick={() => onRespond(request.id, false)}
@@ -63,7 +66,7 @@ export function ConfirmationCard({ request, onRespond }: Props) {
             color: '#bbb', fontWeight: 600, fontSize: 13, cursor: 'pointer',
           }}
         >
-          キャンセル
+          {t('confirmation.cancel')}
         </button>
       </div>
     </div>

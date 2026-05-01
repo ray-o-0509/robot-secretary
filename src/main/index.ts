@@ -523,11 +523,11 @@ async function requestScreenPermission() {
     console.log('[Permission] getSources 後 status:', after, 'sources:', sources.length)
     if (status === 'denied' || after === 'denied') {
       console.warn(
-        '[Permission] 過去に拒否済みでプロンプトが抑制されてる。ターミナルで `tccutil reset ScreenCapture` を実行してから再起動してくれ',
+        '[Permission] Screen capture was previously denied and the prompt is suppressed. Run `tccutil reset ScreenCapture` in a terminal and restart the app.',
       )
     }
   } catch (err) {
-    console.error('[Permission] 画面収録プロンプト失敗:', err)
+    console.error('[Permission] Screen capture prompt failed:', err)
   }
 }
 
@@ -615,41 +615,41 @@ function setupContextMenu() {
   win.webContents.on('context-menu', () => {
     const menu = Menu.buildFromTemplate([
       {
-        label: isWandering ? '移動を止める' : '移動を再開する',
+        label: isWandering ? 'Stop wandering' : 'Resume wandering',
         click: () => {
           isWandering = !isWandering
           if (isWandering && !wanderInterval) startWandering()
         },
       },
       {
-        label: isMuted ? 'ミュート解除' : 'ミュート',
+        label: isMuted ? 'Unmute' : 'Mute',
         click: () => {
           isMuted = !isMuted
           win?.webContents.send('mute-changed', isMuted)
         },
       },
       { type: 'separator' },
-      { label: '設定', click: () => openSettingsWindow() },
+      { label: 'Settings', click: () => openSettingsWindow() },
       ...(isDev
         ? [
             { type: 'separator' as const },
             {
-              label: 'デバッグ: パネル表示',
+              label: 'Debug: Show panel',
               submenu: [
-                { label: 'メール', click: () => triggerDebugPanel('email') },
-                { label: 'カレンダー (今日)', click: () => triggerDebugPanel('calendar_today') },
-                { label: 'カレンダー (明日)', click: () => triggerDebugPanel('calendar_tomorrow') },
-                { label: 'カレンダー (今週)', click: () => triggerDebugPanel('calendar_week') },
-                { label: 'タスク', click: () => triggerDebugPanel('tasks') },
-                { label: 'AIニュース', click: () => triggerDebugPanel('news') },
-                { label: 'ツール', click: () => triggerDebugPanel('tools') },
-                { label: '映画', click: () => triggerDebugPanel('movies') },
+                { label: 'Email', click: () => triggerDebugPanel('email') },
+                { label: 'Calendar (today)', click: () => triggerDebugPanel('calendar_today') },
+                { label: 'Calendar (tomorrow)', click: () => triggerDebugPanel('calendar_tomorrow') },
+                { label: 'Calendar (week)', click: () => triggerDebugPanel('calendar_week') },
+                { label: 'Tasks', click: () => triggerDebugPanel('tasks') },
+                { label: 'AI News', click: () => triggerDebugPanel('news') },
+                { label: 'Tools', click: () => triggerDebugPanel('tools') },
+                { label: 'Movies', click: () => triggerDebugPanel('movies') },
               ],
             },
           ]
         : []),
       { type: 'separator' },
-      { label: '終了', click: () => app.quit() },
+      { label: 'Quit', click: () => app.quit() },
     ])
     menu.popup({ window: win! })
   })
@@ -891,15 +891,15 @@ app.whenReady().then(async () => {
     {
       label: app.name,
       submenu: [
-        { label: `${app.name} について`, role: 'about' },
+        { label: `About ${app.name}`, role: 'about' },
         { type: 'separator' },
         {
-          label: '設定...',
+          label: 'Preferences...',
           accelerator: 'CmdOrCtrl+,',
           click: () => openSettingsWindow(),
         },
         { type: 'separator' },
-        { label: '終了', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
+        { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
       ],
     },
   ]))

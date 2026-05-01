@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
@@ -17,20 +18,22 @@ interface Props {
 }
 
 export function ToolsView({ payload }: Props) {
+  const { t } = useTranslation()
+
   if (payload.error) {
-    return <ErrorState message={payload.error} hint="TURSO_DATABASE_URL を .env.local で確認" />
+    return <ErrorState message={payload.error} hint={t('tools.dbHint')} />
   }
 
   const wrap = payload.data as DashboardPayload<ToolsData> | null
   if (!wrap || 'error' in wrap) {
-    return <ErrorState message={(wrap as { error: string } | null)?.error ?? '取得失敗'} />
+    return <ErrorState message={(wrap as { error: string } | null)?.error ?? t('tools.fetchFailed')} />
   }
   const data = wrap.data
   const categories = data?.categories ?? []
   const total = categories.reduce((s, c) => s + (c.tools?.length ?? 0), 0)
 
   if (total === 0) {
-    return <EmptyState message="ツールなし" />
+    return <EmptyState message={t('tools.noTools')} />
   }
 
   return (

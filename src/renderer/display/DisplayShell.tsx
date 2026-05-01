@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import i18next from 'i18next'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { TopButtons } from './TopButtons'
 
@@ -133,7 +134,7 @@ function formatFetchedAt(ts: number): string {
   const d = new Date(ts)
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm} 取得`
+  return i18next.t('display.fetchedAt', { time: `${hh}:${mm}` })
 }
 
 function CornerBrackets() {

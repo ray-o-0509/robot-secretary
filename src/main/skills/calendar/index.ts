@@ -35,7 +35,7 @@ async function getEventsFor(
     .map<CalendarEvent>((e) => ({
       id: e.id as string,
       account,
-      title: e.summary ?? '(無題)',
+      title: e.summary ?? '(no title)',
       start: e.start?.dateTime ?? e.start?.date ?? undefined,
       end: e.end?.dateTime ?? e.end?.date ?? undefined,
       allDay: isAllDay(e.start ?? undefined),
@@ -99,19 +99,19 @@ export async function createCalendarEvent(opts: {
 }) {
   const { requireConfirmation } = await import('../confirmation/index')
   const account = opts.account ?? listAccounts()[0]
-  if (!account) throw new Error('Googleアカウントが登録されていない')
+  if (!account) throw new Error('No Google account registered')
 
   const tz = opts.timeZone ?? 'Asia/Tokyo'
   const attendees = opts.attendees ?? []
 
   if (attendees.length > 0) {
     const confirmed = await requireConfirmation({
-      action: 'カレンダーイベント作成',
+      action: 'Create calendar event',
       summary: opts.title,
       details: {
-        '日時': `${opts.startDateTime} 〜 ${opts.endDateTime}`,
-        '出席者': attendees.join(', '),
-        ...(opts.location ? { '場所': opts.location } : {}),
+        'Time': `${opts.startDateTime} 〜 ${opts.endDateTime}`,
+        'Attendees': attendees.join(', '),
+        ...(opts.location ? { 'Location': opts.location } : {}),
       },
     })
     if (!confirmed) return { ok: false, cancelled: true }

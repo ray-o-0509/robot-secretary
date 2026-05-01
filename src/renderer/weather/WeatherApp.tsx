@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO } from '../display/styles'
 import { DisplayShell } from '../display/DisplayShell'
 
@@ -224,14 +225,15 @@ function DailyForecast({ daily }: { daily: DailyItem[] }) {
 }
 
 function DetailsGrid({ data }: { data: WeatherData }) {
+  const { t } = useTranslation()
   const items: [string, string | number | null][] = [
-    ['湿度', data.humidity != null ? `${data.humidity}%` : null],
-    ['風', data.wind],
-    ['突風', data.windGust != null ? `${data.windGust}m/s` : null],
-    ['気圧', data.pressure != null ? `${data.pressure}hPa` : null],
+    [t('weather.humidity'), data.humidity != null ? `${data.humidity}%` : null],
+    [t('weather.wind'), data.wind],
+    [t('weather.gust'), data.windGust != null ? `${data.windGust}m/s` : null],
+    [t('weather.pressure'), data.pressure != null ? `${data.pressure}hPa` : null],
     ['UV', data.uvIndex != null ? String(data.uvIndex) : null],
-    ['露点', data.dewPoint != null ? `${data.dewPoint}°` : null],
-    ['雲量', data.cloudCover != null ? `${data.cloudCover}%` : null],
+    [t('weather.dewPoint'), data.dewPoint != null ? `${data.dewPoint}°` : null],
+    [t('weather.cloudCover'), data.cloudCover != null ? `${data.cloudCover}%` : null],
   ].filter(([, v]) => v != null) as [string, string][]
 
   if (!items.length) return null

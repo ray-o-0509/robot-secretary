@@ -80,61 +80,61 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
 }
 
 export function buildSummary(payload: PanelPayload): string {
-  if (payload.error) return `${payload.type} 取得失敗: ${payload.error}`
+  if (payload.error) return `${payload.type} fetch failed: ${payload.error}`
   switch (payload.type) {
     case 'email': {
       const d = payload.data as { accounts: { account: string; count: number; error: string | null }[]; messages: unknown[] } | null
-      if (!d) return '0件'
+      if (!d) return '0 items'
       const total = d.messages.length
       const errs = d.accounts.filter((a) => a.error)
-      const errPart = errs.length ? `（認証エラー: ${errs.map((a) => a.account).join(', ')}）` : ''
+      const errPart = errs.length ? ` (auth error: ${errs.map((a) => a.account).join(', ')})` : ''
       const breakdown = d.accounts.filter((a) => !a.error).map((a) => `${a.account}:${a.count}`).join(', ')
-      return `インボックス${total}件${breakdown ? ` (${breakdown})` : ''}${errPart}`
+      return `Inbox ${total} items${breakdown ? ` (${breakdown})` : ''}${errPart}`
     }
     case 'email_search': {
       const d = payload.data as { query: string; messages: unknown[] } | null
-      if (!d) return '0件'
-      return `「${d.query}」の検索結果 ${d.messages.length}件`
+      if (!d) return '0 items'
+      return `Search results for "${d.query}": ${d.messages.length} items`
     }
     case 'calendar_today':
     case 'calendar_tomorrow':
     case 'calendar_week': {
       const d = payload.data as { events: { title: string; start?: string }[] } | null
-      if (!d) return '0件'
+      if (!d) return '0 items'
       const n = d.events.length
-      if (n === 0) return '予定なし'
+      if (n === 0) return 'no events'
       const first = d.events[0]
-      return `${n}件、最初は${first.title}`
+      return `${n} events, first: ${first.title}`
     }
     case 'tasks': {
       const d = payload.data as { tasks: { status: string; due?: string }[] } | null
-      if (!d) return '0件'
+      if (!d) return '0 items'
       const todos = d.tasks.filter((t) => t.status === 'todo')
-      return `${todos.length}件のタスク`
+      return `${todos.length} tasks`
     }
     case 'news': {
       const d = payload.data as { error?: string; subtitle?: string; data?: { items?: unknown[] } } | null
-      if (!d || d.error) return d?.error ?? '取得失敗'
+      if (!d || d.error) return d?.error ?? 'fetch failed'
       const n = d.data?.items?.length ?? 0
-      return `AIニュース ${n}件${d.subtitle ? ` (${d.subtitle})` : ''}`
+      return `AI news ${n} items${d.subtitle ? ` (${d.subtitle})` : ''}`
     }
     case 'tools': {
       const d = payload.data as { error?: string; subtitle?: string; data?: { categories?: { tools?: unknown[] }[] } } | null
-      if (!d || d.error) return d?.error ?? '取得失敗'
+      if (!d || d.error) return d?.error ?? 'fetch failed'
       const total = (d.data?.categories ?? []).reduce((sum, c) => sum + (c.tools?.length ?? 0), 0)
-      return `ツール ${total}件${d.subtitle ? ` (${d.subtitle})` : ''}`
+      return `Tools ${total} items${d.subtitle ? ` (${d.subtitle})` : ''}`
     }
     case 'movies': {
       const d = payload.data as { error?: string; subtitle?: string; data?: { nowPlaying?: unknown[]; upcoming?: unknown[] } } | null
-      if (!d || d.error) return d?.error ?? '取得失敗'
+      if (!d || d.error) return d?.error ?? 'fetch failed'
       const nowN = d.data?.nowPlaying?.length ?? 0
       const upN = d.data?.upcoming?.length ?? 0
-      return `映画: 公開中${nowN}件、来月${upN}件`
+      return `Movies: ${nowN} now playing, ${upN} upcoming`
     }
     case 'terminal_output': {
       const d = payload.data as { command: string; stdout: string; stderr: string } | null
-      if (!d) return '実行結果なし'
-      return `コマンド実行完了: ${d.command}`
+      if (!d) return 'no output'
+      return `Command executed: ${d.command}`
     }
   }
 }
@@ -142,7 +142,7 @@ export function buildSummary(payload: PanelPayload): string {
 let pendingPayload: PanelPayload | null = null
 
 /**
- * 表示ウィンドウへ payload を送る。まだ did-finish-load 前なら queue する。
+ * Send a payload to the display window. Queues it if did-finish-load has not fired yet.
  */
 export function pushPayload(displayWin: BrowserWindow, payload: PanelPayload, ready: boolean) {
   if (ready && !displayWin.isDestroyed()) {
@@ -169,7 +169,7 @@ export async function showPanel(
 ): Promise<{ ok: boolean; type: PanelType; data: unknown; summary: string; error?: string }> {
   const { win, ready } = await deps.getOrCreateWindow()
 
-  // ローディング状態を即座にプッシュしてユーザー待ち時間を埋める
+  // Push loading state immediately to fill the user's wait time
   const fetchedAt = Date.now()
   pushPayload(win, { type, data: null, fetchedAt, loading: true }, ready)
   win.show()

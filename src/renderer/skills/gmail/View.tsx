@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import i18next from 'i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
@@ -21,11 +23,13 @@ interface Props {
 }
 
 export function EmailView({ payload }: Props) {
+  const { t } = useTranslation()
+
   if (payload.error) {
     return (
       <ErrorState
         message={payload.error}
-        hint="トークン切れの可能性。`scripts/auth-google.mjs <email>` で再認証しろ"
+        hint={t('gmail.tokenExpiredHint')}
       />
     )
   }
@@ -70,7 +74,7 @@ export function EmailView({ payload }: Props) {
             <button
               key={`${account}-${m.id ?? i}`}
               onClick={() => window.electronAPI?.openEmailDetail(m.account, m.id)}
-              title="クリックで詳細を別ウィンドウで開く"
+              title={t('gmail.clickForDetail')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -92,7 +96,7 @@ export function EmailView({ payload }: Props) {
                     marginBottom: 4,
                   }}
                 >
-                  {m.subject || '(件名なし)'}
+                  {m.subject || t('gmail.noSubject')}
                 </div>
                 <div
                   style={{
@@ -138,6 +142,7 @@ function AccountStatus({
 }: {
   accounts: Array<{ account: string; error: string | null; count: number }>
 }) {
+  const { t } = useTranslation()
   const errors = accounts.filter((a) => a.error)
   if (errors.length === 0) return null
   return (
@@ -146,7 +151,7 @@ function AccountStatus({
         <ErrorState
           key={a.account}
           message={`${a.account}: ${a.error}`}
-          hint="認証切れなら `scripts/auth-google.mjs` を走らせろ"
+          hint={t('gmail.authExpiredHint')}
         />
       ))}
     </>
@@ -166,12 +171,12 @@ function formatDate(raw: string): string {
   const now = Date.now()
   const diff = now - d.getTime()
   const min = Math.floor(diff / 60_000)
-  if (min < 1) return 'たった今'
-  if (min < 60) return `${min}分前`
+  if (min < 1) return i18next.t('time.justNow')
+  if (min < 60) return i18next.t('time.minutesAgo', { count: min })
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}時間前`
+  if (hr < 24) return i18next.t('time.hoursAgo', { count: hr })
   const day = Math.floor(hr / 24)
-  if (day < 7) return `${day}日前`
+  if (day < 7) return i18next.t('time.daysAgo', { count: day })
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   return `${mm}/${dd}`

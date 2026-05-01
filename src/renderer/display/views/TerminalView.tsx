@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../styles'
 import { EmptyState } from '../components/EmptyState'
 import type { PanelPayload, TerminalOutputData } from '../types'
@@ -7,10 +8,11 @@ interface Props {
 }
 
 export function TerminalView({ payload }: Props) {
+  const { t } = useTranslation()
   const d = payload.data as TerminalOutputData | null
 
   if (!d) {
-    return <EmptyState message="実行結果なし" />
+    return <EmptyState message={t('terminal.noOutput')} />
   }
 
   return (
@@ -97,7 +99,7 @@ export function TerminalView({ payload }: Props) {
             padding: '8px 2px',
           }}
         >
-          (出力なし)
+          {t('terminal.emptyOutput')}
         </div>
       )}
     </div>

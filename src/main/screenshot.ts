@@ -9,11 +9,11 @@ export async function captureScreen(): Promise<{ base64: string; mediaType: 'ima
     thumbnailSize: { width: targetWidth, height: targetHeight },
   })
   if (sources.length === 0) {
-    throw new Error('画面ソースが見つからない（システム設定→プライバシーとセキュリティ→画面収録 で許可しろ）')
+    throw new Error('No screen sources found (grant Screen Recording in System Settings → Privacy & Security)')
   }
   const png = sources[0].thumbnail.toPNG()
   if (png.length === 0) {
-    throw new Error('スクショが空。システム設定→プライバシーとセキュリティ→画面収録 で許可しろ')
+    throw new Error('Screenshot is empty (grant Screen Recording in System Settings → Privacy & Security)')
   }
   return { base64: png.toString('base64'), mediaType: 'image/png' }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 type Tab = 'profile' | 'apps' | 'api'
 
@@ -11,17 +12,18 @@ type DefaultApps = {
   editor?: string
 }
 
-const APP_ROWS: { key: keyof DefaultApps; label: string; placeholder: string }[] = [
-  { key: 'email',    label: 'メール',     placeholder: 'Spark, Mail, Outlook …' },
-  { key: 'browser',  label: 'ブラウザ',   placeholder: 'Arc, Safari, Google Chrome …' },
-  { key: 'terminal', label: 'ターミナル', placeholder: 'iTerm, Terminal, Warp …' },
-  { key: 'editor',   label: 'エディタ',   placeholder: 'Visual Studio Code, Xcode …' },
-]
-
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 export function SettingsApp() {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('profile')
+
+  const APP_ROWS: { key: keyof DefaultApps; label: string; placeholder: string }[] = [
+    { key: 'email',    label: t('settings.apps.email'),    placeholder: 'Spark, Mail, Outlook …' },
+    { key: 'browser',  label: t('settings.apps.browser'),  placeholder: 'Arc, Safari, Google Chrome …' },
+    { key: 'terminal', label: t('settings.apps.terminal'), placeholder: 'iTerm, Terminal, Warp …' },
+    { key: 'editor',   label: t('settings.apps.editor'),   placeholder: 'Visual Studio Code, Xcode …' },
+  ]
 
   return (
     <div style={containerStyle}>
@@ -32,16 +34,16 @@ export function SettingsApp() {
             <div style={{ fontSize: 10, color: '#6366f1', letterSpacing: '0.15em', fontFamily: 'monospace', marginBottom: 4 }}>
               ROBOT SECRETARY // SETTINGS
             </div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>設定</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>{t('settings.title')}</div>
           </div>
         </div>
 
         {/* Tab bar */}
         <div style={{ ...noDrag, display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           {([
-            { id: 'profile', label: 'プロフィール' },
-            { id: 'apps',    label: 'デフォルトアプリ' },
-            { id: 'api',     label: 'APIキー' },
+            { id: 'profile', label: t('settings.tabs.profile') },
+            { id: 'apps',    label: t('settings.tabs.apps') },
+            { id: 'api',     label: t('settings.tabs.api') },
           ] as { id: Tab; label: string }[]).map(({ id, label }) => (
             <button
               key={id}
@@ -68,7 +70,7 @@ export function SettingsApp() {
       {/* Scrollable body — no-drag */}
       <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
         {tab === 'profile' && <ProfileTab />}
-        {tab === 'apps'    && <AppsTab />}
+        {tab === 'apps'    && <AppsTab appRows={APP_ROWS} />}
         {tab === 'api'     && <ApiTab />}
       </div>
     </div>
@@ -78,6 +80,7 @@ export function SettingsApp() {
 // ── Profile Tab ─────────────────────────────────────────────────────────────
 
 function ProfileTab() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<ProfileItems>({})
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -133,12 +136,12 @@ function ProfileTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px' }}>
-        ベガが会話中に参照するあなたの情報。「名前は○○だ」と話しかけると自動で更新されます。
+        {t('settings.profile.description')}
       </p>
 
       {entries.length === 0 && !addingNew && (
         <div style={{ fontSize: 12, color: '#475569', padding: '12px 0' }}>
-          まだ登録されていません
+          {t('settings.profile.empty')}
         </div>
       )}
 
@@ -155,8 +158,8 @@ function ProfileTab() {
                 style={inputStyle}
               />
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                <SmallBtn onClick={() => saveEdit(key)} color="#6366f1">保存</SmallBtn>
-                <SmallBtn onClick={cancelEdit} color="#475569">取消</SmallBtn>
+                <SmallBtn onClick={() => saveEdit(key)} color="#6366f1">{t('common.save')}</SmallBtn>
+                <SmallBtn onClick={cancelEdit} color="#475569">{t('common.cancel')}</SmallBtn>
               </div>
             </>
           ) : (
@@ -164,8 +167,8 @@ function ProfileTab() {
               <span style={{ fontSize: 12, color: '#94a3b8', width: 100, flexShrink: 0 }}>{key}</span>
               <span style={{ flex: 1, fontSize: 13, color: '#e2e8f0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                <SmallBtn onClick={() => { setEditingKey(key); setEditValue(value) }} color="#334155">編集</SmallBtn>
-                <SmallBtn onClick={() => deleteItem(key)} color="#7f1d1d">削除</SmallBtn>
+                <SmallBtn onClick={() => { setEditingKey(key); setEditValue(value) }} color="#334155">{t('common.edit')}</SmallBtn>
+                <SmallBtn onClick={() => deleteItem(key)} color="#7f1d1d">{t('common.delete')}</SmallBtn>
               </div>
             </>
           )}
@@ -178,19 +181,19 @@ function ProfileTab() {
             ref={newKeyRef}
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
-            placeholder="項目名（例: 名前）"
+            placeholder={t('settings.profile.keyPlaceholder')}
             style={{ ...inputStyle, width: 110 }}
           />
           <input
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') saveNew(); if (e.key === 'Escape') cancelNew() }}
-            placeholder="内容"
+            placeholder={t('settings.profile.valuePlaceholder')}
             style={{ ...inputStyle, flex: 1 }}
           />
           <div style={{ display: 'flex', gap: 4 }}>
-            <SmallBtn onClick={saveNew} color="#6366f1">追加</SmallBtn>
-            <SmallBtn onClick={cancelNew} color="#475569">取消</SmallBtn>
+            <SmallBtn onClick={saveNew} color="#6366f1">{t('common.add')}</SmallBtn>
+            <SmallBtn onClick={cancelNew} color="#475569">{t('common.cancel')}</SmallBtn>
           </div>
         </div>
       )}
@@ -210,7 +213,7 @@ function ProfileTab() {
             alignSelf: 'flex-start',
           }}
         >
-          + 項目を追加
+          {t('settings.profile.addItem')}
         </button>
       )}
     </div>
@@ -219,7 +222,8 @@ function ProfileTab() {
 
 // ── Default Apps Tab ─────────────────────────────────────────────────────────
 
-function AppsTab() {
+function AppsTab({ appRows }: { appRows: { key: keyof DefaultApps; label: string; placeholder: string }[] }) {
+  const { t } = useTranslation()
   const [apps, setApps] = useState<DefaultApps>({})
   const [saved, setSaved] = useState(false)
 
@@ -236,11 +240,10 @@ function AppsTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 4px' }}>
-        「メール開いて」「ブラウザ開いて」のようにカテゴリで言われた場合に開くアプリを設定します。
-        固有名（"Google Chrome"など）で指定された場合はそのまま開きます。
+        {t('settings.apps.description')}
       </p>
 
-      {APP_ROWS.map(({ key, label, placeholder }) => (
+      {appRows.map(({ key, label, placeholder }) => (
         <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <label style={{ fontSize: 11, color: '#94a3b8' }}>{label}</label>
           <input
@@ -253,7 +256,7 @@ function AppsTab() {
       ))}
 
       <button onClick={save} style={saveButtonStyle(saved)}>
-        {saved ? '保存しました ✓' : '保存'}
+        {saved ? t('common.saved') : t('common.save')}
       </button>
     </div>
   )
@@ -262,6 +265,7 @@ function AppsTab() {
 // ── API Keys Tab ─────────────────────────────────────────────────────────────
 
 function ApiTab() {
+  const { t } = useTranslation()
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
   const [saved, setSaved] = useState(false)
 
@@ -284,16 +288,16 @@ function ApiTab() {
           style={inputStyle}
         />
         <p style={{ fontSize: 10, color: '#475569', margin: '2px 0 0' }}>
-          変更後はアプリの再起動が必要です
+          {t('settings.api.restartRequired')}
         </p>
       </div>
 
       <button onClick={save} style={saveButtonStyle(saved)}>
-        {saved ? '保存しました ✓' : '保存'}
+        {saved ? t('common.saved') : t('common.save')}
       </button>
 
       <p style={{ fontSize: 10, color: '#334155', margin: 0 }}>
-        Google認証（Gmail / Calendar）は .env.local で設定してください
+        {t('settings.api.googleAuthNote')}
       </p>
     </div>
   )

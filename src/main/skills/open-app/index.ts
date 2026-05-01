@@ -4,7 +4,7 @@ import { resolveAppName } from '../default-apps/index'
 export async function openApp(appName: string): Promise<{ ok: boolean; error?: string }> {
   const resolved = await resolveAppName(appName)
   const safe = resolved.replace(/"/g, '').trim()
-  if (!safe) return { ok: false, error: 'アプリ名が空' }
+  if (!safe) return { ok: false, error: 'App name is empty' }
 
   return new Promise((resolve) => {
     exec(`open -a "${safe}"`, (err) => {

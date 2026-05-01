@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
@@ -19,18 +20,20 @@ interface Props {
 }
 
 export function NewsView({ payload }: Props) {
+  const { t } = useTranslation()
+
   if (payload.error) {
-    return <ErrorState message={payload.error} hint="TURSO_DATABASE_URL を .env.local で確認" />
+    return <ErrorState message={payload.error} hint={t('news.dbHint')} />
   }
 
   const wrap = payload.data as DashboardPayload<NewsData> | null
   if (!wrap || 'error' in wrap) {
-    return <ErrorState message={(wrap as { error: string } | null)?.error ?? '取得失敗'} />
+    return <ErrorState message={(wrap as { error: string } | null)?.error ?? t('news.fetchFailed')} />
   }
   const data = wrap.data
 
   if (!data?.items || data.items.length === 0) {
-    return <EmptyState message="ニュースなし" />
+    return <EmptyState message={t('news.noNews')} />
   }
 
   return (

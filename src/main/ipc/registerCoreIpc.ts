@@ -50,7 +50,7 @@ export function registerCoreIpc(deps: Deps): void {
       }
       if (toolName === 'analyze_screen') {
         const { runClaudeTask } = await import('../agent/claude')
-        const question = (args.question as string | undefined) ?? '画面に何が表示されているか教えてくれ'
+        const question = (args.question as string | undefined) ?? 'Tell me what is on the screen'
         const result = await runClaudeTask({ task: question, includeScreenshot: true })
         return { result }
       }
@@ -100,7 +100,7 @@ export function registerCoreIpc(deps: Deps): void {
         return {
           ok: true,
           totalCount: result.messages.length,
-          accounts: result.accounts.map((a) => `${a.account}(${a.count}件)`),
+          accounts: result.accounts.map((a) => `${a.account} (${a.count} items)`),
         }
       }
       if (toolName === 'open_app') {
@@ -246,7 +246,7 @@ export function registerCoreIpc(deps: Deps): void {
         if (notifs.length > 0) {
           deps.getMainWindow()?.webContents.send('notification:incoming', notifs)
         }
-      }).catch(() => {/* 通知モジュール未ロードなら無視 */})
+      }).catch(() => {/* ignore if notification module not loaded */})
     }
   })
 

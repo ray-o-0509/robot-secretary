@@ -1,0 +1,152 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "edit": "編集",
+    "delete": "削除",
+    "add": "追加",
+    "saved": "保存しました ✓",
+    "noData": "NO DATA"
+  },
+  "time": {
+    "justNow": "たった今",
+    "minutesAgo": "{{count}}分前",
+    "hoursAgo": "{{count}}時間前",
+    "daysAgo": "{{count}}日前"
+  },
+  "gmail": {
+    "noSubject": "(件名なし)",
+    "noBody": "(本文なし)",
+    "tokenExpiredHint": "トークン切れの可能性。`scripts/auth-google.mjs <email>` で再認証しろ",
+    "authExpiredHint": "認証切れなら `scripts/auth-google.mjs` を走らせろ",
+    "clickForDetail": "クリックで詳細を別ウィンドウで開く",
+    "noResults": "「{{query}}」に一致するメールはありません",
+    "standby": "メールをクリックすると詳細が表示される",
+    "emptyResponse": "レスポンスが空"
+  },
+  "calendar": {
+    "allDay": "終日",
+    "noEventsToday": "今日は予定なし。サボれ",
+    "noEventsTomorrow": "明日も予定なし",
+    "noEvents": "予定なし",
+    "daysShort": ["日", "月", "火", "水", "木", "金", "土"]
+  },
+  "tasks": {
+    "authExpiredHint": "TickTick の認証が切れている可能性",
+    "noTasks": "タスクなし。やる事ねえぞ",
+    "markDone": "完了にする",
+    "overdue": "期限切れ ",
+    "today": "今日 "
+  },
+  "news": {
+    "dbHint": "TURSO_DATABASE_URL を .env.local で確認",
+    "fetchFailed": "取得失敗",
+    "noNews": "ニュースなし"
+  },
+  "movies": {
+    "dbHint": "TURSO_DATABASE_URL を .env.local で確認",
+    "fetchFailed": "取得失敗",
+    "noMovies": "映画情報なし",
+    "nowPlaying": "今月公開中 ({{count}})",
+    "upcoming": "来月注目 ({{count}})"
+  },
+  "tools": {
+    "dbHint": "TURSO_DATABASE_URL を .env.local で確認",
+    "fetchFailed": "取得失敗",
+    "noTools": "ツールなし"
+  },
+  "settings": {
+    "title": "設定",
+    "tabs": {
+      "profile": "プロフィール",
+      "apps": "デフォルトアプリ",
+      "api": "APIキー"
+    },
+    "profile": {
+      "description": "ベガが会話中に参照するあなたの情報。「名前は○○だ」と話しかけると自動で更新されます。",
+      "empty": "まだ登録されていません",
+      "keyPlaceholder": "項目名（例: 名前）",
+      "valuePlaceholder": "内容",
+      "addItem": "+ 項目を追加"
+    },
+    "apps": {
+      "description": "「メール開いて」「ブラウザ開いて」のようにカテゴリで言われた場合に開くアプリを設定します。固有名（\"Google Chrome\"など）で指定された場合はそのまま開きます。",
+      "email": "メール",
+      "browser": "ブラウザ",
+      "terminal": "ターミナル",
+      "editor": "エディタ"
+    },
+    "api": {
+      "restartRequired": "変更後はアプリの再起動が必要です",
+      "googleAuthNote": "Google認証（Gmail / Calendar）は .env.local で設定してください"
+    }
+  },
+  "setup": {
+    "header": "起動前チェック",
+    "subtitle": "必要な権限とAPIキーを確認してください",
+    "checking": "確認中...",
+    "required": "必須",
+    "optional": "オプション",
+    "launch": "LAUNCH",
+    "launching": "LAUNCHING...",
+    "checkRequired": "必須項目を確認してください",
+    "missingBoth": "マイク権限とGemini APIキーが必要です",
+    "missingMic": "マイク権限が必要です",
+    "missingKey": "Gemini APIキーが必要です",
+    "mic": {
+      "label": "マイク権限",
+      "denied": "システム設定で許可してください",
+      "notDetermined": "ダイアログが表示されたら「OK」を押してください",
+      "granted": "許可済み"
+    },
+    "geminiKey": {
+      "set": "設定済み (.env.local)",
+      "unset": ".env.local に GEMINI_API_KEY を設定してください"
+    },
+    "accessibility": {
+      "label": "Accessibility（PTTホットキー）",
+      "granted": "許可済み",
+      "denied": "Optionキーでの音声入力が使えません"
+    },
+    "gmail": {
+      "noTokens": "~/.config/gmail-triage/tokens/ にトークンがありません"
+    },
+    "ticktick": {
+      "set": "設定済み",
+      "unset": ".env.local に TICKTICK_ACCESS_TOKEN を設定してください"
+    },
+    "openSettings": "設定を開く"
+  },
+  "settingsPanel": {
+    "title": "設定",
+    "googleNote": "Google認証（Gmail/Calendar）は .env ファイルで設定してください"
+  },
+  "confirmation": {
+    "title": "⚠ 実行確認 —",
+    "execute": "実行",
+    "cancel": "キャンセル"
+  },
+  "weather": {
+    "humidity": "湿度",
+    "wind": "風",
+    "gust": "突風",
+    "pressure": "気圧",
+    "dewPoint": "露点",
+    "cloudCover": "雲量"
+  },
+  "display": {
+    "fetchedAt": "{{time}} 取得"
+  },
+  "terminal": {
+    "noOutput": "実行結果なし",
+    "emptyOutput": "(出力なし)"
+  },
+  "connection": {
+    "maxRetries": "再接続に失敗しました。接続状況を確認してください。",
+    "noApiKey": "Gemini API キーが未設定です。右クリック→設定から入力してください。",
+    "authError": "認証エラー ({{code}})。APIキーが無効または期限切れです。設定を確認してください。",
+    "micDenied": "マイク権限が拒否されています。システム設定で Robot Secretary のマイク使用を許可して、アプリを再起動してください。",
+    "network": "インターネット接続を確認してください。",
+    "connectError": "接続に失敗しました。({{msg}})"
+  }
+}

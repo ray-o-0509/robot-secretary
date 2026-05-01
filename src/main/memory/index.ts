@@ -28,31 +28,31 @@ function newSessionId(): string {
 async function buildInjection(memory: Memory): Promise<string> {
   const sections: string[] = []
 
-  // 明示的に登録されたパーソナル情報（profile.json）
+  // Explicitly registered personal info (profile.json)
   const profile = await loadProfile()
   const profileEntries = Object.entries(profile.items)
   if (profileEntries.length) {
     sections.push(
-      '## ユーザーのパーソナル情報（確定事項）\n' +
+      '## User personal info (confirmed)\n' +
         profileEntries.map(([k, v]) => `- ${k}: ${v}`).join('\n'),
     )
   }
 
-  // 会話から自動抽出した記憶
-  if (memory.facts.length) sections.push('## 会話から覚えたこと\n- ' + memory.facts.join('\n- '))
+  // Memory auto-extracted from conversations
+  if (memory.facts.length) sections.push('## Learned from conversation\n- ' + memory.facts.join('\n- '))
   if (memory.preferences.length)
-    sections.push('## 好み・話し方の指針\n- ' + memory.preferences.join('\n- '))
+    sections.push('## Preferences and communication style\n- ' + memory.preferences.join('\n- '))
   if (memory.ongoing_topics.length)
-    sections.push('## 進行中の話題\n- ' + memory.ongoing_topics.join('\n- '))
+    sections.push('## Ongoing topics\n- ' + memory.ongoing_topics.join('\n- '))
 
   if (!sections.length) return ''
-  return '\n\n# 俺が知っているお前のこと\n' + sections.join('\n\n')
+  return '\n\n# What I know about you\n' + sections.join('\n\n')
 }
 
 async function summarizePending(apiKey: string | undefined): Promise<void> {
   if (summarizing) return
   if (!apiKey) {
-    console.warn('[memory] GEMINI_API_KEY 未設定のため要約スキップ')
+    console.warn('[memory] Skipping summarization: GEMINI_API_KEY is not set')
     return
   }
   summarizing = true
@@ -65,10 +65,10 @@ async function summarizePending(apiKey: string | undefined): Promise<void> {
         const updated = await summarize(existing, transcripts, apiKey)
         await saveMemory(updated)
         await markSummarized(session.id)
-        console.log('[memory] 要約完了:', session.id, `(${transcripts.length}件)`)
+        console.log('[memory] Summarization complete:', session.id, `(${transcripts.length} entries)`)
       } catch (err) {
-        // 1つのセッションで失敗しても次に進む。次回起動時にまた拾われる
-        console.error('[memory] 要約失敗:', session.id, err)
+        // Failure in one session does not block the next; it will be picked up again on next startup
+        console.error('[memory] Summarization failed:', session.id, err)
       }
     }
   } finally {
@@ -77,19 +77,19 @@ async function summarizePending(apiKey: string | undefined): Promise<void> {
 }
 
 export async function initMemory(getApiKey: () => string | undefined): Promise<void> {
-  // 1. 起動時に新しいセッションを開始
+  // 1. Start a new session on startup
   activeSessionId = newSessionId()
   await startSession(activeSessionId)
-  console.log('[memory] セッション開始:', activeSessionId)
+  console.log('[memory] Session started:', activeSessionId)
 
-  // 2. 前回までの未完了セッションを救済（endedAt 埋める）
+  // 2. Repair any incomplete sessions from previous runs (fill in endedAt)
   await repairCrashedSessions(activeSessionId)
 
-  // 3. 未要約のセッションを非同期でバックグラウンド処理
-  //    ここは await しない。アプリ本体の起動をブロックしないため
+  // 3. Process unsummarized sessions asynchronously in the background
+  //    Do not await — must not block app startup
   void summarizePending(getApiKey())
 
-  // 4. IPC ハンドラ登録
+  // 4. Register IPC handlers
   ipcMain.handle('memory:get-injection', async () => {
     const memory = await loadMemory()
     return buildInjection(memory)
@@ -97,13 +97,13 @@ export async function initMemory(getApiKey: () => string | undefined): Promise<v
 
   ipcMain.handle('memory:upsert-profile', async (_event, key: string, value: string) => {
     const profile = await upsertProfileItem(key, value)
-    console.log('[memory] プロファイル更新:', key, '=', value)
+    console.log('[memory] Profile updated:', key, '=', value)
     return { ok: true, items: profile.items }
   })
 
   ipcMain.handle('memory:delete-profile', async (_event, key: string) => {
     const profile = await deleteProfileItem(key)
-    console.log('[memory] プロファイル削除:', key)
+    console.log('[memory] Profile item deleted:', key)
     return { ok: true, items: profile.items }
   })
 
@@ -121,19 +121,19 @@ export async function initMemory(getApiKey: () => string | undefined): Promise<v
       ts: new Date().toISOString(),
       role: payload.role,
       text: payload.text,
-    }).catch((err) => console.error('[memory] 転写追記失敗:', err))
+    }).catch((err) => console.error('[memory] Failed to append transcript:', err))
   })
 }
 
-// アプリ終了時に呼ぶ。endedAt を打刻するだけ。
-// 要約は次回起動時にやる（before-quit を await できないので確実性を優先）
+// Call on app exit. Only stamps endedAt.
+// Summarization is deferred to next startup (before-quit cannot be awaited reliably).
 export async function shutdownMemory(): Promise<void> {
   if (!activeSessionId) return
   try {
     await endSession(activeSessionId)
-    console.log('[memory] セッション終了:', activeSessionId)
+    console.log('[memory] Session ended:', activeSessionId)
   } catch (err) {
-    console.error('[memory] セッション終了処理失敗:', err)
+    console.error('[memory] Failed to end session:', err)
   }
   activeSessionId = null
 }
@@ -142,5 +142,5 @@ export function getActiveSessionId(): string | null {
   return activeSessionId
 }
 
-// テスト/デバッグ用に export しておく
+// Exported for testing/debugging
 export { loadMemory, loadSessions }

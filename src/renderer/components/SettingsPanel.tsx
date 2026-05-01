@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onClose: () => void
 }
 
 export function SettingsPanel({ onClose }: Props) {
+  const { t } = useTranslation()
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
 
   function save() {
@@ -30,7 +32,7 @@ export function SettingsPanel({ onClose }: Props) {
       overflowY: 'auto',
       borderRadius: 16,
     }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, color: '#adf' }}>設定</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, color: '#adf' }}>{t('settingsPanel.title')}</h2>
 
       {[
         { label: 'Gemini API Key', value: geminiKey, set: setGeminiKey },
@@ -55,12 +57,12 @@ export function SettingsPanel({ onClose }: Props) {
       ))}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button onClick={save} style={btnStyle('#4af')}>保存</button>
-        <button onClick={onClose} style={btnStyle('#555')}>キャンセル</button>
+        <button onClick={save} style={btnStyle('#4af')}>{t('common.save')}</button>
+        <button onClick={onClose} style={btnStyle('#555')}>{t('common.cancel')}</button>
       </div>
 
       <p style={{ fontSize: 10, color: '#666', marginTop: 4 }}>
-        Google認証（Gmail/Calendar）は .env ファイルで設定してください
+        {t('settingsPanel.googleNote')}
       </p>
     </div>
   )

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function TasksView({ payload }: Props) {
+  const { t } = useTranslation()
   const [pendingTasks, setPendingTasks] = useState<Set<string>>(new Set())
   const [pendingSubtasks, setPendingSubtasks] = useState<Set<string>>(new Set())
 
@@ -34,7 +36,7 @@ export function TasksView({ payload }: Props) {
   }, [payload.fetchedAt])
 
   if (payload.error) {
-    return <ErrorState message={payload.error} hint="TickTick の認証が切れている可能性" />
+    return <ErrorState message={payload.error} hint={t('tasks.authExpiredHint')} />
   }
 
   const data = payload.data as TaskData
@@ -42,7 +44,7 @@ export function TasksView({ payload }: Props) {
     (t) => t.status === 'todo' && !pendingTasks.has(t.taskId),
   )
   if (todos.length === 0) {
-    return <EmptyState message="タスクなし。やる事ねえぞ" />
+    return <EmptyState message={t('tasks.noTasks')} />
   }
 
   const handleCompleteTask = async (taskId: string, projectId: string) => {
@@ -149,10 +151,11 @@ export function TasksView({ payload }: Props) {
 }
 
 function Checkbox({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation()
   return (
     <button
       onClick={onClick}
-      title="完了にする"
+      title={t('tasks.markDone')}
       style={{
         background: 'transparent',
         border: 'none',
@@ -249,6 +252,7 @@ function PriorityBadge({ priority }: { priority: 'low' | 'medium' | 'high' }) {
 }
 
 function DueBadge({ due }: { due: string }) {
+  const { t } = useTranslation()
   const today = new Date()
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   const overdue = due < todayKey
@@ -267,7 +271,7 @@ function DueBadge({ due }: { due: string }) {
         textShadow: `0 0 6px ${color}60`,
       }}
     >
-      {overdue ? '期限切れ ' : isToday ? '今日 ' : ''}
+      {overdue ? t('tasks.overdue') : isToday ? t('tasks.today') : ''}
       {due}
     </span>
   )
