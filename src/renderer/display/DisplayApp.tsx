@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { DisplayShell } from './DisplayShell'
 import { TopButtons } from './TopButtons'
-import { EmailView } from './views/EmailView'
-import { EmailSearchView } from './views/EmailSearchView'
-import { CalendarView } from './views/CalendarView'
-import { TasksView } from './views/TasksView'
-import { SlackView } from './views/SlackView'
-import { NewsView } from './views/NewsView'
-import { ToolsView } from './views/ToolsView'
-import { MoviesView } from './views/MoviesView'
+import { EmailView } from '../skills/gmail/View'
+import { EmailSearchView } from '../skills/gmail/SearchView'
+import { CalendarView } from '../skills/calendar/View'
+import { TasksView } from '../skills/tasks/View'
+import { NewsView } from '../../private/renderer-skills/ai-news/View'
+import { ToolsView } from '../../private/renderer-skills/best-tools/View'
+import { MoviesView } from '../../private/renderer-skills/movies/View'
 import { TerminalView } from './views/TerminalView'
 import { PANEL_LABELS, type PanelPayload } from './types'
 
@@ -83,8 +82,6 @@ function renderView(payload: PanelPayload) {
       return <CalendarView payload={payload} />
     case 'tasks':
       return <TasksView payload={payload} />
-    case 'slack':
-      return <SlackView payload={payload} />
     case 'news':
       return <NewsView payload={payload} />
     case 'tools':
