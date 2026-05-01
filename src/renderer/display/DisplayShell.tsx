@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { TopButtons } from './TopButtons'
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function DisplayShell({ label, fetchedAt, loading = false, onRefresh, onClose, children }: Props) {
+  const { t } = useTranslation()
   return (
     <>
       <style>{CYBER_STYLES}</style>
@@ -102,7 +104,7 @@ export function DisplayShell({ label, fetchedAt, loading = false, onRefresh, onC
           whiteSpace: 'nowrap',
         }}
       >
-        {loading ? 'FETCHING…' : fetchedAt ? formatFetchedAt(fetchedAt) : ''}
+        {loading ? t('display.fetchingLabel') : fetchedAt ? formatFetchedAt(fetchedAt, t('display.fetch')) : ''}
       </div>
 
       {/* CLOSE / RELOAD ボタン */}
@@ -129,11 +131,11 @@ export function DisplayShell({ label, fetchedAt, loading = false, onRefresh, onC
   )
 }
 
-function formatFetchedAt(ts: number): string {
+function formatFetchedAt(ts: number, fetchLabel: string): string {
   const d = new Date(ts)
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm} 取得`
+  return `${hh}:${mm} ${fetchLabel}`
 }
 
 function CornerBrackets() {

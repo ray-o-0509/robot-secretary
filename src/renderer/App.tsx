@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
+import { syncI18nLanguage } from './i18n'
 import { RobotScene } from './components/RobotScene'
 import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { ConfirmationCard, type ConfirmationRequest } from './components/ConfirmationCard'
 import { DisplayApp } from './display/DisplayApp'
-import { EmailDetailApp } from './display/EmailDetailApp'
-import { SearchApp } from './search/SearchApp'
-import { WeatherApp } from './weather/WeatherApp'
+import { EmailDetailApp } from './skills/gmail/DetailApp'
+import { SearchApp } from './skills/web-search/SearchApp'
+import { WeatherApp } from './skills/weather/WeatherApp'
 import { SetupApp } from './setup/SetupApp'
 import { SettingsApp } from './settings/SettingsApp'
 import type { PanelPayload } from './display/types'
@@ -119,6 +120,7 @@ function RobotWindowApp() {
     const offLang = window.electronAPI?.onLanguageChange((lang) => {
       localStorage.setItem('LANGUAGE_CODE', lang)
       setLanguageCode(lang)
+      syncI18nLanguage(lang)
     })
     const offConfirm = window.electronAPI?.onConfirmationRequest((req) => {
       setPendingConfirmation(req)
@@ -220,6 +222,7 @@ function ChatWindowApp() {
     window.electronAPI?.onLanguageChange((lang) => {
       localStorage.setItem('LANGUAGE_CODE', lang)
       setLanguageCode(lang)
+      syncI18nLanguage(lang)
     })
     window.electronAPI?.onConnectionError((err) => setConnectionError(err))
   }, [])
@@ -228,6 +231,7 @@ function ChatWindowApp() {
     if (lang === languageCode) return
     localStorage.setItem('LANGUAGE_CODE', lang)
     setLanguageCode(lang)
+    syncI18nLanguage(lang)
     window.electronAPI?.setLanguage(lang)
   }
 

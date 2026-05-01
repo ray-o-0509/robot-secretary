@@ -1,0 +1,117 @@
+{
+  "setup": {
+    "loading": "Checking...",
+    "title": "Pre-launch Check",
+    "subtitle": "Verify required permissions and API keys",
+    "required": "REQUIRED",
+    "optional": "OPTIONAL",
+    "openSettings": "Open Settings",
+    "mic": "Microphone Permission",
+    "micGranted": "Granted",
+    "micDenied": "Please allow in System Settings",
+    "micNotDetermined": "Click OK when the dialog appears",
+    "geminiKeySet": "Configured (.env.local)",
+    "geminiKeyMissing": "Set GEMINI_API_KEY in .env.local",
+    "accessibility": "Accessibility (PTT Hotkey)",
+    "accessibilityGranted": "Granted",
+    "accessibilityDenied": "Option key voice input will not work",
+    "gmailLabel": "Gmail ({{count}} account(s))",
+    "gmailMissing": "No tokens in ~/.config/gmail-triage/tokens/",
+    "ticktickSet": "Configured",
+    "ticktickMissing": "Set TICKTICK_ACCESS_TOKEN in .env.local",
+    "launching": "LAUNCHING...",
+    "launch": "LAUNCH",
+    "checkRequired": "Check required items",
+    "needBoth": "Microphone permission and Gemini API key are required",
+    "needMic": "Microphone permission is required",
+    "needGemini": "Gemini API key is required"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabProfile": "Profile",
+    "tabApps": "Default Apps",
+    "tabApi": "API Keys",
+    "profileDescription": "Your information Vega refers to during conversations. Say \"My name is ...\" and it will be updated automatically.",
+    "noItems": "No items yet",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "add": "Add",
+    "addItem": "+ Add item",
+    "newKeyPlaceholder": "Key (e.g. Name)",
+    "newValuePlaceholder": "Value",
+    "saved": "Saved ✓",
+    "appDescription": "Set which app opens when you say a category like \"open email\" or \"open browser\". Specific names like \"Slack\" open directly.",
+    "email": "Email",
+    "browser": "Browser",
+    "terminal": "Terminal",
+    "editor": "Editor",
+    "geminiKeyLabel": "Gemini API Key",
+    "geminiKeyRestart": "Restart the app after changing this",
+    "googleAuthNote": "Google auth (Gmail / Calendar) is configured via .env.local"
+  },
+  "confirmation": {
+    "title": "Confirm Action",
+    "confirm": "Execute",
+    "cancel": "Cancel"
+  },
+  "gmail": {
+    "noSubject": "(no subject)",
+    "tokenExpired": "Token may have expired. Re-authenticate with `scripts/auth-google.mjs <email>`",
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago",
+    "fetchFailed": "Fetch failed",
+    "noResults": "No emails",
+    "responseEmpty": "Empty response",
+    "noBody": "(no body)",
+    "clickToOpen": "Click an email to open it",
+    "query": "QUERY",
+    "noMatch": "No results for query"
+  },
+  "calendar": {
+    "allDay": "All day",
+    "emptyToday": "No events today. Take a break.",
+    "emptyTomorrow": "No events tomorrow",
+    "empty": "No events",
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  },
+  "tasks": {
+    "complete": "Mark complete",
+    "overdue": "Overdue",
+    "today": "Today",
+    "empty": "No tasks. Nothing to do.",
+    "ticktickError": "TickTick authentication may have expired",
+    "fetchFailed": "Fetch failed"
+  },
+  "movies": {
+    "thisMonth": "Now in theaters",
+    "nextMonth": "Coming next month",
+    "empty": "No movie info",
+    "fetchFailed": "Fetch failed"
+  },
+  "news": {
+    "empty": "No news",
+    "fetchFailed": "Fetch failed",
+    "highlight": "HIGHLIGHT"
+  },
+  "weather": {
+    "humidity": "Humidity",
+    "wind": "Wind",
+    "gust": "Gust",
+    "pressure": "Pressure",
+    "dewPoint": "Dew point",
+    "cloudCover": "Cloud cover",
+    "standby": "STANDBY",
+    "hourly": "HOURLY",
+    "sevenDay": "7-DAY",
+    "details": "DETAILS",
+    "fetching": "FETCHING…"
+  },
+  "display": {
+    "fetch": "Fetch",
+    "fetchingLabel": "FETCHING…"
+  }
+}

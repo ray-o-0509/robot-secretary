@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 type PermissionStatus = 'granted' | 'denied' | 'not-determined' | 'restricted' | 'unknown'
 
@@ -7,7 +8,6 @@ interface SetupStatus {
   accessibilityPermission: boolean
   geminiApiKey: boolean
   ticktickToken: boolean
-  slackToken: boolean
   gmailAccounts: string[]
 }
 
@@ -54,7 +54,7 @@ function CheckRow({ label, ok, required, detail, actionLabel, onAction }: CheckR
             flexShrink: 0,
           }}
         >
-          {actionLabel ?? '設定を開く'}
+          {actionLabel}
         </button>
       )}
     </div>
@@ -62,6 +62,7 @@ function CheckRow({ label, ok, required, detail, actionLabel, onAction }: CheckR
 }
 
 export function SetupApp() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<SetupStatus | null>(null)
   const [launching, setLaunching] = useState(false)
 
@@ -89,46 +90,42 @@ export function SetupApp() {
   if (!status) {
     return (
       <div style={containerStyle}>
-        <div style={{ padding: '28px 24px', color: '#64748b', fontSize: 13 }}>確認中...</div>
+        <div style={{ padding: '28px 24px', color: '#64748b', fontSize: 13 }}>{t('setup.loading')}</div>
       </div>
     )
   }
 
   const micOk = status.micPermission === 'granted'
   const micDetail = status.micPermission === 'denied'
-    ? 'システム設定で許可してください'
+    ? t('setup.micDenied')
     : status.micPermission === 'not-determined'
-    ? 'ダイアログが表示されたら「OK」を押してください'
-    : '許可済み'
+    ? t('setup.micNotDetermined')
+    : t('setup.micGranted')
 
-  // ノードラッグ領域（ボタン・入力など操作が必要な要素）
   const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
   return (
     <div style={containerStyle}>
-      {/* Header — ドラッグ可能 */}
       <div style={{ padding: '20px 24px 16px', flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: '#6366f1', letterSpacing: '0.15em', fontFamily: 'monospace', marginBottom: 6 }}>
           VEGA // SETUP
         </div>
         <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>
-          起動前チェック
+          {t('setup.title')}
         </div>
         <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
-          必要な権限とAPIキーを確認してください
+          {t('setup.subtitle')}
         </div>
       </div>
 
-      {/* Scrollable body — ノードラッグ */}
       <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '0 24px 24px' }}>
-        {/* Required section */}
-        <Section title="必須" color="#f87171">
+        <Section title={t('setup.required')} color="#f87171">
           <CheckRow
-            label="マイク権限"
+            label={t('setup.mic')}
             ok={micOk}
             required={true}
             detail={micDetail}
-            actionLabel="設定を開く"
+            actionLabel={t('setup.openSettings')}
             onAction={status.micPermission === 'denied'
               ? () => window.electronAPI.setupOpenSettings('microphone')
               : undefined}
@@ -137,43 +134,35 @@ export function SetupApp() {
             label="Gemini API Key"
             ok={status.geminiApiKey}
             required={true}
-            detail={status.geminiApiKey ? '設定済み (.env.local)' : '.env.local に GEMINI_API_KEY を設定してください'}
+            detail={status.geminiApiKey ? t('setup.geminiKeySet') : t('setup.geminiKeyMissing')}
           />
         </Section>
 
-        {/* Optional section */}
-        <Section title="オプション" color="#facc15">
+        <Section title={t('setup.optional')} color="#facc15">
           <CheckRow
-            label="Accessibility（PTTホットキー）"
+            label={t('setup.accessibility')}
             ok={status.accessibilityPermission}
             required={false}
-            detail={status.accessibilityPermission ? '許可済み' : 'Optionキーでの音声入力が使えません'}
-            actionLabel="設定を開く"
+            detail={status.accessibilityPermission ? t('setup.accessibilityGranted') : t('setup.accessibilityDenied')}
+            actionLabel={t('setup.openSettings')}
             onAction={() => window.electronAPI.setupOpenSettings('accessibility')}
           />
           <CheckRow
-            label={`Gmail（${status.gmailAccounts.length}アカウント）`}
+            label={t('setup.gmailLabel', { count: status.gmailAccounts.length })}
             ok={status.gmailAccounts.length > 0}
             required={false}
             detail={status.gmailAccounts.length > 0
               ? status.gmailAccounts.join(', ')
-              : '~/.config/gmail-triage/tokens/ にトークンがありません'}
+              : t('setup.gmailMissing')}
           />
           <CheckRow
             label="TickTick"
             ok={status.ticktickToken}
             required={false}
-            detail={status.ticktickToken ? '設定済み' : '.env.local に TICKTICK_ACCESS_TOKEN を設定してください'}
-          />
-          <CheckRow
-            label="Slack"
-            ok={status.slackToken}
-            required={false}
-            detail={status.slackToken ? '設定済み' : '.env.local に SLACK_BOT_TOKEN を設定してください'}
+            detail={status.ticktickToken ? t('setup.ticktickSet') : t('setup.ticktickMissing')}
           />
         </Section>
 
-        {/* Launch button */}
         <div style={{ marginTop: 8 }}>
           <button
             onClick={handleLaunch}
@@ -196,16 +185,16 @@ export function SetupApp() {
               opacity: launching ? 0.6 : 1,
             }}
           >
-            {launching ? 'LAUNCHING...' : canLaunch ? 'LAUNCH' : '必須項目を確認してください'}
+            {launching ? t('setup.launching') : canLaunch ? t('setup.launch') : t('setup.checkRequired')}
           </button>
 
           {!canLaunch && (
             <div style={{ fontSize: 11, color: '#475569', textAlign: 'center', marginTop: 8 }}>
               {!micOk && !status.geminiApiKey
-                ? 'マイク権限とGemini APIキーが必要です'
+                ? t('setup.needBoth')
                 : !micOk
-                ? 'マイク権限が必要です'
-                : 'Gemini APIキーが必要です'}
+                ? t('setup.needMic')
+                : t('setup.needGemini')}
             </div>
           )}
         </div>

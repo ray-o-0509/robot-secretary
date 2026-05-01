@@ -28,12 +28,12 @@ export function registerCoreIpc(deps: Deps): void {
     }, CHAT_HIDE_DELAY_MS)
   }
   // 確認ダイアログをメインウィンドウへ送れるよう初期化
-  import('../tools/confirmation').then(({ initConfirmation }) => {
+  import('../skills/confirmation/index').then(({ initConfirmation }) => {
     initConfirmation(deps.getMainWindow)
   })
 
   ipcMain.on('confirmation:respond', (_event, id: string, confirmed: boolean) => {
-    import('../tools/confirmation').then(({ respondToConfirmation }) => {
+    import('../skills/confirmation/index').then(({ respondToConfirmation }) => {
       respondToConfirmation(id, confirmed)
     })
   })
@@ -64,7 +64,7 @@ export function registerCoreIpc(deps: Deps): void {
         toolName === 'web_search' ||
         toolName === 'get_weather'
       ) {
-        const { executeTool } = await import('../tools/dispatcher')
+        const { executeTool } = await import('../skills/dispatcher')
         const result = await executeTool(toolName, args)
         if (toolName === 'get_weather') {
           deps.showWeatherData(result)
@@ -87,7 +87,7 @@ export function registerCoreIpc(deps: Deps): void {
         return await showPanel(t, { getOrCreateWindow: deps.getOrCreateDisplayWindow })
       }
       if (toolName === 'search_gmail') {
-        const { searchEmails } = await import('../tools/gmail')
+        const { searchEmails } = await import('../skills/gmail/index')
         const { pushPayload } = await import('../display/show-panel')
         const query = String(args.query ?? '').trim()
         const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 20
@@ -104,7 +104,7 @@ export function registerCoreIpc(deps: Deps): void {
         }
       }
       if (toolName === 'open_app') {
-        const { openApp } = await import('../tools/openApp')
+        const { openApp } = await import('../skills/open-app/index')
         return await openApp(args.app_name as string)
       }
       if (toolName === 'update_profile') {
@@ -127,7 +127,7 @@ export function registerCoreIpc(deps: Deps): void {
         return { cwd: currentCwd }
       }
       if (toolName === 'run_command') {
-        const { runCommand } = await import('../tools/shell')
+        const { runCommand } = await import('../skills/shell/index')
         const cwd = (args.cwd as string | undefined) ?? currentCwd
         const result = await runCommand(String(args.command ?? ''), cwd)
         const { pushPayload } = await import('../display/show-panel')
@@ -137,7 +137,7 @@ export function registerCoreIpc(deps: Deps): void {
         return { result }
       }
       if (toolName === 'run_claude') {
-        const { runClaude } = await import('../tools/shell')
+        const { runClaude } = await import('../skills/shell/index')
         const cwd = (args.cwd as string | undefined) ?? currentCwd
         const result = await runClaude(String(args.prompt ?? ''), cwd)
         const { pushPayload } = await import('../display/show-panel')
@@ -207,7 +207,7 @@ export function registerCoreIpc(deps: Deps): void {
 
   // アプリ起動直後（index.ts の app.whenReady）から watch を開始する
   ipcMain.handle('notification:start-watch', () => {
-    import('../tools/notifications').then(({ startNotificationWatch }) => {
+    import('../skills/notifications/index').then(({ startNotificationWatch }) => {
       startNotificationWatch(
         (notif) => {
           deps.getMainWindow()?.webContents.send('notification:incoming', [notif])
@@ -219,7 +219,7 @@ export function registerCoreIpc(deps: Deps): void {
 
   // Gemini セッション接続完了時に renderer が呼ぶ → preSessionBuffer を返す
   ipcMain.handle('notification:session-ready', async () => {
-    const { notificationSessionReady } = await import('../tools/notifications')
+    const { notificationSessionReady } = await import('../skills/notifications/index')
     return notificationSessionReady()
   })
 
@@ -241,7 +241,7 @@ export function registerCoreIpc(deps: Deps): void {
     }
     // idle 復帰時に会話中バッファを flush
     if (state === 'idle' && wasActive) {
-      import('../tools/notifications').then(({ flushActiveNotifications }) => {
+      import('../skills/notifications/index').then(({ flushActiveNotifications }) => {
         const notifs = flushActiveNotifications()
         if (notifs.length > 0) {
           deps.getMainWindow()?.webContents.send('notification:incoming', notifs)

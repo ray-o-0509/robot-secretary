@@ -146,14 +146,14 @@ function registerSettingsIpc() {
   })
 
   ipcMain.handle('settings:get-default-apps', async () => {
-    const { loadDefaultApps } = await import('./tools/defaultApps')
+    const { loadDefaultApps } = await import('./skills/default-apps/index')
     return await loadDefaultApps()
   })
 
   ipcMain.handle('settings:save-default-apps', async (_event, apps: unknown) => {
-    const { saveDefaultApps } = await import('./tools/defaultApps')
+    const { saveDefaultApps } = await import('./skills/default-apps/index')
     if (apps && typeof apps === 'object') {
-      await saveDefaultApps(apps as import('./tools/defaultApps').DefaultApps)
+      await saveDefaultApps(apps as import('./skills/default-apps/index').DefaultApps)
     }
     return { ok: true }
   })
@@ -224,7 +224,6 @@ function registerSetupIpc() {
       accessibilityPermission,
       geminiApiKey: !!(process.env.GEMINI_API_KEY),
       ticktickToken: !!(process.env.TICKTICK_ACCESS_TOKEN),
-      slackToken: !!(process.env.SLACK_BOT_TOKEN),
       gmailAccounts: getGmailAccounts(),
     }
   })
@@ -642,7 +641,6 @@ function setupContextMenu() {
                 { label: 'カレンダー (明日)', click: () => triggerDebugPanel('calendar_tomorrow') },
                 { label: 'カレンダー (今週)', click: () => triggerDebugPanel('calendar_week') },
                 { label: 'タスク', click: () => triggerDebugPanel('tasks') },
-                { label: 'Slack', click: () => triggerDebugPanel('slack') },
                 { label: 'AIニュース', click: () => triggerDebugPanel('news') },
                 { label: 'ツール', click: () => triggerDebugPanel('tools') },
                 { label: '映画', click: () => triggerDebugPanel('movies') },

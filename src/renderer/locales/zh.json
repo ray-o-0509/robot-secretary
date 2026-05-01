@@ -1,0 +1,117 @@
+{
+  "setup": {
+    "loading": "检查中...",
+    "title": "启动前检查",
+    "subtitle": "请确认所需权限和 API 密钥",
+    "required": "必需",
+    "optional": "可选",
+    "openSettings": "打开设置",
+    "mic": "麦克风权限",
+    "micGranted": "已授权",
+    "micDenied": "请在系统设置中允许",
+    "micNotDetermined": "出现对话框时请点击「好」",
+    "geminiKeySet": "已配置 (.env.local)",
+    "geminiKeyMissing": "请在 .env.local 中设置 GEMINI_API_KEY",
+    "accessibility": "辅助功能（PTT 热键）",
+    "accessibilityGranted": "已授权",
+    "accessibilityDenied": "Option 键语音输入将不可用",
+    "gmailLabel": "Gmail（{{count}} 个账户）",
+    "gmailMissing": "~/.config/gmail-triage/tokens/ 中没有令牌",
+    "ticktickSet": "已配置",
+    "ticktickMissing": "请在 .env.local 中设置 TICKTICK_ACCESS_TOKEN",
+    "launching": "启动中...",
+    "launch": "启动",
+    "checkRequired": "请确认必需项目",
+    "needBoth": "需要麦克风权限和 Gemini API 密钥",
+    "needMic": "需要麦克风权限",
+    "needGemini": "需要 Gemini API 密钥"
+  },
+  "settings": {
+    "title": "设置",
+    "tabProfile": "个人资料",
+    "tabApps": "默认应用",
+    "tabApi": "API 密钥",
+    "profileDescription": "Vega 在对话中参考的您的信息。说「我的名字是...」会自动更新。",
+    "noItems": "暂无记录",
+    "save": "保存",
+    "cancel": "取消",
+    "edit": "编辑",
+    "delete": "删除",
+    "add": "添加",
+    "addItem": "+ 添加项目",
+    "newKeyPlaceholder": "键名（例：姓名）",
+    "newValuePlaceholder": "内容",
+    "saved": "已保存 ✓",
+    "appDescription": "设置说「打开邮件」「打开浏览器」等类别时打开的应用。指定具体名称（如\"Slack\"）时直接打开。",
+    "email": "邮件",
+    "browser": "浏览器",
+    "terminal": "终端",
+    "editor": "编辑器",
+    "geminiKeyLabel": "Gemini API Key",
+    "geminiKeyRestart": "更改后需要重启应用",
+    "googleAuthNote": "Google 认证（Gmail / Calendar）请通过 .env.local 配置"
+  },
+  "confirmation": {
+    "title": "确认执行",
+    "confirm": "执行",
+    "cancel": "取消"
+  },
+  "gmail": {
+    "noSubject": "（无主题）",
+    "tokenExpired": "令牌可能已过期。请用 `scripts/auth-google.mjs <email>` 重新认证",
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}}分钟前",
+    "hoursAgo": "{{count}}小时前",
+    "daysAgo": "{{count}}天前",
+    "fetchFailed": "获取失败",
+    "noResults": "无邮件",
+    "responseEmpty": "响应为空",
+    "noBody": "（无正文）",
+    "clickToOpen": "点击邮件打开",
+    "query": "查询",
+    "noMatch": "无匹配结果"
+  },
+  "calendar": {
+    "allDay": "全天",
+    "emptyToday": "今天没有日程。休息一下吧。",
+    "emptyTomorrow": "明天也没有日程",
+    "empty": "没有日程",
+    "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+  },
+  "tasks": {
+    "complete": "标为完成",
+    "overdue": "已逾期",
+    "today": "今天",
+    "empty": "没有任务",
+    "ticktickError": "TickTick 认证可能已过期",
+    "fetchFailed": "获取失败"
+  },
+  "movies": {
+    "thisMonth": "本月上映",
+    "nextMonth": "下月关注",
+    "empty": "暂无电影信息",
+    "fetchFailed": "获取失败"
+  },
+  "news": {
+    "empty": "暂无新闻",
+    "fetchFailed": "获取失败",
+    "highlight": "亮点"
+  },
+  "weather": {
+    "humidity": "湿度",
+    "wind": "风速",
+    "gust": "阵风",
+    "pressure": "气压",
+    "dewPoint": "露点",
+    "cloudCover": "云量",
+    "standby": "待机",
+    "hourly": "逐小时",
+    "sevenDay": "7天预报",
+    "details": "详情",
+    "fetching": "获取中…"
+  },
+  "display": {
+    "fetch": "获取",
+    "fetchingLabel": "获取中…"
+  }
+}

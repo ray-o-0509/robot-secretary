@@ -1,0 +1,117 @@
+{
+  "setup": {
+    "loading": "確認中...",
+    "title": "起動前チェック",
+    "subtitle": "必要な権限とAPIキーを確認してください",
+    "required": "必須",
+    "optional": "オプション",
+    "openSettings": "設定を開く",
+    "mic": "マイク権限",
+    "micGranted": "許可済み",
+    "micDenied": "システム設定で許可してください",
+    "micNotDetermined": "ダイアログが表示されたら「OK」を押してください",
+    "geminiKeySet": "設定済み (.env.local)",
+    "geminiKeyMissing": ".env.local に GEMINI_API_KEY を設定してください",
+    "accessibility": "Accessibility（PTTホットキー）",
+    "accessibilityGranted": "許可済み",
+    "accessibilityDenied": "Optionキーでの音声入力が使えません",
+    "gmailLabel": "Gmail（{{count}}アカウント）",
+    "gmailMissing": "~/.config/gmail-triage/tokens/ にトークンがありません",
+    "ticktickSet": "設定済み",
+    "ticktickMissing": ".env.local に TICKTICK_ACCESS_TOKEN を設定してください",
+    "launching": "LAUNCHING...",
+    "launch": "LAUNCH",
+    "checkRequired": "必須項目を確認してください",
+    "needBoth": "マイク権限とGemini APIキーが必要です",
+    "needMic": "マイク権限が必要です",
+    "needGemini": "Gemini APIキーが必要です"
+  },
+  "settings": {
+    "title": "設定",
+    "tabProfile": "プロフィール",
+    "tabApps": "デフォルトアプリ",
+    "tabApi": "APIキー",
+    "profileDescription": "ベガが会話中に参照するあなたの情報。「名前は○○だ」と話しかけると自動で更新されます。",
+    "noItems": "まだ登録されていません",
+    "save": "保存",
+    "cancel": "取消",
+    "edit": "編集",
+    "delete": "削除",
+    "add": "追加",
+    "addItem": "+ 項目を追加",
+    "newKeyPlaceholder": "項目名（例: 名前）",
+    "newValuePlaceholder": "内容",
+    "saved": "保存しました ✓",
+    "appDescription": "「メール開いて」「ブラウザ開いて」のようにカテゴリで言われた場合に開くアプリを設定します。固有名（\"Slack\"など）で指定された場合はそのまま開きます。",
+    "email": "メール",
+    "browser": "ブラウザ",
+    "terminal": "ターミナル",
+    "editor": "エディタ",
+    "geminiKeyLabel": "Gemini API Key",
+    "geminiKeyRestart": "変更後はアプリの再起動が必要です",
+    "googleAuthNote": "Google認証（Gmail / Calendar）は .env.local で設定してください"
+  },
+  "confirmation": {
+    "title": "実行確認",
+    "confirm": "実行",
+    "cancel": "キャンセル"
+  },
+  "gmail": {
+    "noSubject": "(件名なし)",
+    "tokenExpired": "トークン切れの可能性。`scripts/auth-google.mjs <email>` で再認証しろ",
+    "justNow": "たった今",
+    "minutesAgo": "{{count}}分前",
+    "hoursAgo": "{{count}}時間前",
+    "daysAgo": "{{count}}日前",
+    "fetchFailed": "取得失敗",
+    "noResults": "メールなし",
+    "responseEmpty": "レスポンスが空",
+    "noBody": "(本文なし)",
+    "clickToOpen": "メールをクリックして開く",
+    "query": "QUERY",
+    "noMatch": "クエリマッチなし"
+  },
+  "calendar": {
+    "allDay": "終日",
+    "emptyToday": "今日は予定なし。サボれ",
+    "emptyTomorrow": "明日も予定なし",
+    "empty": "予定なし",
+    "weekdays": ["日", "月", "火", "水", "木", "金", "土"]
+  },
+  "tasks": {
+    "complete": "完了にする",
+    "overdue": "期限切れ",
+    "today": "今日",
+    "empty": "タスクなし。やる事ねえぞ",
+    "ticktickError": "TickTick の認証が切れている可能性",
+    "fetchFailed": "取得失敗"
+  },
+  "movies": {
+    "thisMonth": "今月公開中",
+    "nextMonth": "来月注目",
+    "empty": "映画情報なし",
+    "fetchFailed": "取得失敗"
+  },
+  "news": {
+    "empty": "ニュースなし",
+    "fetchFailed": "取得失敗",
+    "highlight": "HIGHLIGHT"
+  },
+  "weather": {
+    "humidity": "湿度",
+    "wind": "風",
+    "gust": "突風",
+    "pressure": "気圧",
+    "dewPoint": "露点",
+    "cloudCover": "雲量",
+    "standby": "STANDBY",
+    "hourly": "HOURLY",
+    "sevenDay": "7-DAY",
+    "details": "DETAILS",
+    "fetching": "FETCHING…"
+  },
+  "display": {
+    "fetch": "取得",
+    "fetchingLabel": "FETCHING…"
+  }
+}
