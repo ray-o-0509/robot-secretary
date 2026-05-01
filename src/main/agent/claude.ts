@@ -3,7 +3,7 @@ import { toolSchemas, executeTool } from '../tools/dispatcher'
 import { captureScreen } from '../screenshot'
 import { LIMITS, MODELS } from '../../config/models'
 
-const SYSTEM_PROMPT = `お前は秘書ロボット「ベガ」の作業実行エージェントだ。
+const SYSTEM_PROMPT = `お前は「ベガ」の作業実行エージェントだ。
 音声側のベガから委任された作業を、提供されたツールで実行する。
 
 【出力ルール】

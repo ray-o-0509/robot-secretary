@@ -4,7 +4,7 @@ import { MODELS } from '../../config/models'
 
 const MODEL = MODELS.geminiMemorySummarizer
 
-const CURATOR_PROMPT = `あなたはAI秘書「ベガ」のメモリキュレーターだ。
+const CURATOR_PROMPT = `あなたは「ベガ」のメモリキュレーターだ。
 既存メモリ + 直近の会話転写から、3か月後でも役に立つ情報だけを残した最新メモリをJSONで返せ。
 
 【厳格な区分（外れたら絶対に入れない）】
