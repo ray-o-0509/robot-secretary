@@ -340,10 +340,15 @@ function GLBRobot({
     }
 
     // 眼のハイライト: listening 中は赤、それ以外は元の色（薄い青）
-    // body_4 (眼の上の発光球): listening 中は赤、それ以外は元の色（白）
+    // body_4 (眼の上の発光球):
+    //   listening → 赤
+    //   speaking  → 青
+    //   それ以外  → 元の色（白）
     if (highlightMatRef.current && highlightDefaultEmissive.current) {
       if (state === 'listening') {
         highlightMatRef.current.emissive.set('#ff4444')
+      } else if (state === 'speaking') {
+        highlightMatRef.current.emissive.set('#4488ff')
       } else {
         highlightMatRef.current.emissive.copy(highlightDefaultEmissive.current)
       }
