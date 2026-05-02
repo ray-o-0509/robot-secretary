@@ -178,9 +178,9 @@ function GLBRobot({
           return
         }
         if (isAntennaPole) {
-          // アンテナ柱: 強めに発光させる
-          mat.color.set('#ffffff')
-          mat.emissive.set('#00ffff')
+          // アンテナ柱: スラスターと同じオレンジで発光
+          mat.color.set('#ffaa44')
+          mat.emissive.set('#ff6633')
           mat.emissiveIntensity = 15
           mat.metalness = 0
           mat.roughness = 0.4
