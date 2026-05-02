@@ -189,7 +189,7 @@ function GLBRobot({
         // 他の emissive マテリアル（スラスターのリングなど）も Bloom で光らせる
         // 閾値（10）を超える値にして、HDR 維持で halo が出るように
         if (mat.emissive && mat.emissive.getHex() !== 0x000000) {
-          mat.emissiveIntensity = 20
+          mat.emissiveIntensity = 12
           mat.toneMapped = false
         }
       })
@@ -398,10 +398,12 @@ export function RobotScene({
 
       <EffectComposer>
         <Bloom
-          intensity={3}
+          intensity={2}
           luminanceThreshold={10}
           luminanceSmoothing={0.1}
           mipmapBlur
+          radius={0.95}
+          levels={12}
         />
       </EffectComposer>
 
