@@ -186,10 +186,10 @@ function GLBRobot({
           // ベース色の明度を持ち上げて見た目を明るく
           mat.color.setHSL(hsl.h, hsl.s, Math.min(hsl.l + 0.2, 0.9))
         }
-        // 他の emissive マテリアル（スラスターのリングなど）は控えめに発光
-        // アンテナ球だけは Bloom 対象にしたいので toneMapped=true で HDR 化はしない
+        // 他の emissive マテリアル（スラスターのリングなど）はほんのり発光
+        // ハロ・輪郭が出ないよう intensity 低め + toneMapped=true
         if (mat.emissive && mat.emissive.getHex() !== 0x000000) {
-          mat.emissiveIntensity = 5
+          mat.emissiveIntensity = 2
           mat.toneMapped = true
         }
       })
