@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, Suspense } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useGLTF, useAnimations, Float } from '@react-three/drei'
+import { useGLTF, useAnimations } from '@react-three/drei'
 import * as THREE from 'three'
 import type { RobotState } from '../App'
 
@@ -341,20 +341,6 @@ export function RobotScene({
   isConnected: boolean
   velocityRef?: React.RefObject<Velocity>
 }) {
-  // 移動中／停止中の2値だけ管理（速度の連続値を State に持つとガタガタの原因になる）
-  const [isMoving, setIsMoving] = useState(false)
-
-  useEffect(() => {
-    const off = window.electronAPI?.onRobotVelocity?.((v) => {
-      setIsMoving((prev) => {
-        if (v.speed > 30 && !prev) return true
-        if (v.speed < 8 && prev) return false
-        return prev
-      })
-    })
-    return () => off?.()
-  }, [])
-
   return (
     <Canvas
       camera={{ position: [-6.11, 1.8, -2.22], fov: 35 }}
@@ -384,13 +370,7 @@ export function RobotScene({
       {/* 胴体下部のオレンジグロー */}
       <pointLight position={[0, -1, 0]} intensity={2} color="#ff6633" distance={3} />
 
-      <Float
-        speed={isMoving ? 2.5 : (state === 'idle' ? 1.5 : 0.5)}
-        rotationIntensity={0}
-        floatIntensity={isMoving ? 0.7 : (state === 'idle' ? 0.5 : 0.1)}
-      >
-        <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
-      </Float>
+      <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
 
     </Canvas>
   )
