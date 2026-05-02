@@ -16,6 +16,7 @@ function getAntennaColor(isConnected: boolean, state: RobotState): string {
 }
 
 type Velocity = { vx: number; vy: number; speed: number }
+const FEET_TILT_PIVOT_NAME = 'feet_tilt_pivot'
 
 // ========== Placeholder robot ==========
 
@@ -115,7 +116,7 @@ function GLBRobot({
   const antennaMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
   const antennaLightRef = useRef<THREE.PointLight>(null)
   const antennaPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1.5, 0))
-  const feetRef = useRef<THREE.Object3D | null>(null)
+  const feetTiltRef = useRef<THREE.Object3D | null>(null)
   // 移動状態のステートマシン: idle / moving / returning
   // idle: 完全に手を出さない（Blenderアニメに任せる）
   // moving: 進行方向に傾ける
@@ -129,9 +130,31 @@ function GLBRobot({
     box.getCenter(center)
     scene.position.sub(center)
 
+    const feet = scene.getObjectByName('feet')
+    if (feet) {
+      if (feet.parent?.name === FEET_TILT_PIVOT_NAME) {
+        feetTiltRef.current = feet.parent
+      } else if (feet.parent) {
+        const parent = feet.parent
+        const pivot = new THREE.Group()
+        pivot.name = FEET_TILT_PIVOT_NAME
+        pivot.position.copy(feet.position)
+        pivot.quaternion.copy(feet.quaternion)
+        pivot.scale.copy(feet.scale)
+        parent.add(pivot)
+        pivot.add(feet)
+        feet.position.set(0, 0, 0)
+        feet.quaternion.identity()
+        feet.scale.set(1, 1, 1)
+        feetTiltRef.current = pivot
+      }
+    }
+
     // body_6 / body_7 が眼球本体（レンズと縁）。真っ黒に上書きする。
     // body_5 (mat: "eye hilight(ball)") は目のハイライトなので残す。
     const EYE_MESH_NAMES = new Set(['body_6', 'body_7'])
+    // body_1 / body_3 がアンテナの縦柱。黒すぎるので発光させる。
+    const ANTENNA_POLE_NAMES = new Set(['body_1', 'body_3'])
 
     // アンテナ球を位置ヒューリスティックで特定（最も高いY座標のメッシュ）
     let highestY = -Infinity
@@ -139,13 +162,9 @@ function GLBRobot({
 
     const hsl = { h: 0, s: 0, l: 0 }
     scene.traverse((obj) => {
-      // feet ノードを取得（スラスター4つをまとめたノード）
-      if (obj.name === 'feet') {
-        feetRef.current = obj
-      }
-
       if (!(obj instanceof THREE.Mesh)) return
       const isEyeMesh = EYE_MESH_NAMES.has(obj.name)
+      const isAntennaPole = ANTENNA_POLE_NAMES.has(obj.name)
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
       mats.forEach((mat) => {
         if (!(mat instanceof THREE.MeshStandardMaterial)) return
@@ -156,6 +175,16 @@ function GLBRobot({
           mat.metalness = 0.3
           mat.roughness = 0.15
           mat.toneMapped = true
+          return
+        }
+        if (isAntennaPole) {
+          // 黒すぎて見えないアンテナ柱を発光させる（薄いシアン）
+          mat.color.set('#88ccdd')
+          mat.emissive.set('#44aacc')
+          mat.emissiveIntensity = 3
+          mat.metalness = 0.7
+          mat.roughness = 0.3
+          mat.toneMapped = false
           return
         }
         // グレー系（低彩度）のマテリアルは反射を抑えつつ明るくする
@@ -238,19 +267,19 @@ function GLBRobot({
       const targetRotZ =  THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * MAX_TILT
       group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, targetRotX, 0.08)
       group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, targetRotZ, 0.08)
-      if (feetRef.current) {
+      if (feetTiltRef.current) {
         const thrustTiltX =  THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * 0.3
         const thrustTiltZ = -THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * 0.3
-        feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, thrustTiltX, 0.08)
-        feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, thrustTiltZ, 0.08)
+        feetTiltRef.current.rotation.x = THREE.MathUtils.lerp(feetTiltRef.current.rotation.x, thrustTiltX, 0.08)
+        feetTiltRef.current.rotation.z = THREE.MathUtils.lerp(feetTiltRef.current.rotation.z, thrustTiltZ, 0.08)
       }
     } else if (phaseRef.current === 'returning') {
       // 0に戻す。十分小さくなったら idle に遷移して以降は触らない
       group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, 0.1)
       group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, 0.1)
-      if (feetRef.current) {
-        feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, 0, 0.1)
-        feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, 0, 0.1)
+      if (feetTiltRef.current) {
+        feetTiltRef.current.rotation.x = THREE.MathUtils.lerp(feetTiltRef.current.rotation.x, 0, 0.1)
+        feetTiltRef.current.rotation.z = THREE.MathUtils.lerp(feetTiltRef.current.rotation.z, 0, 0.1)
       }
       const settled =
         Math.abs(group.current.rotation.x) < 0.005 &&
@@ -258,9 +287,9 @@ function GLBRobot({
       if (settled) {
         group.current.rotation.x = 0
         group.current.rotation.z = 0
-        if (feetRef.current) {
-          feetRef.current.rotation.x = 0
-          feetRef.current.rotation.z = 0
+        if (feetTiltRef.current) {
+          feetTiltRef.current.rotation.x = 0
+          feetTiltRef.current.rotation.z = 0
         }
         phaseRef.current = 'idle'
       }

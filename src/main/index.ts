@@ -90,6 +90,15 @@ let isMuted = false
 let pttActive = false
 let shuttingDown = false
 
+function sendRobotVelocity(vx: number, vy: number, speed: number) {
+  if (!win || win.isDestroyed()) return
+  win.webContents.send('robot-velocity', { vx, vy, speed })
+}
+
+function sendRobotStopped() {
+  sendRobotVelocity(0, 0, 0)
+}
+
 // ========== Settings Window ==========
 
 function openSettingsWindow() {
@@ -576,7 +585,7 @@ function startWandering() {
       // 目標到達。次の目的地を一度だけ予約する
       if (!nextTargetPending) {
         nextTargetPending = true
-        win.webContents.send('robot-velocity', { vx: 0, vy: 0, speed: 0 })
+        sendRobotStopped()
         setTimeout(() => {
           nextTargetPending = false
           pickNewTarget()
@@ -611,12 +620,13 @@ function startWandering() {
       lastVelSend = nowVel
       const vx = (dx / dist) * (moveAmount / dt)
       const vy = (dy / dist) * (moveAmount / dt)
-      win.webContents.send('robot-velocity', { vx, vy, speed: Math.hypot(vx, vy) })
+      sendRobotVelocity(vx, vy, Math.hypot(vx, vy))
     }
   }, 16) // ≒ 60fps
 }
 
 function stopWandering() {
+  sendRobotStopped()
   if (wanderInterval) {
     clearInterval(wanderInterval)
     wanderInterval = null
@@ -634,6 +644,7 @@ function setupContextMenu() {
         label: isWandering ? 'Stop wandering' : 'Resume wandering',
         click: () => {
           isWandering = !isWandering
+          if (!isWandering) sendRobotStopped()
           if (isWandering && !wanderInterval) startWandering()
         },
       },
@@ -748,7 +759,9 @@ registerCoreIpc({
   getOrCreateSearchWindow,
   showWeatherData,
   setWanderingByState: (state: string) => {
-    isWandering = state !== 'listening' && state !== 'speaking' && state !== 'thinking'
+    const shouldWander = state !== 'listening' && state !== 'speaking' && state !== 'thinking'
+    if (!shouldWander) sendRobotStopped()
+    isWandering = shouldWander
   },
   onClickthroughChanged: (enabled: boolean) => {
     if (!win) return
@@ -765,6 +778,7 @@ registerCoreIpc({
     } else {
       win.setIgnoreMouseEvents(false)
       isInteracting = true
+      sendRobotStopped()
     }
   },
 })
