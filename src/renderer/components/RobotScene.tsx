@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, Suspense } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useGLTF, useAnimations } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import type { RobotState } from '../App'
 
@@ -215,7 +216,7 @@ function GLBRobot({
         ? ((antennaMesh as THREE.Mesh).material as THREE.MeshStandardMaterial[])[0]
         : ((antennaMesh as THREE.Mesh).material as THREE.MeshStandardMaterial)
       if (mat instanceof THREE.MeshStandardMaterial) {
-        mat.emissiveIntensity = 60
+        mat.emissiveIntensity = 100
         mat.toneMapped = false
         antennaMatRef.current = mat
       }
@@ -304,7 +305,7 @@ function GLBRobot({
     if (antennaMatRef.current) {
       antennaMatRef.current.emissive.set(antennaColor)
       antennaMatRef.current.color.set(antennaColor)
-      antennaMatRef.current.emissiveIntensity = 60
+      antennaMatRef.current.emissiveIntensity = 100
     }
     if (antennaLightRef.current) {
       antennaLightRef.current.color.set(antennaColor)
@@ -396,6 +397,15 @@ export function RobotScene({
       <pointLight position={[0, -1, 0]} intensity={2} color="#ff6633" distance={3} />
 
       <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
+
+      <EffectComposer>
+        <Bloom
+          intensity={2.5}
+          luminanceThreshold={0.6}
+          luminanceSmoothing={0.5}
+          mipmapBlur
+        />
+      </EffectComposer>
 
     </Canvas>
   )
