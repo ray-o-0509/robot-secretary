@@ -1,0 +1,3 @@
+[submodule "secreat"]
+	path = secreat
+	url = https://github.com/ray-o-0509/robot-secretary-private

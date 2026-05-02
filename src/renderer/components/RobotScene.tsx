@@ -397,26 +397,30 @@ export function RobotScene({
         alpha: true,
         antialias: true,
         toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: 1.6,
+        toneMappingExposure: 2.4,
       }}
     >
       {/* 環境光（全体を明るく持ち上げる） */}
-      <ambientLight intensity={0.6} />
+      <ambientLight intensity={1.2} />
 
       {/* 正面からのキーライト */}
-      <directionalLight position={[2, 3, 4]} intensity={1.6} color="#ffffff" />
+      <directionalLight position={[2, 3, 4]} intensity={3.0} color="#ffffff" />
 
       {/* 反対側からのフィルライト（影を和らげる） */}
-      <directionalLight position={[-3, 2, 2]} intensity={0.9} color="#ffeedd" />
+      <directionalLight position={[-3, 2, 2]} intensity={1.8} color="#ffeedd" />
 
       {/* 上からのリムライト */}
-      <directionalLight position={[0, 5, -2]} intensity={0.7} color="#ddeeff" />
+      <directionalLight position={[0, 5, -2]} intensity={1.4} color="#ddeeff" />
 
       {/* スラスターの青白い下からの反射光 */}
-      <pointLight position={[0, -2, 1]} intensity={3} color="#44aaff" distance={5} />
+      <pointLight position={[0, -2, 1]} intensity={5} color="#44aaff" distance={5} />
 
       {/* 胴体下部のオレンジグロー */}
-      <pointLight position={[0, -1, 0]} intensity={2} color="#ff6633" distance={3} />
+      <pointLight position={[0, -1, 0]} intensity={3.5} color="#ff6633" distance={3} />
+
+      {/* 真下からの赤いライトアップ */}
+      <pointLight position={[0, -3, 0]} intensity={8} color="#ff0000" distance={8} />
+      <pointLight position={[0, -2, 1.5]} intensity={5} color="#cc0000" distance={6} />
 
       <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
 
