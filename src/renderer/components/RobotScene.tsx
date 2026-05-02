@@ -216,6 +216,31 @@ function GLBRobot({
       }
     })
 
+    // === DEBUG: 全メッシュをログ出力 ===
+    // 名前 / bbox / マテリアル名 / emissive を一覧表示
+    console.group('[RobotScene] mesh inventory')
+    scene.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return
+      const bb = new THREE.Box3().setFromObject(obj)
+      const sz = new THREE.Vector3()
+      bb.getSize(sz)
+      const c = new THREE.Vector3()
+      bb.getCenter(c)
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      const matInfo = mats.map((m) => {
+        if (!(m instanceof THREE.MeshStandardMaterial)) return '?'
+        const e = m.emissive
+        const col = m.color
+        return `name='${m.name}' color=#${col.getHexString()} emissive=#${e.getHexString()} (intensity=${m.emissiveIntensity})`
+      }).join(' / ')
+      console.log(
+        `${obj.name.padEnd(12)} ` +
+        `pos=(${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)}) ` +
+        `size=(${sz.x.toFixed(2)},${sz.y.toFixed(2)},${sz.z.toFixed(2)}) | ${matInfo}`
+      )
+    })
+    console.groupEnd()
+
     // アンテナ球マテリアルと位置を保存
     if (antennaMesh) {
       const mat = Array.isArray((antennaMesh as THREE.Mesh).material)
