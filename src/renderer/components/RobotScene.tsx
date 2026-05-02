@@ -400,9 +400,9 @@ export function RobotScene({
 
       <EffectComposer>
         <Bloom
-          intensity={2.5}
-          luminanceThreshold={0.6}
-          luminanceSmoothing={0.5}
+          intensity={3}
+          luminanceThreshold={10}
+          luminanceSmoothing={0.1}
           mipmapBlur
         />
       </EffectComposer>
