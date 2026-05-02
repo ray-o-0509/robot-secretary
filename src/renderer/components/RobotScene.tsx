@@ -154,8 +154,6 @@ function GLBRobot({
     // body_6 / body_7 が眼球本体（レンズと縁）。真っ黒に上書きする。
     // body_5 (mat: "eye hilight(ball)") は目のハイライトなので残す。
     const EYE_MESH_NAMES = new Set(['body_6', 'body_7'])
-    // body_1 / body_3 がアンテナの縦柱（発光させない）
-    const ANTENNA_POLE_NAMES = new Set(['body_1', 'body_3'])
     // body_2 がアンテナ先端の球（発光対象）
     const ANTENNA_BALL_NAME = 'body_2'
 
@@ -167,7 +165,6 @@ function GLBRobot({
     scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return
       const isEyeMesh = EYE_MESH_NAMES.has(obj.name)
-      const isAntennaPole = ANTENNA_POLE_NAMES.has(obj.name)
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
       mats.forEach((mat) => {
         if (!(mat instanceof THREE.MeshStandardMaterial)) return
@@ -180,7 +177,6 @@ function GLBRobot({
           mat.toneMapped = true
           return
         }
-        // (アンテナ柱の発光は削除。デフォルトのマテリアルのまま)
         // グレー系（低彩度）のマテリアルは反射を抑えつつ明るくする
         mat.color.getHSL(hsl)
         const isGray = hsl.s < 0.15 && hsl.l > 0.15
@@ -321,8 +317,8 @@ function GLBRobot({
         ref={antennaLightRef}
         position={[p.x, p.y, p.z]}
         color={getAntennaColor(isConnected, state)}
-        intensity={30}
-        distance={6}
+        intensity={12}
+        distance={4}
       />
     </>
   )
