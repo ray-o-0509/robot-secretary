@@ -178,12 +178,12 @@ function GLBRobot({
           return
         }
         if (isAntennaPole) {
-          // 黒すぎて見えないアンテナ柱を発光させる（薄いシアン）
-          mat.color.set('#88ccdd')
-          mat.emissive.set('#44aacc')
-          mat.emissiveIntensity = 3
-          mat.metalness = 0.7
-          mat.roughness = 0.3
+          // アンテナ柱: 強めに発光させる
+          mat.color.set('#ffffff')
+          mat.emissive.set('#00ffff')
+          mat.emissiveIntensity = 15
+          mat.metalness = 0
+          mat.roughness = 0.4
           mat.toneMapped = false
           return
         }
