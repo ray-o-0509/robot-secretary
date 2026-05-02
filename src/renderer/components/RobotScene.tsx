@@ -117,9 +117,9 @@ function GLBRobot({
   // moving: 進行方向に傾ける
   // returning: 0に戻している途中、戻りきったら idle に切り替え
   const phaseRef = useRef<'idle' | 'moving' | 'returning'>('idle')
-  // body_5 = 眼のハイライト。state によって色を変えるため参照を保持
-  const eyeHighlightMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
-  const eyeHighlightDefaultColor = useRef<THREE.Color | null>(null)
+  // body_7 = ハイライト球（白 emissive）。state によって色を変えるため参照を保持
+  const highlightMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
+  const highlightDefaultColor = useRef<THREE.Color | null>(null)
 
   useEffect(() => {
     // バウンディングボックスで自動センタリング
@@ -148,9 +148,11 @@ function GLBRobot({
       }
     }
 
-    // body_6 / body_7 が眼球本体（レンズと縁）。真っ黒に上書きする。
-    // body_5 (mat: "eye hilight(ball)") は目のハイライトなので残す。
-    const EYE_MESH_NAMES = new Set(['body_6', 'body_7'])
+    // body_6 が眼球本体（レンズ）。真っ黒に上書きする。
+    // body_5 (mat: "eye hilight(ball)") は目のハイライト。
+    // body_7 (mat: "マテリアル.001" 白 emissive) は「ハイライト球（額の発光ジュエル）」で、
+    //   listening 時に赤く光らせるためここでは黒塗り対象から除外。
+    const EYE_MESH_NAMES = new Set(['body_6'])
     // body_2 がアンテナ先端の球（発光対象）
     const ANTENNA_BALL_NAME = 'body_2'
 
@@ -190,10 +192,10 @@ function GLBRobot({
           mat.toneMapped = false
         }
 
-        // body_5 = 眼のハイライト。デフォルト色を保存して state で切り替えられるように
-        if (obj.name === 'body_5') {
-          eyeHighlightMatRef.current = mat
-          eyeHighlightDefaultColor.current = mat.emissive.clone()
+        // body_7 = ハイライト球。デフォルト色を保存して state で切り替えられるように
+        if (obj.name === 'body_7') {
+          highlightMatRef.current = mat
+          highlightDefaultColor.current = mat.emissive.clone()
         }
       })
 
@@ -310,11 +312,11 @@ function GLBRobot({
     }
 
     // 眼のハイライト: listening 中は赤、それ以外は元の色（薄い青）
-    if (eyeHighlightMatRef.current && eyeHighlightDefaultColor.current) {
+    if (highlightMatRef.current && highlightDefaultColor.current) {
       if (state === 'listening') {
-        eyeHighlightMatRef.current.emissive.set('#ff4444')
+        highlightMatRef.current.emissive.set('#ff4444')
       } else {
-        eyeHighlightMatRef.current.emissive.copy(eyeHighlightDefaultColor.current)
+        highlightMatRef.current.emissive.copy(highlightDefaultColor.current)
       }
     }
 
