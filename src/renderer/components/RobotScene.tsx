@@ -181,7 +181,7 @@ function GLBRobot({
           // アンテナ柱: ほんのり見える程度のオレンジ
           mat.color.set('#ffaa44')
           mat.emissive.set('#ff6633')
-          mat.emissiveIntensity = 2
+          mat.emissiveIntensity = 0.6
           mat.metalness = 0
           mat.roughness = 0.5
           mat.toneMapped = true
