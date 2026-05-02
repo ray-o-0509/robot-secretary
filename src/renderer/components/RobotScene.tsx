@@ -117,9 +117,10 @@ function GLBRobot({
   // moving: 進行方向に傾ける
   // returning: 0に戻している途中、戻りきったら idle に切り替え
   const phaseRef = useRef<'idle' | 'moving' | 'returning'>('idle')
-  // body_7 = ハイライト球（白 emissive）。state によって色を変えるため参照を保持
+  // ハイライト球。state によって色を変えるため参照を保持
   const highlightMatRef = useRef<THREE.MeshStandardMaterial | null>(null)
   const highlightDefaultColor = useRef<THREE.Color | null>(null)
+  const highlightDefaultEmissive = useRef<THREE.Color | null>(null)
 
   useEffect(() => {
     // バウンディングボックスで自動センタリング
@@ -192,10 +193,12 @@ function GLBRobot({
           mat.toneMapped = false
         }
 
-        // body_7 = ハイライト球。デフォルト色を保存して state で切り替えられるように
-        if (obj.name === 'body_7') {
+        // body_0 = アンテナ根元のハイライト球（base color のみ）
+        // state によって color/emissive を切り替えられるように両方保持
+        if (obj.name === 'body_0') {
           highlightMatRef.current = mat
-          highlightDefaultColor.current = mat.emissive.clone()
+          highlightDefaultColor.current = mat.color.clone()
+          highlightDefaultEmissive.current = mat.emissive.clone()
         }
       })
 
@@ -312,11 +315,15 @@ function GLBRobot({
     }
 
     // 眼のハイライト: listening 中は赤、それ以外は元の色（薄い青）
-    if (highlightMatRef.current && highlightDefaultColor.current) {
+    if (highlightMatRef.current && highlightDefaultColor.current && highlightDefaultEmissive.current) {
       if (state === 'listening') {
-        highlightMatRef.current.emissive.set('#ff4444')
+        highlightMatRef.current.color.set('#ff4444')
+        highlightMatRef.current.emissive.set('#ff2222')
+        highlightMatRef.current.emissiveIntensity = 5
       } else {
-        highlightMatRef.current.emissive.copy(highlightDefaultColor.current)
+        highlightMatRef.current.color.copy(highlightDefaultColor.current)
+        highlightMatRef.current.emissive.copy(highlightDefaultEmissive.current)
+        highlightMatRef.current.emissiveIntensity = 0
       }
     }
 
