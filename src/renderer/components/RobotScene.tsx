@@ -190,9 +190,10 @@ function GLBRobot({
           // ベース色の明度を持ち上げて見た目を明るく
           mat.color.setHSL(hsl.h, hsl.s, Math.min(hsl.l + 0.2, 0.9))
         }
+        // 他の emissive マテリアルは控えめに（アンテナ球だけ強発光させたいので）
         if (mat.emissive && mat.emissive.getHex() !== 0x000000) {
-          mat.emissiveIntensity = 6
-          mat.toneMapped = false // bloomが正しく効くよう HDR値を維持
+          mat.emissiveIntensity = 1
+          mat.toneMapped = true
         }
       })
 
