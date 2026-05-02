@@ -178,13 +178,13 @@ function GLBRobot({
           return
         }
         if (isAntennaPole) {
-          // アンテナ柱: スラスターと同じオレンジで発光
+          // アンテナ柱: ほんのり見える程度のオレンジ
           mat.color.set('#ffaa44')
           mat.emissive.set('#ff6633')
-          mat.emissiveIntensity = 15
+          mat.emissiveIntensity = 2
           mat.metalness = 0
-          mat.roughness = 0.4
-          mat.toneMapped = false
+          mat.roughness = 0.5
+          mat.toneMapped = true
           return
         }
         // グレー系（低彩度）のマテリアルは反射を抑えつつ明るくする
