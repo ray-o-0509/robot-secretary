@@ -193,9 +193,9 @@ function GLBRobot({
           mat.toneMapped = false
         }
 
-        // body_0 = アンテナ根元のハイライト球（base color のみ）
-        // state によって color/emissive を切り替えられるように両方保持
-        if (obj.name === 'body_0') {
+        // body_4 = 眼の上の小さい発光球（白 emissive, 4cm立方）
+        // listening 中だけ赤くする
+        if (obj.name === 'body_4') {
           highlightMatRef.current = mat
           highlightDefaultColor.current = mat.color.clone()
           highlightDefaultEmissive.current = mat.emissive.clone()
@@ -340,15 +340,12 @@ function GLBRobot({
     }
 
     // 眼のハイライト: listening 中は赤、それ以外は元の色（薄い青）
-    if (highlightMatRef.current && highlightDefaultColor.current && highlightDefaultEmissive.current) {
+    // body_4 (眼の上の発光球): listening 中は赤、それ以外は元の色（白）
+    if (highlightMatRef.current && highlightDefaultEmissive.current) {
       if (state === 'listening') {
-        highlightMatRef.current.color.set('#ff4444')
-        highlightMatRef.current.emissive.set('#ff2222')
-        highlightMatRef.current.emissiveIntensity = 5
+        highlightMatRef.current.emissive.set('#ff4444')
       } else {
-        highlightMatRef.current.color.copy(highlightDefaultColor.current)
         highlightMatRef.current.emissive.copy(highlightDefaultEmissive.current)
-        highlightMatRef.current.emissiveIntensity = 0
       }
     }
 
