@@ -153,8 +153,10 @@ function GLBRobot({
     // body_6 / body_7 が眼球本体（レンズと縁）。真っ黒に上書きする。
     // body_5 (mat: "eye hilight(ball)") は目のハイライトなので残す。
     const EYE_MESH_NAMES = new Set(['body_6', 'body_7'])
-    // body_1 / body_3 がアンテナの縦柱。黒すぎるので発光させる。
+    // body_1 / body_3 がアンテナの縦柱（発光させない）
     const ANTENNA_POLE_NAMES = new Set(['body_1', 'body_3'])
+    // body_2 がアンテナ先端の球（発光対象）
+    const ANTENNA_BALL_NAME = 'body_2'
 
     // アンテナ球を位置ヒューリスティックで特定（最も高いY座標のメッシュ）
     let highestY = -Infinity
@@ -177,16 +179,7 @@ function GLBRobot({
           mat.toneMapped = true
           return
         }
-        if (isAntennaPole) {
-          // アンテナ柱: ほんのり見える程度のオレンジ
-          mat.color.set('#ffaa44')
-          mat.emissive.set('#ff6633')
-          mat.emissiveIntensity = 0.6
-          mat.metalness = 0
-          mat.roughness = 0.5
-          mat.toneMapped = true
-          return
-        }
+        // (アンテナ柱の発光は削除。デフォルトのマテリアルのまま)
         // グレー系（低彩度）のマテリアルは反射を抑えつつ明るくする
         mat.color.getHSL(hsl)
         const isGray = hsl.s < 0.15 && hsl.l > 0.15
@@ -202,8 +195,11 @@ function GLBRobot({
         }
       })
 
-      // アンテナ球候補: 眼球以外で最も高いメッシュ
-      if (!isEyeMesh) {
+      // アンテナ球: 名前で確定（body_2）+ 高さヒューリスティックでフォールバック
+      if (obj.name === ANTENNA_BALL_NAME) {
+        antennaMesh = obj
+        highestY = Infinity // これ以降の上書きを防ぐ
+      } else if (!isEyeMesh && highestY !== Infinity) {
         const box = new THREE.Box3().setFromObject(obj)
         const centerY = (box.min.y + box.max.y) / 2
         if (centerY > highestY) {
