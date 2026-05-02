@@ -186,11 +186,11 @@ function GLBRobot({
           // ベース色の明度を持ち上げて見た目を明るく
           mat.color.setHSL(hsl.h, hsl.s, Math.min(hsl.l + 0.2, 0.9))
         }
-        // 他の emissive マテリアル（スラスターのリングなど）はほんのり発光
-        // ハロ・輪郭が出ないよう intensity 低め + toneMapped=true
+        // 他の emissive マテリアル（スラスターのリングなど）も Bloom で光らせる
+        // 閾値（10）を超える値にして、HDR 維持で halo が出るように
         if (mat.emissive && mat.emissive.getHex() !== 0x000000) {
-          mat.emissiveIntensity = 2
-          mat.toneMapped = true
+          mat.emissiveIntensity = 10
+          mat.toneMapped = false
         }
       })
 
