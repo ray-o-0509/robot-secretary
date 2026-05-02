@@ -5,10 +5,9 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import type { RobotState } from '../App'
 
-// アンテナ球は接続状態・ロボット状態に依らず常に固定色（緑）
-const ANTENNA_COLOR = '#44ff88'
-function getAntennaColor(_isConnected: boolean, _state: RobotState): string {
-  return ANTENNA_COLOR
+// アンテナ球の色は接続状態のみに連動: 接続中=緑 / 切断=赤
+function getAntennaColor(isConnected: boolean, _state: RobotState): string {
+  return isConnected ? '#44ff88' : '#ff4444'
 }
 
 type Velocity = { vx: number; vy: number; speed: number }
