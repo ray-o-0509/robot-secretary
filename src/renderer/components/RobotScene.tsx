@@ -398,12 +398,12 @@ export function RobotScene({
 
       <EffectComposer>
         <Bloom
-          intensity={2}
+          intensity={4}
           luminanceThreshold={10}
           luminanceSmoothing={0.1}
           mipmapBlur
-          radius={0.95}
-          levels={12}
+          radius={1.0}
+          levels={16}
         />
       </EffectComposer>
 
