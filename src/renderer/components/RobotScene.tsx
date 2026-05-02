@@ -209,7 +209,7 @@ function GLBRobot({
         ? ((antennaMesh as THREE.Mesh).material as THREE.MeshStandardMaterial[])[0]
         : ((antennaMesh as THREE.Mesh).material as THREE.MeshStandardMaterial)
       if (mat instanceof THREE.MeshStandardMaterial) {
-        mat.emissiveIntensity = 100
+        mat.emissiveIntensity = 12
         mat.toneMapped = false
         antennaMatRef.current = mat
       }
@@ -298,7 +298,7 @@ function GLBRobot({
     if (antennaMatRef.current) {
       antennaMatRef.current.emissive.set(antennaColor)
       antennaMatRef.current.color.set(antennaColor)
-      antennaMatRef.current.emissiveIntensity = 100
+      antennaMatRef.current.emissiveIntensity = 12
     }
     if (antennaLightRef.current) {
       antennaLightRef.current.color.set(antennaColor)
@@ -313,8 +313,8 @@ function GLBRobot({
         ref={antennaLightRef}
         position={[p.x, p.y, p.z]}
         color={getAntennaColor(isConnected, state)}
-        intensity={12}
-        distance={4}
+        intensity={3}
+        distance={2}
       />
     </>
   )
