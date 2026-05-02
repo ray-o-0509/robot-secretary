@@ -116,6 +116,11 @@ function GLBRobot({
   const antennaLightRef = useRef<THREE.PointLight>(null)
   const antennaPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1.5, 0))
   const feetRef = useRef<THREE.Object3D | null>(null)
+  // 移動状態のステートマシン: idle / moving / returning
+  // idle: 完全に手を出さない（Blenderアニメに任せる）
+  // moving: 進行方向に傾ける
+  // returning: 0に戻している途中、戻りきったら idle に切り替え
+  const phaseRef = useRef<'idle' | 'moving' | 'returning'>('idle')
 
   useEffect(() => {
     // バウンディングボックスで自動センタリング
@@ -217,13 +222,52 @@ function GLBRobot({
     const MAX_SPEED = 400
     const MAX_TILT = 0.2
 
-    // 胴体を進行方向へ傾ける
-    const targetRotX = vel.speed > 5 ? -THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * MAX_TILT : 0
-    const targetRotZ = vel.speed > 5 ?  THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * MAX_TILT : 0
-    const lerpFactor = vel.speed > 5 ? 0.06 : 0.04
-    group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, targetRotX, lerpFactor)
-    group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, targetRotZ, lerpFactor)
+    // 移動状態のステートマシン（ヒステリシス付き）
+    const SPEED_START = 30  // この速度を超えたら moving 開始
+    const SPEED_STOP = 8    // この速度を下回ったら returning 開始
+    if (vel.speed > SPEED_START) {
+      phaseRef.current = 'moving'
+    } else if (vel.speed < SPEED_STOP && phaseRef.current === 'moving') {
+      phaseRef.current = 'returning'
+    }
 
+    // === 移動アニメーション（フェーズ別に分離） ===
+    if (phaseRef.current === 'moving') {
+      // 胴体を進行方向に傾ける
+      const targetRotX = -THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * MAX_TILT
+      const targetRotZ =  THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * MAX_TILT
+      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, targetRotX, 0.08)
+      group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, targetRotZ, 0.08)
+      if (feetRef.current) {
+        const thrustTiltX =  THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * 0.3
+        const thrustTiltZ = -THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * 0.3
+        feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, thrustTiltX, 0.08)
+        feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, thrustTiltZ, 0.08)
+      }
+    } else if (phaseRef.current === 'returning') {
+      // 0に戻す。十分小さくなったら idle に遷移して以降は触らない
+      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, 0.1)
+      group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, 0.1)
+      if (feetRef.current) {
+        feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, 0, 0.1)
+        feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, 0, 0.1)
+      }
+      const settled =
+        Math.abs(group.current.rotation.x) < 0.005 &&
+        Math.abs(group.current.rotation.z) < 0.005
+      if (settled) {
+        group.current.rotation.x = 0
+        group.current.rotation.z = 0
+        if (feetRef.current) {
+          feetRef.current.rotation.x = 0
+          feetRef.current.rotation.z = 0
+        }
+        phaseRef.current = 'idle'
+      }
+    }
+    // idle フェーズ: rotation には一切触らない（Blender アニメが自由に動く）
+
+    // === 状態別アニメーション（速度とは独立、常時動作） ===
     if (state === 'speaking') {
       group.current.position.y = Math.sin(Date.now() * 0.02) * 0.05
     } else {
@@ -239,14 +283,6 @@ function GLBRobot({
     }
     if (antennaLightRef.current) {
       antennaLightRef.current.color.set(antennaColor)
-    }
-
-    // スラスター（feet ノード）: 進行方向と逆に傾くのみ（回転はBlenderアニメに任せる）
-    if (feetRef.current) {
-      const thrustTiltX = vel.speed > 5 ?  THREE.MathUtils.clamp(vel.vy / MAX_SPEED, -1, 1) * 0.3 : 0
-      const thrustTiltZ = vel.speed > 5 ? -THREE.MathUtils.clamp(vel.vx / MAX_SPEED, -1, 1) * 0.3 : 0
-      feetRef.current.rotation.x = THREE.MathUtils.lerp(feetRef.current.rotation.x, thrustTiltX, 0.06)
-      feetRef.current.rotation.z = THREE.MathUtils.lerp(feetRef.current.rotation.z, thrustTiltZ, 0.06)
     }
   })
 
@@ -305,11 +341,16 @@ export function RobotScene({
   isConnected: boolean
   velocityRef?: React.RefObject<Velocity>
 }) {
-  const [floatBoost, setFloatBoost] = useState(0)
+  // 移動中／停止中の2値だけ管理（速度の連続値を State に持つとガタガタの原因になる）
+  const [isMoving, setIsMoving] = useState(false)
 
   useEffect(() => {
     const off = window.electronAPI?.onRobotVelocity?.((v) => {
-      setFloatBoost(Math.min(v.speed / 400, 1))
+      setIsMoving((prev) => {
+        if (v.speed > 30 && !prev) return true
+        if (v.speed < 8 && prev) return false
+        return prev
+      })
     })
     return () => off?.()
   }, [])
@@ -344,9 +385,9 @@ export function RobotScene({
       <pointLight position={[0, -1, 0]} intensity={2} color="#ff6633" distance={3} />
 
       <Float
-        speed={state === 'idle' ? 1.5 + floatBoost * 2.0 : 0.5 + floatBoost * 1.0}
+        speed={isMoving ? 2.5 : (state === 'idle' ? 1.5 : 0.5)}
         rotationIntensity={0}
-        floatIntensity={state === 'idle' ? 0.5 + floatBoost * 0.4 : 0.1 + floatBoost * 0.2}
+        floatIntensity={isMoving ? 0.7 : (state === 'idle' ? 0.5 : 0.1)}
       >
         <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
       </Float>
