@@ -1,6 +1,8 @@
 import { ipcMain, shell, type BrowserWindow } from 'electron'
+import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 type Deps = {
   getDisplayWindow: () => BrowserWindow | null
@@ -31,10 +33,86 @@ function formatVoiceLine(command: string, stdout: string, stderr: string): strin
   return head + out + err
 }
 
+function looksLikeClaudeCodePrompt(buffer: string): boolean {
+  const tail = buffer.slice(-8000)
+  return tail.includes('Claude Code') && (
+    tail.includes('bypass permissions on') ||
+    tail.includes('Try "') ||
+    tail.includes('bypass permissions')
+  )
+}
+
+// Walk descendants of `rootPid` and return true if any process's argv looks like Claude Code.
+// Authoritative: catches cc even before the welcome banner reaches the scrollback.
+function hasClaudeDescendant(rootPid: number): boolean {
+  try {
+    const out = execFileSync('ps', ['-axo', 'pid=,ppid=,args='], { encoding: 'utf8', timeout: 1000 })
+    type Proc = { pid: number; ppid: number; args: string }
+    const procs: Proc[] = []
+    for (const line of out.split('\n')) {
+      const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/)
+      if (m) procs.push({ pid: Number(m[1]), ppid: Number(m[2]), args: m[3] })
+    }
+    const childrenOf = new Map<number, Proc[]>()
+    for (const p of procs) {
+      const arr = childrenOf.get(p.ppid) ?? []
+      arr.push(p)
+      childrenOf.set(p.ppid, arr)
+    }
+    // Match the Claude Code binary (claude or .../bin/claude), avoiding stray "claude" in unrelated paths.
+    const isClaude = (args: string) => /(?:^|\/)claude(?:\s|$|\b)/.test(args)
+    const stack = [rootPid]
+    const seen = new Set<number>()
+    while (stack.length) {
+      const pid = stack.pop()!
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      for (const child of childrenOf.get(pid) ?? []) {
+        if (isClaude(child.args)) return true
+        stack.push(child.pid)
+      }
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
 export function registerCoreIpc(deps: Deps): void {
   let chatHideTimer: ReturnType<typeof setTimeout> | null = null
   let currentCwd = homedir()
   let currentRobotState = 'idle'
+  let lastEmailSearch: { query: string; maxResults: number; account: string | undefined } | null = null
+  let lastDriveSearch: { query: string; mimeType: string | undefined; maxResults: number | undefined; account: string | undefined } | null = null
+
+  // Re-fetch and push whatever panel the user is currently viewing. Called after any
+  // state-mutating tool so the visible screen reflects the new state without a manual reload.
+  // Skips if the display window is hidden or destroyed (no point fetching for nobody).
+  async function refreshActivePanel() {
+    const w = deps.getDisplayWindow()
+    if (!w || w.isDestroyed() || !w.isVisible()) return
+    const { getCurrentPanelType, fetchPanelData, pushPayload, isPanelType } = await import('../display/show-panel')
+    const active = getCurrentPanelType()
+    if (!active) return
+    // Search panels need their original query replayed; fetchPanelData has no state for them.
+    if (active === 'email_search') {
+      if (!lastEmailSearch) return
+      const { searchEmails } = await import('../skills/gmail/index')
+      const data = await searchEmails(lastEmailSearch.query, lastEmailSearch.maxResults, lastEmailSearch.account)
+      pushPayload(w, { type: 'email_search', data, fetchedAt: Date.now() }, deps.isDisplayReady())
+      return
+    }
+    if (active === 'drive_search') {
+      if (!lastDriveSearch) return
+      const { searchDriveFiles } = await import('../skills/drive/index')
+      const data = await searchDriveFiles(lastDriveSearch)
+      pushPayload(w, { type: 'drive_search', data, fetchedAt: Date.now() }, deps.isDisplayReady())
+      return
+    }
+    if (!isPanelType(active)) return
+    const payload = await fetchPanelData(active)
+    pushPayload(w, payload, deps.isDisplayReady())
+  }
 
   function resetChatHideTimer() {
     if (chatHideTimer) clearTimeout(chatHideTimer)
@@ -124,7 +202,11 @@ export function registerCoreIpc(deps: Deps): void {
         toolName === 'complete_task' ||
         toolName === 'complete_subtask' ||
         toolName === 'update_task' ||
+        toolName === 'get_gmail_inbox' ||
+        toolName === 'trash_gmail' ||
+        toolName === 'archive_gmail' ||
         toolName === 'get_email_detail' ||
+        toolName === 'create_calendar_event' ||
         toolName === 'web_search' ||
         toolName === 'get_weather' ||
         toolName === 'list_drive_recent' ||
@@ -151,6 +233,24 @@ export function registerCoreIpc(deps: Deps): void {
             sw.webContents.send('search:data', result)
           }
         }
+        const mutating = new Set([
+          'trash_gmail',
+          'archive_gmail',
+          'create_calendar_event',
+          'create_task',
+          'complete_task',
+          'complete_subtask',
+          'update_task',
+          'create_drive_file',
+          'upload_drive_file',
+          'move_drive_item',
+          'copy_drive_item',
+          'trash_drive_item',
+          'share_drive_item',
+        ])
+        if (mutating.has(toolName)) {
+          await refreshActivePanel()
+        }
         return { result }
       }
       if (toolName === 'show_panel') {
@@ -167,6 +267,7 @@ export function registerCoreIpc(deps: Deps): void {
         const account = typeof args.account === 'string' ? args.account : undefined
         if (!query) return { error: 'query is required' }
         const result = await searchEmails(query, maxResults, account)
+        lastEmailSearch = { query, maxResults, account }
         const { win, ready } = await deps.getOrCreateDisplayWindow()
         win.show()
         pushPayload(win, { type: 'email_search', data: result, fetchedAt: Date.now() }, ready)
@@ -181,12 +282,14 @@ export function registerCoreIpc(deps: Deps): void {
         const { pushPayload } = await import('../display/show-panel')
         const query = String(args.query ?? '').trim()
         if (!query) return { error: 'query is required' }
-        const result = await searchDriveFiles({
+        const driveSearchArgs = {
           query,
           mimeType: typeof args.mimeType === 'string' ? args.mimeType : undefined,
           maxResults: typeof args.maxResults === 'number' ? args.maxResults : undefined,
           account: typeof args.account === 'string' ? args.account : undefined,
-        })
+        }
+        const result = await searchDriveFiles(driveSearchArgs)
+        lastDriveSearch = driveSearchArgs
         const { win, ready } = await deps.getOrCreateDisplayWindow()
         win.show()
         pushPayload(win, { type: 'drive_search', data: result, fetchedAt: Date.now() }, ready)
@@ -217,7 +320,8 @@ export function registerCoreIpc(deps: Deps): void {
       if (toolName === 'cd') {
         const raw = String(args.path ?? '').trim()
         if (!raw) return { error: 'path is required' }
-        const target = raw.startsWith('~') ? raw.replace('~', homedir()) : raw
+        const expanded = raw === '~' || raw.startsWith('~/') ? path.join(homedir(), raw.slice(2)) : raw
+        const target = path.resolve(currentCwd, expanded)
 
         // Verify the target before changing state. If this returns an error, the caller
         // (Gemini) will see it and can retry with a corrected path.
@@ -239,23 +343,59 @@ export function registerCoreIpc(deps: Deps): void {
         currentCwd = target
         ptyMod?.ptyWrite(`\x15cd ${shellQuote(currentCwd)}\n`)
         await showTerminalPanel()
-        return { cwd: currentCwd, contents: ls.stdout }
+        return { ok: true, cwd: currentCwd, contents: ls.stdout, lsOk: ls.ok, lsExitCode: ls.exitCode, lsStderr: ls.stderr }
       }
       if (toolName === 'run_command') {
         const { runCommand } = await import('../skills/shell/index')
         const command = String(args.command ?? '')
         const cwd = (args.cwd as string | undefined) ?? currentCwd
+        if (/^\s*(claude|cc)(\s|$)/.test(command)) {
+          return { error: 'Claude Code commands are not allowed through run_command. Use run_claude for code work.' }
+        }
         const result = await runCommand(command, cwd)
         await injectAndShowTerminal(command, result.stdout, result.stderr)
         return { result }
       }
       if (toolName === 'run_claude') {
-        const { runClaude } = await import('../skills/shell/index')
         const prompt = String(args.prompt ?? '')
         const cwd = (args.cwd as string | undefined) ?? currentCwd
-        const result = await runClaude(prompt, cwd)
-        await injectAndShowTerminal(`claude -p "${prompt}"`, String(result.result ?? ''), '')
-        return { result }
+        const runId = `claude-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        _event.sender.send('claude:run:start', { runId, cwd, prompt })
+        await showTerminalPanel()
+        if (!ptyMod) return { error: 'terminal is not ready' }
+        const pastePrompt = () => {
+          // Bracketed paste lets Claude Code receive multiline prompts as one paste.
+          ptyMod?.ptyWrite(`\x1b[200~${prompt}\x1b[201~\r`)
+        }
+
+        // Process check is authoritative; buffer heuristic is the fallback (process check
+        // can fail if `ps` is sandboxed or cc was launched outside this PTY's process tree).
+        const shellPid = ptyMod?.ptyPid?.() ?? null
+        const ccActive =
+          (shellPid !== null && hasClaudeDescendant(shellPid)) ||
+          looksLikeClaudeCodePrompt(ptyMod?.ptyGetBuffer() ?? '')
+
+        if (ccActive) {
+          pastePrompt()
+        } else {
+          ptyMod?.ptyWrite(`\x15cd ${shellQuote(cwd)}\ncc\n`)
+          setTimeout(pastePrompt, 1500)
+        }
+
+        _event.sender.send('claude:run:done', {
+          runId,
+          exitCode: 0,
+          durationMs: 0,
+        })
+        await showTerminalPanel()
+        return {
+          result: {
+            ok: true,
+            mode: 'interactive-pty',
+            cwd,
+            message: 'Claude Codeへ入力しました。完了結果はターミナルパネルで確認してください。',
+          },
+        }
       }
       if (
         toolName === 'start_timer' ||
@@ -320,6 +460,7 @@ export function registerCoreIpc(deps: Deps): void {
   ipcMain.on('display:close', () => {
     const w = deps.getDisplayWindow()
     if (w && !w.isDestroyed()) w.hide()
+    import('../display/show-panel').then(({ clearCurrentPanelType }) => clearCurrentPanelType())
   })
 
   ipcMain.handle('display:refresh', async (_event, type: unknown) => {

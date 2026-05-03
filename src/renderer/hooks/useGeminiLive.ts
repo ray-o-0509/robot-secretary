@@ -12,7 +12,7 @@ const secretaryTools = [
   {
     name: 'delegate_task',
     description:
-      'Delegate tasks to a Claude agent: checking Gmail, Google Calendar, screen contents, complex summarization, or cross-cutting research. Use this for everything except task management (get_tasks/create_task/complete_task).',
+      'Delegate read-only or analytical work to a Claude agent: checking Gmail, Google Calendar, screen contents, complex summarization, or cross-cutting research. Do not use this for code edits; use run_claude for code. Do not use this for destructive actions like deleting or archiving email; use the dedicated Gmail tools.',
     parameters: {
       type: 'object',
       properties: {
@@ -35,7 +35,7 @@ const secretaryTools = [
   },
   {
     name: 'create_task',
-    description: 'Create a new task in TickTick. If projectId is omitted, the task goes to inbox.',
+    description: 'Create one or more tasks in TickTick. If projectId is omitted, the task goes to inbox. Use tasks for batch creation.',
     parameters: {
       type: 'object',
       properties: {
@@ -43,20 +43,80 @@ const secretaryTools = [
         due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional; use "high" for urgent/important)' },
         projectId: { type: 'string', description: 'Project ID (optional; omit to use inbox)' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId' },
       },
-      required: ['title'],
     },
   },
   {
     name: 'complete_task',
-    description: 'Mark a TickTick task as complete. Requires taskId and projectId obtained beforehand via get_tasks.',
+    description: 'Mark one or more TickTick tasks as complete. Requires taskId and projectId obtained beforehand via get_tasks. Use tasks for batch completion.',
     parameters: {
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Task ID (from get_tasks result)' },
         projectId: { type: 'string', description: 'Project ID (from get_tasks result)' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to complete, each with taskId and projectId' },
       },
-      required: ['taskId', 'projectId'],
+    },
+  },
+  {
+    name: 'get_gmail_inbox',
+    description:
+      'Fetch Gmail inbox messages across registered accounts. Use this to get message ids and account values before trash_gmail, archive_gmail, get_email_detail, or reply flows.',
+    parameters: {
+      type: 'object',
+      properties: {
+        maxResults: { type: 'number', description: 'Maximum messages per account (default 100)' },
+        account: { type: 'string', description: 'Optional email account to restrict to' },
+      },
+    },
+  },
+  {
+    name: 'trash_gmail',
+    description:
+      'Move one or more Gmail messages to trash. Use this for user-approved email deletion/trashing instead of run_claude or shell commands. Requires message ids and account from Gmail lookup results. Use account+ids for one account, or targets for messages across multiple accounts.',
+    parameters: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Email account address from Gmail results' },
+        ids: { type: 'array', items: { type: 'string' }, description: 'Message IDs to move to trash' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              account: { type: 'string', description: 'Email account address from Gmail results' },
+              id: { type: 'string', description: 'Message ID to move to trash' },
+            },
+            required: ['account', 'id'],
+          },
+          description: 'Messages to trash across multiple Gmail accounts',
+        },
+      },
+    },
+  },
+  {
+    name: 'archive_gmail',
+    description:
+      'Archive one or more Gmail messages by removing them from the inbox. Use this for user-approved email archiving instead of run_claude or shell commands. Requires message ids and account from Gmail lookup results. Use account+ids for one account, or targets for messages across multiple accounts.',
+    parameters: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Email account address from Gmail results' },
+        ids: { type: 'array', items: { type: 'string' }, description: 'Message IDs to archive' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              account: { type: 'string', description: 'Email account address from Gmail results' },
+              id: { type: 'string', description: 'Message ID to archive' },
+            },
+            required: ['account', 'id'],
+          },
+          description: 'Messages to archive across multiple Gmail accounts',
+        },
+      },
     },
   },
   {
@@ -84,7 +144,7 @@ const secretaryTools = [
   },
   {
     name: 'update_task',
-    description: 'Update the due date, title, or priority of a TickTick task. Confirm taskId and projectId via get_tasks before calling.',
+    description: 'Update the due date, title, or priority of one or more TickTick tasks. Confirm taskId and projectId via get_tasks before calling. Use tasks for batch updates.',
     parameters: {
       type: 'object',
       properties: {
@@ -93,8 +153,8 @@ const secretaryTools = [
         title: { type: 'string', description: 'New title (if changing)' },
         due: { type: 'string', description: 'New due date YYYY-MM-DD. Pass null to clear the due date.' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple task updates, each with taskId, projectId, and fields to change' },
       },
-      required: ['taskId', 'projectId'],
     },
   },
   {
@@ -106,6 +166,30 @@ const secretaryTools = [
         location: { type: 'string', description: 'Place name (e.g. "Tokyo", "Osaka", "Sapporo")' },
       },
       required: ['location'],
+    },
+  },
+  {
+    name: 'create_calendar_event',
+    description:
+      'Create one or more Google Calendar events. If attendees are specified, a confirmation dialog appears and invites are only sent if the user confirms. Use events for multiple event creation.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Event title' },
+        startDateTime: { type: 'string', description: 'Start date/time (ISO 8601 or YYYY-MM-DD)' },
+        endDateTime: { type: 'string', description: 'End date/time (ISO 8601 or YYYY-MM-DD)' },
+        account: { type: 'string', description: 'Google account email' },
+        allDay: { type: 'boolean', description: 'Set true for all-day events' },
+        location: { type: 'string', description: 'Location' },
+        description: { type: 'string', description: 'Description' },
+        attendees: { type: 'array', items: { type: 'string' }, description: 'Attendee email addresses' },
+        timeZone: { type: 'string', description: 'Time zone' },
+        events: {
+          type: 'array',
+          items: { type: 'object' },
+          description: 'Multiple events to create; each item uses title, startDateTime, endDateTime, and optional account/allDay/location/description/attendees/timeZone',
+        },
+      },
     },
   },
   {
@@ -223,55 +307,59 @@ const secretaryTools = [
   },
   {
     name: 'move_drive_item',
-    description: 'Move a Drive file or folder to a different parent folder. Get fileId and newParentId via list_drive_recent / search_drive first.',
+    description: 'Move one or more Drive files or folders. Use fileIds with one newParentId for a batch into the same folder, or items for per-file destinations/accounts. Get ids via list_drive_recent / search_drive first.',
     parameters: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'File or folder ID to move' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'File or folder IDs to move to the same destination folder' },
         newParentId: { type: 'string', description: 'Destination folder ID' },
         account: { type: 'string', description: 'Google account email' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple move items, each with fileId, newParentId, and optional account' },
       },
-      required: ['fileId', 'newParentId'],
     },
   },
   {
     name: 'copy_drive_item',
-    description: 'Copy a Drive file (paste). Optionally rename and place in a parent folder. Folders cannot be copied through this API.',
+    description: 'Copy one or more Drive files. Optionally rename and place in a parent folder. Folders cannot be copied through this API. Use fileIds for a batch or items for per-file names/parents/accounts.',
     parameters: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'File ID to copy' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'File IDs to copy' },
         newName: { type: 'string', description: 'Optional new name' },
         parentId: { type: 'string', description: 'Optional destination folder ID' },
         account: { type: 'string', description: 'Google account email' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple copy items, each with fileId and optional newName, parentId, account' },
       },
-      required: ['fileId'],
     },
   },
   {
     name: 'trash_drive_item',
-    description: 'Move a Drive file or folder to the trash. Recoverable for 30 days, then Drive purges it. Permanent deletion is not supported.',
+    description: 'Move one or more Drive files or folders to the trash. Recoverable for 30 days, then Drive purges it. Permanent deletion is not supported.',
     parameters: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'File or folder ID to trash' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'File or folder IDs to trash' },
         account: { type: 'string', description: 'Google account email' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple trash items, each with fileId and optional account' },
       },
-      required: ['fileId'],
     },
   },
   {
     name: 'share_drive_item',
-    description: 'Share a Drive file or folder with a specific email address. A confirmation dialog appears and the invite is only sent if the user confirms.',
+    description: 'Share one or more Drive files or folders. A confirmation dialog appears and invites are only sent if the user confirms. Use fileIds for several files to the same recipient/role, or items for per-file recipients/roles.',
     parameters: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'File or folder ID' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'File or folder IDs to share with the same recipient and role' },
         email: { type: 'string', description: 'Email address to share with' },
         role: { type: 'string', enum: ['reader', 'commenter', 'writer'], description: 'Permission level' },
         account: { type: 'string', description: 'Google account email (the owner)' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple share items, each with fileId, email, role, and optional account' },
       },
-      required: ['fileId', 'email', 'role'],
     },
   },
   {
@@ -424,7 +512,7 @@ const secretaryTools = [
   {
     name: 'run_command',
     description:
-      'Run a shell command and display the output on screen. Supports git, ls, cat, npm, and anything else. If cwd is omitted, runs in the current working directory. Results appear in the panel.',
+      'Run a shell command and display the output on screen. Supports git, ls, cat, npm, and anything else. If cwd is omitted, runs in the current working directory. Results appear in the panel. Always inspect ok/exitCode/stdout/stderr before answering. If ok is false, say the command failed and use stderr to explain or retry. Do not use this for persistent directory changes; call the cd tool instead. Do not run Claude Code commands through this tool; use run_claude for code work and dedicated app tools for email/calendar/Drive actions.',
     parameters: {
       type: 'object',
       properties: {
@@ -443,7 +531,7 @@ const secretaryTools = [
   {
     name: 'run_claude',
     description:
-      'Pass a prompt to the Claude Code CLI and execute it. Use when asked to have Claude write or modify code. If cwd is omitted, runs in the current working directory.',
+      'Type a prompt into the interactive Claude Code terminal. If Claude Code is already open, paste the prompt there; otherwise start `cc` in the current working directory and paste the prompt. Use this only for codebase work such as reading code, editing files, debugging, tests, refactors, or reviews. Do not use this for Gmail deletion/archive, calendar changes, Drive operations, tasks, or profile updates; use the dedicated tools. This returns after handing off the prompt; the user should watch the terminal panel for progress and results.',
     parameters: {
       type: 'object',
       properties: {
@@ -460,6 +548,43 @@ const secretaryTools = [
     },
   },
 ]
+
+const OPERATIONAL_PROMPT = `
+[Operational rules - mandatory across all languages]
+You are the front desk. Route work to the narrowest appropriate tool and inspect each tool result before answering.
+
+Direct tools:
+- App launch requests -> open_app. Pass the official English app name.
+- Web lookup/latest/news/general search -> web_search.
+- User profile memory -> update_profile/delete_profile.
+- TickTick tasks -> get_tasks/create_task/complete_task/update_task. Use tasks:[...] for multiple task creates/completions/updates.
+- Weather -> get_weather. Use the current location from the context block when the user does not specify a place.
+- Screen questions -> analyze_screen.
+- Explicit panel display/list/show requests -> show_panel. Use show_panel(tasks) for a visual task list.
+
+Delegation:
+- Read-only or analytical email/calendar/screen/cross-source work can use delegate_task.
+- Actions affecting other people, such as email replies or calendar events with invitees, must use delegate_task because it handles confirmation.
+- Do not use delegate_task for code edits. Use run_claude for codebase work.
+- Do not use delegate_task for Gmail trash/archive. Use the Gmail tools.
+
+Code and shell:
+- Codebase work such as reading code, editing files, debugging, running tests, refactoring, or code review must use run_claude.
+- run_claude types into the interactive Claude Code terminal. It hands off the prompt; it is not a command-result API.
+- Do not use run_claude for Gmail deletion/archive, calendar changes, Drive operations, tasks, profile updates, weather, app launching, or panel display.
+- Directory changes -> cd. Ordinary shell commands such as git status, ls, cat, npm, and build commands -> run_command.
+- Do not run Claude Code commands through run_command.
+
+Gmail and Drive actions:
+- For Gmail trash/archive, first obtain message ids and account values with get_gmail_inbox or search_gmail, then use trash_gmail or archive_gmail. Use one call with account+ids for multiple messages in one account; use one call with targets:[{account,id}] for messages across multiple accounts.
+- For Drive move/copy/trash/share actions, first obtain file ids with list_drive_recent/search_drive/list_drive_folder, then use the dedicated Drive tools. Use fileIds for multiple files with the same options, or items for per-file options/accounts. Do not use run_claude or run_command for Drive actions.
+- For multiple calendar events, use one create_calendar_event call with events:[...]. For attendee invites, the tool handles confirmation.
+
+Tool result handling:
+- After every tool call, inspect the actual result before answering.
+- If a result contains error, ok:false, nonzero exitCode, or stderr, report the failure honestly or retry with corrected inputs.
+- For multi-step tasks, decide the next tool only after seeing the previous tool result.
+`.trim()
 
 
 function buildContextBlock(languageCode: string, location: string): string {
@@ -499,7 +624,7 @@ function getSystemPrompt(languageCode: string, location: string): string {
   else if (languageCode.startsWith('ko')) prompt = KOREAN_SYSTEM_PROMPT
   else if (languageCode.startsWith('en')) prompt = ENGLISH_SYSTEM_PROMPT
   else prompt = JAPANESE_SYSTEM_PROMPT
-  return buildContextBlock(languageCode, location) + '\n\n' + prompt
+  return buildContextBlock(languageCode, location) + '\n\n' + OPERATIONAL_PROMPT + '\n\n' + prompt
 }
 
 async function resolveLocation(): Promise<string> {

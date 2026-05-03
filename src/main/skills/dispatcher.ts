@@ -1,6 +1,174 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { optString, reqString } from './shared/validation'
 
+type GmailTarget = { account: string; id: string }
+type CalendarEventInput = {
+  title: string
+  startDateTime: string
+  endDateTime: string
+  account?: string
+  allDay?: boolean
+  location?: string
+  description?: string
+  attendees?: string[]
+  timeZone?: string
+}
+type DriveMoveInput = { fileId: string; newParentId: string; account?: string }
+type DriveCopyInput = { fileId: string; newName?: string; parentId?: string; account?: string }
+type DriveTrashInput = { fileId: string; account?: string }
+type DriveShareInput = { fileId: string; email: string; role: 'reader' | 'commenter' | 'writer'; account?: string }
+type TaskCreateInput = { title: string; due?: string; priority?: 'low' | 'medium' | 'high'; projectId?: string }
+type TaskRef = { taskId: string; projectId: string }
+type TaskUpdateInput = TaskRef & { title?: string; due?: string | null; priority?: 'low' | 'medium' | 'high' | 'none' }
+
+function gmailTargets(args: Record<string, unknown>): Map<string, string[]> {
+  const grouped = new Map<string, string[]>()
+  if (Array.isArray(args.targets)) {
+    for (const raw of args.targets) {
+      const target = raw as Partial<GmailTarget>
+      if (typeof target.account !== 'string' || typeof target.id !== 'string') continue
+      const ids = grouped.get(target.account) ?? []
+      ids.push(target.id)
+      grouped.set(target.account, ids)
+    }
+  } else {
+    const account = reqString(args, 'account')
+    const ids = Array.isArray(args.ids) ? args.ids.filter((id): id is string => typeof id === 'string') : []
+    if (ids.length) grouped.set(account, ids)
+  }
+  if (grouped.size === 0) throw new Error('Provide either account + ids, or targets: [{ account, id }]')
+  return grouped
+}
+
+function ensureRole(role: string): 'reader' | 'commenter' | 'writer' {
+  if (role !== 'reader' && role !== 'commenter' && role !== 'writer') {
+    throw new Error(`role must be one of: reader, commenter, writer (got "${role}")`)
+  }
+  return role
+}
+
+function calendarEvents(args: Record<string, unknown>): CalendarEventInput[] {
+  if (Array.isArray(args.events)) {
+    return args.events.map((raw) => {
+      const event = raw as Partial<CalendarEventInput>
+      if (typeof event.title !== 'string' || typeof event.startDateTime !== 'string' || typeof event.endDateTime !== 'string') {
+        throw new Error('Each calendar event requires title, startDateTime, and endDateTime')
+      }
+      return event as CalendarEventInput
+    })
+  }
+  return [{
+    title: reqString(args, 'title'),
+    startDateTime: reqString(args, 'startDateTime'),
+    endDateTime: reqString(args, 'endDateTime'),
+    account: optString(args, 'account'),
+    allDay: args.allDay as boolean | undefined,
+    location: optString(args, 'location'),
+    description: optString(args, 'description'),
+    attendees: args.attendees as string[] | undefined,
+    timeZone: optString(args, 'timeZone'),
+  }]
+}
+
+function driveMoveItems(args: Record<string, unknown>): DriveMoveInput[] {
+  if (Array.isArray(args.items)) {
+    return args.items.map((raw) => {
+      const item = raw as Partial<DriveMoveInput>
+      if (typeof item.fileId !== 'string' || typeof item.newParentId !== 'string') throw new Error('Each Drive move item requires fileId and newParentId')
+      return item as DriveMoveInput
+    })
+  }
+  const fileIds = Array.isArray(args.fileIds) ? args.fileIds.filter((id): id is string => typeof id === 'string') : []
+  const newParentId = reqString(args, 'newParentId')
+  if (fileIds.length) return fileIds.map((fileId) => ({ fileId, newParentId, account: optString(args, 'account') }))
+  return [{ fileId: reqString(args, 'fileId'), newParentId, account: optString(args, 'account') }]
+}
+
+function driveCopyItems(args: Record<string, unknown>): DriveCopyInput[] {
+  if (Array.isArray(args.items)) {
+    return args.items.map((raw) => {
+      const item = raw as Partial<DriveCopyInput>
+      if (typeof item.fileId !== 'string') throw new Error('Each Drive copy item requires fileId')
+      return item as DriveCopyInput
+    })
+  }
+  const fileIds = Array.isArray(args.fileIds) ? args.fileIds.filter((id): id is string => typeof id === 'string') : []
+  if (fileIds.length) return fileIds.map((fileId) => ({ fileId, parentId: optString(args, 'parentId'), account: optString(args, 'account') }))
+  return [{ fileId: reqString(args, 'fileId'), newName: optString(args, 'newName'), parentId: optString(args, 'parentId'), account: optString(args, 'account') }]
+}
+
+function driveTrashItems(args: Record<string, unknown>): DriveTrashInput[] {
+  if (Array.isArray(args.items)) {
+    return args.items.map((raw) => {
+      const item = raw as Partial<DriveTrashInput>
+      if (typeof item.fileId !== 'string') throw new Error('Each Drive trash item requires fileId')
+      return item as DriveTrashInput
+    })
+  }
+  const fileIds = Array.isArray(args.fileIds) ? args.fileIds.filter((id): id is string => typeof id === 'string') : []
+  if (fileIds.length) return fileIds.map((fileId) => ({ fileId, account: optString(args, 'account') }))
+  return [{ fileId: reqString(args, 'fileId'), account: optString(args, 'account') }]
+}
+
+function driveShareItems(args: Record<string, unknown>): DriveShareInput[] {
+  if (Array.isArray(args.items)) {
+    return args.items.map((raw) => {
+      const item = raw as Partial<DriveShareInput>
+      if (typeof item.fileId !== 'string' || typeof item.email !== 'string' || typeof item.role !== 'string') throw new Error('Each Drive share item requires fileId, email, and role')
+      return { ...item, role: ensureRole(item.role) } as DriveShareInput
+    })
+  }
+  const fileIds = Array.isArray(args.fileIds) ? args.fileIds.filter((id): id is string => typeof id === 'string') : []
+  const email = reqString(args, 'email')
+  const role = ensureRole(reqString(args, 'role'))
+  if (fileIds.length) return fileIds.map((fileId) => ({ fileId, email, role, account: optString(args, 'account') }))
+  return [{ fileId: reqString(args, 'fileId'), email, role, account: optString(args, 'account') }]
+}
+
+function taskCreates(args: Record<string, unknown>): TaskCreateInput[] {
+  if (Array.isArray(args.tasks)) {
+    return args.tasks.map((raw) => {
+      const task = raw as Partial<TaskCreateInput>
+      if (typeof task.title !== 'string') throw new Error('Each task requires title')
+      return task as TaskCreateInput
+    })
+  }
+  return [{
+    title: reqString(args, 'title'),
+    due: optString(args, 'due'),
+    priority: args.priority as 'low' | 'medium' | 'high' | undefined,
+    projectId: optString(args, 'projectId'),
+  }]
+}
+
+function taskRefs(args: Record<string, unknown>): TaskRef[] {
+  if (Array.isArray(args.tasks)) {
+    return args.tasks.map((raw) => {
+      const task = raw as Partial<TaskRef>
+      if (typeof task.taskId !== 'string' || typeof task.projectId !== 'string') throw new Error('Each task requires taskId and projectId')
+      return task as TaskRef
+    })
+  }
+  return [{ taskId: reqString(args, 'taskId'), projectId: reqString(args, 'projectId') }]
+}
+
+function taskUpdates(args: Record<string, unknown>): TaskUpdateInput[] {
+  if (Array.isArray(args.tasks)) {
+    return args.tasks.map((raw) => {
+      const task = raw as Partial<TaskUpdateInput>
+      if (typeof task.taskId !== 'string' || typeof task.projectId !== 'string') throw new Error('Each task update requires taskId and projectId')
+      return task as TaskUpdateInput
+    })
+  }
+  return [{
+    taskId: reqString(args, 'taskId'),
+    projectId: reqString(args, 'projectId'),
+    title: args.title as string | undefined,
+    due: args.due as string | null | undefined,
+    priority: args.priority as 'low' | 'medium' | 'high' | 'none' | undefined,
+  }]
+}
+
 export const toolSchemas: Anthropic.Tool[] = [
   {
     name: 'get_gmail_inbox',
@@ -15,26 +183,48 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'trash_gmail',
-    description: 'Move Gmail messages to trash. Recoverable for 30 days; Google permanently deletes them after that. Permanent deletion is not supported. Fetch id and account from get_gmail_inbox first.',
+    description: 'Move one or more Gmail messages to trash. Recoverable for 30 days; Google permanently deletes them after that. Permanent deletion is not supported. Fetch id and account from get_gmail_inbox first. Use account+ids for one account, or targets for messages across multiple accounts.',
     input_schema: {
       type: 'object',
       properties: {
         account: { type: 'string', description: 'Email address of the target account (account field from get_gmail_inbox)' },
         ids: { type: 'array', items: { type: 'string' }, description: 'Array of message IDs to trash' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              account: { type: 'string' },
+              id: { type: 'string' },
+            },
+            required: ['account', 'id'],
+          },
+          description: 'Messages to trash across accounts. Use this when selected messages belong to different Gmail accounts.',
+        },
       },
-      required: ['account', 'ids'],
     },
   },
   {
     name: 'archive_gmail',
-    description: 'Archive Gmail messages (removes the INBOX label only; the message is kept and remains searchable). Fetch id and account from get_gmail_inbox first.',
+    description: 'Archive one or more Gmail messages (removes the INBOX label only; the message is kept and remains searchable). Fetch id and account from get_gmail_inbox first. Use account+ids for one account, or targets for messages across multiple accounts.',
     input_schema: {
       type: 'object',
       properties: {
         account: { type: 'string', description: 'Email address of the target account (account field from get_gmail_inbox)' },
         ids: { type: 'array', items: { type: 'string' }, description: 'Array of message IDs to archive' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              account: { type: 'string' },
+              id: { type: 'string' },
+            },
+            required: ['account', 'id'],
+          },
+          description: 'Messages to archive across accounts. Use this when selected messages belong to different Gmail accounts.',
+        },
       },
-      required: ['account', 'ids'],
     },
   },
   {
@@ -59,7 +249,7 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a new task in TickTick. Goes to inbox if projectId is not specified',
+    description: 'Create one or more tasks in TickTick. Goes to inbox if projectId is not specified. Use tasks for batch creation.',
     input_schema: {
       type: 'object',
       properties: {
@@ -67,20 +257,20 @@ export const toolSchemas: Anthropic.Tool[] = [
         due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional)' },
         projectId: { type: 'string', description: 'Project ID (optional, defaults to inbox)' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId' },
       },
-      required: ['title'],
     },
   },
   {
     name: 'complete_task',
-    description: 'Mark a TickTick task as complete',
+    description: 'Mark one or more TickTick tasks as complete. Use tasks for batch completion.',
     input_schema: {
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Task ID (taskId field from get_tasks response)' },
         projectId: { type: 'string', description: 'Project ID (projectId field from get_tasks response)' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to complete, each with taskId and projectId' },
       },
-      required: ['taskId', 'projectId'],
     },
   },
   {
@@ -121,7 +311,7 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'update_task',
-    description: 'Update a TickTick task. Use for changing due date, title, or priority. Fetch taskId and projectId from get_tasks first.',
+    description: 'Update one or more TickTick tasks. Use for changing due date, title, or priority. Fetch taskId and projectId from get_tasks first. Use tasks for batch updates.',
     input_schema: {
       type: 'object',
       properties: {
@@ -130,8 +320,8 @@ export const toolSchemas: Anthropic.Tool[] = [
         title: { type: 'string', description: 'New title (if changing)' },
         due: { type: 'string', description: 'New due date YYYY-MM-DD. Pass null to remove the due date.' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple task updates, each with taskId, projectId, and fields to change' },
       },
-      required: ['taskId', 'projectId'],
     },
   },
   {
@@ -149,7 +339,7 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'create_calendar_event',
-    description: 'Create a new event in Google Calendar. If attendees are specified, a confirmation dialog is shown and invites are only sent if the user confirms.',
+    description: 'Create one or more events in Google Calendar. If attendees are specified, a confirmation dialog is shown and invites are only sent if the user confirms. Use events for batch creation.',
     input_schema: {
       type: 'object',
       properties: {
@@ -162,8 +352,8 @@ export const toolSchemas: Anthropic.Tool[] = [
         description: { type: 'string', description: 'Description (optional)' },
         attendees: { type: 'array', items: { type: 'string' }, description: 'Array of attendee email addresses (optional)' },
         timeZone: { type: 'string', description: 'Time zone (defaults to Asia/Tokyo)' },
+        events: { type: 'array', items: { type: 'object' }, description: 'Multiple events to create; each item uses title, startDateTime, endDateTime, and optional account/allDay/location/description/attendees/timeZone.' },
       },
-      required: ['title', 'startDateTime', 'endDateTime'],
     },
   },
   {
@@ -258,55 +448,59 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'move_drive_item',
-    description: 'Move a Drive file or folder to a different parent folder.',
+    description: 'Move one or more Drive files or folders. Use fileIds with one newParentId for a batch into the same folder, or items for per-file destinations/accounts.',
     input_schema: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'Drive file or folder ID to move' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'Drive file or folder IDs to move to the same destination folder' },
         newParentId: { type: 'string', description: 'Destination folder ID' },
         account: { type: 'string', description: 'Google account email' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple move items, each with fileId, newParentId, and optional account' },
       },
-      required: ['fileId', 'newParentId'],
     },
   },
   {
     name: 'copy_drive_item',
-    description: 'Copy a Drive file (paste). Optionally rename and place into a parent folder. Folders cannot be copied via this API.',
+    description: 'Copy one or more Drive files. Folders cannot be copied via this API. Use fileIds to copy several files to one parent, or items for per-file names/parents/accounts.',
     input_schema: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'Drive file ID to copy' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'Drive file IDs to copy' },
         newName: { type: 'string', description: 'Optional new name for the copy' },
         parentId: { type: 'string', description: 'Optional destination folder ID' },
         account: { type: 'string', description: 'Google account email' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple copy items, each with fileId and optional newName, parentId, account' },
       },
-      required: ['fileId'],
     },
   },
   {
     name: 'trash_drive_item',
-    description: 'Move a Drive file or folder to the trash. Recoverable for 30 days, then Drive purges automatically. Permanent deletion is not supported.',
+    description: 'Move one or more Drive files or folders to trash. Recoverable for 30 days, then Drive purges automatically. Permanent deletion is not supported.',
     input_schema: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'Drive file or folder ID to trash' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'Drive file or folder IDs to trash' },
         account: { type: 'string', description: 'Google account email' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple trash items, each with fileId and optional account' },
       },
-      required: ['fileId'],
     },
   },
   {
     name: 'share_drive_item',
-    description: 'Share a Drive file or folder with a specific email address. Shows a confirmation dialog and only sends the invite if the user confirms. Sends a notification email by default.',
+    description: 'Share one or more Drive files or folders. Shows a confirmation dialog and only sends the invite if the user confirms. Use fileIds for several files to the same recipient/role, or items for per-file recipients/roles.',
     input_schema: {
       type: 'object',
       properties: {
         fileId: { type: 'string', description: 'Drive file or folder ID' },
+        fileIds: { type: 'array', items: { type: 'string' }, description: 'Drive file or folder IDs to share with the same recipient and role' },
         email: { type: 'string', description: 'Email address of the person to share with' },
         role: { type: 'string', enum: ['reader', 'commenter', 'writer'], description: 'Permission level' },
         account: { type: 'string', description: 'Google account email (the owner)' },
+        items: { type: 'array', items: { type: 'object' }, description: 'Multiple share items, each with fileId, email, role, and optional account' },
       },
-      required: ['fileId', 'email', 'role'],
     },
   },
   {
@@ -339,11 +533,17 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     }
     case 'trash_gmail': {
       const { trashEmails } = await import('./gmail/index')
-      return await trashEmails(reqString(args, 'account'), args.ids as string[])
+      const results = await Promise.all(
+        Array.from(gmailTargets(args)).map(async ([account, ids]) => trashEmails(account, ids))
+      )
+      return { results }
     }
     case 'archive_gmail': {
       const { archiveEmails } = await import('./gmail/index')
-      return await archiveEmails(reqString(args, 'account'), args.ids as string[])
+      const results = await Promise.all(
+        Array.from(gmailTargets(args)).map(async ([account, ids]) => archiveEmails(account, ids))
+      )
+      return { results }
     }
     case 'get_calendar_events': {
       const { getTodayEvents, getTomorrowEvents, getUpcomingEvents } = await import('./calendar/index')
@@ -358,19 +558,15 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     }
     case 'create_task': {
       const { createTask } = await import('./tasks/index')
-      return await createTask({
-        title: reqString(args, 'title'),
-        due: args.due as string | undefined,
-        priority: args.priority as 'low' | 'medium' | 'high' | undefined,
-        projectId: args.projectId as string | undefined,
-      })
+      const items = taskCreates(args)
+      const results = await Promise.all(items.map((item) => createTask(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'complete_task': {
       const { completeTask } = await import('./tasks/index')
-      return await completeTask({
-        taskId: reqString(args, 'taskId'),
-        projectId: reqString(args, 'projectId'),
-      })
+      const items = taskRefs(args)
+      const results = await Promise.all(items.map((item) => completeTask(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'complete_subtask': {
       const { completeSubtask } = await import('./tasks/index')
@@ -390,13 +586,9 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     }
     case 'update_task': {
       const { updateTask } = await import('./tasks/index')
-      return await updateTask({
-        taskId: reqString(args, 'taskId'),
-        projectId: reqString(args, 'projectId'),
-        title: args.title as string | undefined,
-        due: args.due as string | null | undefined,
-        priority: args.priority as 'low' | 'medium' | 'high' | 'none' | undefined,
-      })
+      const items = taskUpdates(args)
+      const results = await Promise.all(items.map((item) => updateTask(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'reply_gmail': {
       const { replyToEmail } = await import('./gmail/index')
@@ -408,17 +600,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     }
     case 'create_calendar_event': {
       const { createCalendarEvent } = await import('./calendar/index')
-      return await createCalendarEvent({
-        title: reqString(args, 'title'),
-        startDateTime: reqString(args, 'startDateTime'),
-        endDateTime: reqString(args, 'endDateTime'),
-        account: args.account as string | undefined,
-        allDay: args.allDay as boolean | undefined,
-        location: args.location as string | undefined,
-        description: args.description as string | undefined,
-        attendees: args.attendees as string[] | undefined,
-        timeZone: args.timeZone as string | undefined,
-      })
+      const results = await Promise.all(calendarEvents(args).map((event) => createCalendarEvent(event)))
+      return Array.isArray(args.events) ? { results } : results[0]
     }
     case 'get_weather': {
       const { getWeather } = await import('./weather/index')
@@ -470,40 +653,27 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     }
     case 'move_drive_item': {
       const { moveDriveItem } = await import('./drive/index')
-      return await moveDriveItem({
-        fileId: reqString(args, 'fileId'),
-        newParentId: reqString(args, 'newParentId'),
-        account: optString(args, 'account'),
-      })
+      const items = driveMoveItems(args)
+      const results = await Promise.all(items.map((item) => moveDriveItem(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'copy_drive_item': {
       const { copyDriveItem } = await import('./drive/index')
-      return await copyDriveItem({
-        fileId: reqString(args, 'fileId'),
-        newName: optString(args, 'newName'),
-        parentId: optString(args, 'parentId'),
-        account: optString(args, 'account'),
-      })
+      const items = driveCopyItems(args)
+      const results = await Promise.all(items.map((item) => copyDriveItem(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'trash_drive_item': {
       const { trashDriveItem } = await import('./drive/index')
-      return await trashDriveItem({
-        fileId: reqString(args, 'fileId'),
-        account: optString(args, 'account'),
-      })
+      const items = driveTrashItems(args)
+      const results = await Promise.all(items.map((item) => trashDriveItem(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'share_drive_item': {
       const { shareDriveItem } = await import('./drive/index')
-      const role = reqString(args, 'role')
-      if (role !== 'reader' && role !== 'commenter' && role !== 'writer') {
-        throw new Error(`role must be one of: reader, commenter, writer (got "${role}")`)
-      }
-      return await shareDriveItem({
-        fileId: reqString(args, 'fileId'),
-        email: reqString(args, 'email'),
-        role,
-        account: optString(args, 'account'),
-      })
+      const items = driveShareItems(args)
+      const results = await Promise.all(items.map((item) => shareDriveItem(item)))
+      return items.length > 1 ? { results } : results[0]
     }
     case 'get_dashboard_entry': {
       const { getDashboardEntry } = await import('./shared/turso')

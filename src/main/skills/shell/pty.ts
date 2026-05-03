@@ -4,6 +4,14 @@ import { spawn, type IPty } from 'node-pty'
 const SHELL = process.env.SHELL || '/bin/zsh'
 const SCROLLBACK_MAX_BYTES = 200 * 1024
 const SCROLLBACK_TRIM_TRIGGER = SCROLLBACK_MAX_BYTES + SCROLLBACK_MAX_BYTES / 2
+const EXTRA_PATHS = [
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  `${os.homedir()}/.local/bin`,
+  `${os.homedir()}/Library/pnpm`,
+  `${os.homedir()}/.npm-global/bin`,
+  `${os.homedir()}/.nix-profile/bin`,
+]
 
 type DataListener = (data: string) => void
 
@@ -31,7 +39,12 @@ function ensure(): IPty {
     cols: 80,
     rows: 24,
     cwd: os.homedir(),
-    env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+    env: {
+      ...process.env,
+      PATH: [...EXTRA_PATHS, process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin'].join(':'),
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+    },
   })
   child.onData(broadcast)
   child.onExit(() => {
@@ -75,4 +88,8 @@ export function ptyKill(): void {
     /* ignore */
   }
   pty = null
+}
+
+export function ptyPid(): number | null {
+  return pty?.pid ?? null
 }

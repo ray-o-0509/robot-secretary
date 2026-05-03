@@ -168,11 +168,13 @@ export function buildSummary(payload: PanelPayload): string {
 }
 
 let pendingPayload: PanelPayload | null = null
+let currentPanelType: PanelType | null = null
 
 /**
  * Send a payload to the display window. Queues it if did-finish-load has not fired yet.
  */
 export function pushPayload(displayWin: BrowserWindow, payload: PanelPayload, ready: boolean) {
+  currentPanelType = payload.type
   if (ready && !displayWin.isDestroyed()) {
     displayWin.webContents.send('display:data', payload)
   } else {
@@ -185,6 +187,14 @@ export function flushPending(displayWin: BrowserWindow) {
     displayWin.webContents.send('display:data', pendingPayload)
     pendingPayload = null
   }
+}
+
+export function getCurrentPanelType(): PanelType | null {
+  return currentPanelType
+}
+
+export function clearCurrentPanelType() {
+  currentPanelType = null
 }
 
 export type ShowPanelDeps = {

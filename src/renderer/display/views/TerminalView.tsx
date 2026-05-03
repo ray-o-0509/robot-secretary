@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { PanelPayload } from '../types'
+import { CYAN, FONT_MONO } from '../styles'
 
 interface Props {
   payload: PanelPayload
@@ -89,15 +90,102 @@ export function TerminalView(_props: Props) {
 
   return (
     <div
-      ref={hostRef}
       style={{
+        position: 'relative',
         width: '100%',
-        height: 360,
-        background: 'transparent',
-        border: '1px solid rgba(0, 240, 255, 0.15)',
-        padding: 6,
-        boxSizing: 'border-box',
+        flex: 1,
+        minHeight: 0,
+        maxHeight: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        fontFamily: FONT_MONO,
       }}
-    />
+    >
+      {/* ヘッダーバー */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '5px 10px 5px 12px',
+          background: `linear-gradient(90deg, rgba(0, 240, 255, 0.09) 0%, rgba(0, 240, 255, 0.03) 100%)`,
+          border: `1px solid rgba(0, 240, 255, 0.35)`,
+          borderBottom: `1px solid rgba(0, 240, 255, 0.12)`,
+          clipPath: 'polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px)',
+          flexShrink: 0,
+        }}
+      >
+        <span className="cyber-status-dot" />
+        <span
+          style={{
+            fontSize: 9.5,
+            fontWeight: 700,
+            letterSpacing: 2,
+            color: CYAN,
+            textShadow: `0 0 8px ${CYAN}80`,
+            textTransform: 'uppercase',
+          }}
+        >
+          ▸ Shell
+        </span>
+        <span
+          style={{
+            marginLeft: 'auto',
+            fontSize: 8.5,
+            letterSpacing: 1.5,
+            color: `rgba(0, 240, 255, 0.4)`,
+            textTransform: 'uppercase',
+          }}
+        >
+          PTY
+        </span>
+      </div>
+
+      {/* ターミナル本体 */}
+      <div
+        style={{
+          position: 'relative',
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          border: `1px solid rgba(0, 240, 255, 0.28)`,
+          borderTop: 'none',
+          background: 'transparent',
+          boxShadow: '0 0 28px rgba(0, 240, 255, 0.1)',
+          clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%)',
+        }}
+      >
+        {/* 左下ブラケット */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            width: 10,
+            height: 10,
+            borderBottom: `1.5px solid ${CYAN}`,
+            borderLeft: `1.5px solid ${CYAN}`,
+            boxShadow: `0 0 6px rgba(0, 240, 255, 0.6)`,
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
+
+        <div
+          ref={hostRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            width: '100%',
+            background: 'transparent',
+            padding: '6px 8px',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+          }}
+        />
+      </div>
+    </div>
   )
 }
