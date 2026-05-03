@@ -143,6 +143,138 @@ const secretaryTools = [
     },
   },
   {
+    name: 'list_drive_recent',
+    description: 'List recently modified files on Google Drive (excludes trashed). Returns id, name, mimeType, modifiedTime, owner, webViewLink. Use this to find a fileId before calling read_drive_file / move_drive_item / etc.',
+    parameters: {
+      type: 'object',
+      properties: {
+        maxResults: { type: 'number', description: 'Max files to return (1–100, default 30)' },
+        account: { type: 'string', description: 'Google account email (omit to use the default)' },
+      },
+    },
+  },
+  {
+    name: 'list_drive_folder',
+    description: 'List the contents of a specific Google Drive folder. Pass folderId obtained from list_drive_recent / search_drive (item with isFolder:true), or "root" for the My Drive top level. Folders sort first. Use this to browse into a folder the user mentions by name.',
+    parameters: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Drive folder ID, or "root" for top level' },
+        maxResults: { type: 'number', description: 'Max items to return (1–100, default 100)' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['folderId'],
+    },
+  },
+  {
+    name: 'search_drive',
+    description: 'Search Google Drive files by name and full-text content (excludes trashed). Optionally filter by mimeType. Results are also shown on the Drive panel.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search keyword' },
+        mimeType: { type: 'string', description: 'Optional mimeType filter (e.g. "application/vnd.google-apps.document", "application/pdf", "application/vnd.google-apps.folder")' },
+        maxResults: { type: 'number', description: 'Max files to return (1–100, default 30)' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'read_drive_file',
+    description: 'Read the text contents of a Drive file. Google Docs/Sheets/Slides are exported to text/csv. Plain-text/JSON files are downloaded directly. Binary files cannot be read this way. Truncated at 256 KB. Get fileId from list_drive_recent or search_drive first.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'Drive file ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'create_drive_file',
+    description: 'Create a new file on Drive with text content. Defaults to text/plain at the account root. Pass parentId to put it in a specific folder.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'File name' },
+        content: { type: 'string', description: 'Text content' },
+        mimeType: { type: 'string', description: 'Optional mimeType (default "text/plain")' },
+        parentId: { type: 'string', description: 'Optional parent folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['name', 'content'],
+    },
+  },
+  {
+    name: 'upload_drive_file',
+    description: 'Upload a local file to Drive. mimeType is inferred. Pass parentId to upload into a specific folder.',
+    parameters: {
+      type: 'object',
+      properties: {
+        localPath: { type: 'string', description: 'Local file path (~ accepted)' },
+        name: { type: 'string', description: 'Override the uploaded name' },
+        parentId: { type: 'string', description: 'Optional parent folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['localPath'],
+    },
+  },
+  {
+    name: 'move_drive_item',
+    description: 'Move a Drive file or folder to a different parent folder. Get fileId and newParentId via list_drive_recent / search_drive first.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'File or folder ID to move' },
+        newParentId: { type: 'string', description: 'Destination folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId', 'newParentId'],
+    },
+  },
+  {
+    name: 'copy_drive_item',
+    description: 'Copy a Drive file (paste). Optionally rename and place in a parent folder. Folders cannot be copied through this API.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'File ID to copy' },
+        newName: { type: 'string', description: 'Optional new name' },
+        parentId: { type: 'string', description: 'Optional destination folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'trash_drive_item',
+    description: 'Move a Drive file or folder to the trash. Recoverable for 30 days, then Drive purges it. Permanent deletion is not supported.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'File or folder ID to trash' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'share_drive_item',
+    description: 'Share a Drive file or folder with a specific email address. A confirmation dialog appears and the invite is only sent if the user confirms.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'File or folder ID' },
+        email: { type: 'string', description: 'Email address to share with' },
+        role: { type: 'string', enum: ['reader', 'commenter', 'writer'], description: 'Permission level' },
+        account: { type: 'string', description: 'Google account email (the owner)' },
+      },
+      required: ['fileId', 'email', 'role'],
+    },
+  },
+  {
     name: 'open_app',
     description:
       'Launch a macOS application. app_name must be the official English name (e.g. "Safari", "Finder", "Google Chrome").',
@@ -160,7 +292,7 @@ const secretaryTools = [
   {
     name: 'show_panel',
     description:
-      'Display email, calendar, tasks, AI news, tools, movies, or timers in a dedicated panel. Only call when the user explicitly asks to show or display something. For checks like "any new mail?" use delegate_task instead. The response data field contains raw data — summarize it verbally as usual and note that it is also shown on screen.',
+      'Display email, calendar, tasks, AI news, tools, movies, timers, or recent Drive files in a dedicated panel. Only call when the user explicitly asks to show or display something. For checks like "any new mail?" use delegate_task instead. The response data field contains raw data — summarize it verbally as usual and note that it is also shown on screen.',
     parameters: {
       type: 'object',
       properties: {
@@ -176,9 +308,10 @@ const secretaryTools = [
             'tools',
             'movies',
             'timer',
+            'drive_recent',
           ],
           description:
-            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies, timer=active timers and stopwatches',
+            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies, timer=active timers and stopwatches, drive_recent=recently modified Google Drive files',
         },
       },
       required: ['type'],

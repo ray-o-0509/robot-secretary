@@ -12,6 +12,8 @@ export type PanelType =
   | 'movies'
   | 'terminal_output'
   | 'timer'
+  | 'drive_recent'
+  | 'drive_search'
 
 export type PanelPayload = {
   type: PanelType
@@ -21,6 +23,8 @@ export type PanelPayload = {
   error?: string
 }
 
+// drive_search is intentionally absent: a refresh would have no query state to replay,
+// so it would silently return recent files. Push-only (via the search_drive IPC handler).
 const VALID_TYPES = new Set<PanelType>([
   'email',
   'email_search',
@@ -33,6 +37,7 @@ const VALID_TYPES = new Set<PanelType>([
   'movies',
   'terminal_output',
   'timer',
+  'drive_recent',
 ])
 
 export function isPanelType(v: unknown): v is PanelType {
@@ -78,6 +83,10 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
       case 'timer': {
         const { getTimerSnapshot } = await import('../skills/timer/index')
         return { type, data: getTimerSnapshot(), fetchedAt }
+      }
+      case 'drive_recent': {
+        const { listRecentDriveFiles } = await import('../skills/drive/index')
+        return { type, data: await listRecentDriveFiles(30), fetchedAt }
       }
     }
   } catch (err) {
@@ -146,6 +155,13 @@ export function buildSummary(payload: PanelPayload): string {
       const d = payload.data as { id: string; kind: string; state: string }[] | null
       if (!d) return '0 entries'
       return `${d.filter((e) => e.kind === 'timer').length} timers, ${d.filter((e) => e.kind === 'stopwatch').length} stopwatches`
+    }
+    case 'drive_recent':
+    case 'drive_search': {
+      const d = payload.data as { account: string; files: unknown[]; query?: string } | null
+      if (!d) return '0 files'
+      const tag = payload.type === 'drive_search' && d.query ? ` for "${d.query}"` : ''
+      return `Drive ${d.files.length} files${tag} (${d.account})`
     }
   }
 }

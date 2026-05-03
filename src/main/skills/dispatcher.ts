@@ -178,6 +178,138 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'list_drive_recent',
+    description: 'List recently modified files on Google Drive (excludes trashed). Single account; use the default account if not specified.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        maxResults: { type: 'number', description: 'Max files to return (1–100, default 30)' },
+        account: { type: 'string', description: 'Google account email (omit to use the default)' },
+      },
+    },
+  },
+  {
+    name: 'list_drive_folder',
+    description: 'List the contents of a specific Google Drive folder (excludes trashed). Pass folderId from a prior list/search result, or "root" for the My Drive top level. Folders sort first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        folderId: { type: 'string', description: 'Drive folder ID, or "root" for My Drive top level' },
+        maxResults: { type: 'number', description: 'Max items to return (1–100, default 100)' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['folderId'],
+    },
+  },
+  {
+    name: 'search_drive',
+    description: 'Search Google Drive files by name and full-text content (excludes trashed). Optionally filter by mimeType. Results show in the Drive panel.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search keyword (matched against name and full text)' },
+        mimeType: { type: 'string', description: 'Optional Drive mimeType filter (e.g. "application/vnd.google-apps.document", "application/pdf", "application/vnd.google-apps.folder")' },
+        maxResults: { type: 'number', description: 'Max files to return (1–100, default 30)' },
+        account: { type: 'string', description: 'Google account email (omit to use the default)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'read_drive_file',
+    description: 'Read the text contents of a Drive file. Google Docs/Sheets/Slides are exported to text/csv. Plain-text and JSON-like files are downloaded directly. Binary files cannot be read this way. Truncates at 256 KB.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'Drive file ID (from list_drive_recent or search_drive)' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'create_drive_file',
+    description: 'Create a new file on Drive with the given text content. Defaults to text/plain at the account root. Pass parentId to put it in a specific folder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'File name (e.g. "memo.txt")' },
+        content: { type: 'string', description: 'Text content' },
+        mimeType: { type: 'string', description: 'Optional mimeType (default "text/plain")' },
+        parentId: { type: 'string', description: 'Optional parent folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['name', 'content'],
+    },
+  },
+  {
+    name: 'upload_drive_file',
+    description: 'Upload a local file to Drive. Mime type is inferred. Pass parentId to upload into a specific folder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        localPath: { type: 'string', description: 'Absolute or ~ path to a local file' },
+        name: { type: 'string', description: 'Override the uploaded file name (defaults to basename of localPath)' },
+        parentId: { type: 'string', description: 'Optional parent folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['localPath'],
+    },
+  },
+  {
+    name: 'move_drive_item',
+    description: 'Move a Drive file or folder to a different parent folder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'Drive file or folder ID to move' },
+        newParentId: { type: 'string', description: 'Destination folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId', 'newParentId'],
+    },
+  },
+  {
+    name: 'copy_drive_item',
+    description: 'Copy a Drive file (paste). Optionally rename and place into a parent folder. Folders cannot be copied via this API.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'Drive file ID to copy' },
+        newName: { type: 'string', description: 'Optional new name for the copy' },
+        parentId: { type: 'string', description: 'Optional destination folder ID' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'trash_drive_item',
+    description: 'Move a Drive file or folder to the trash. Recoverable for 30 days, then Drive purges automatically. Permanent deletion is not supported.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'Drive file or folder ID to trash' },
+        account: { type: 'string', description: 'Google account email' },
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'share_drive_item',
+    description: 'Share a Drive file or folder with a specific email address. Shows a confirmation dialog and only sends the invite if the user confirms. Sends a notification email by default.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fileId: { type: 'string', description: 'Drive file or folder ID' },
+        email: { type: 'string', description: 'Email address of the person to share with' },
+        role: { type: 'string', enum: ['reader', 'commenter', 'writer'], description: 'Permission level' },
+        account: { type: 'string', description: 'Google account email (the owner)' },
+      },
+      required: ['fileId', 'email', 'role'],
+    },
+  },
+  {
     name: 'get_dashboard_entry',
     description:
       "Fetch a daily summary entry from Turso DB. skill='ai-news' for AI news, 'best-tools' for recommended tools, 'movies' for movies, 'spending' for spending analysis. Omit id to return the latest.",
@@ -291,6 +423,87 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case 'get_weather': {
       const { getWeather } = await import('./weather/index')
       return await getWeather(reqString(args, 'location'))
+    }
+    case 'list_drive_recent': {
+      const { listRecentDriveFiles } = await import('./drive/index')
+      return await listRecentDriveFiles(args.maxResults as number | undefined, optString(args, 'account'))
+    }
+    case 'list_drive_folder': {
+      const { listDriveFolder } = await import('./drive/index')
+      return await listDriveFolder({
+        folderId: reqString(args, 'folderId'),
+        maxResults: args.maxResults as number | undefined,
+        account: optString(args, 'account'),
+      })
+    }
+    case 'search_drive': {
+      const { searchDriveFiles } = await import('./drive/index')
+      return await searchDriveFiles({
+        query: reqString(args, 'query'),
+        mimeType: optString(args, 'mimeType'),
+        maxResults: args.maxResults as number | undefined,
+        account: optString(args, 'account'),
+      })
+    }
+    case 'read_drive_file': {
+      const { readDriveFile } = await import('./drive/index')
+      return await readDriveFile(reqString(args, 'fileId'), optString(args, 'account'))
+    }
+    case 'create_drive_file': {
+      const { createDriveFile } = await import('./drive/index')
+      return await createDriveFile({
+        name: reqString(args, 'name'),
+        content: reqString(args, 'content'),
+        mimeType: optString(args, 'mimeType'),
+        parentId: optString(args, 'parentId'),
+        account: optString(args, 'account'),
+      })
+    }
+    case 'upload_drive_file': {
+      const { uploadDriveFile } = await import('./drive/index')
+      return await uploadDriveFile({
+        localPath: reqString(args, 'localPath'),
+        name: optString(args, 'name'),
+        parentId: optString(args, 'parentId'),
+        account: optString(args, 'account'),
+      })
+    }
+    case 'move_drive_item': {
+      const { moveDriveItem } = await import('./drive/index')
+      return await moveDriveItem({
+        fileId: reqString(args, 'fileId'),
+        newParentId: reqString(args, 'newParentId'),
+        account: optString(args, 'account'),
+      })
+    }
+    case 'copy_drive_item': {
+      const { copyDriveItem } = await import('./drive/index')
+      return await copyDriveItem({
+        fileId: reqString(args, 'fileId'),
+        newName: optString(args, 'newName'),
+        parentId: optString(args, 'parentId'),
+        account: optString(args, 'account'),
+      })
+    }
+    case 'trash_drive_item': {
+      const { trashDriveItem } = await import('./drive/index')
+      return await trashDriveItem({
+        fileId: reqString(args, 'fileId'),
+        account: optString(args, 'account'),
+      })
+    }
+    case 'share_drive_item': {
+      const { shareDriveItem } = await import('./drive/index')
+      const role = reqString(args, 'role')
+      if (role !== 'reader' && role !== 'commenter' && role !== 'writer') {
+        throw new Error(`role must be one of: reader, commenter, writer (got "${role}")`)
+      }
+      return await shareDriveItem({
+        fileId: reqString(args, 'fileId'),
+        email: reqString(args, 'email'),
+        role,
+        account: optString(args, 'account'),
+      })
     }
     case 'get_dashboard_entry': {
       const { getDashboardEntry } = await import('./shared/turso')

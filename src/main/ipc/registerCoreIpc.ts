@@ -73,7 +73,16 @@ export function registerCoreIpc(deps: Deps): void {
         toolName === 'update_task' ||
         toolName === 'get_email_detail' ||
         toolName === 'web_search' ||
-        toolName === 'get_weather'
+        toolName === 'get_weather' ||
+        toolName === 'list_drive_recent' ||
+        toolName === 'list_drive_folder' ||
+        toolName === 'read_drive_file' ||
+        toolName === 'create_drive_file' ||
+        toolName === 'upload_drive_file' ||
+        toolName === 'move_drive_item' ||
+        toolName === 'copy_drive_item' ||
+        toolName === 'trash_drive_item' ||
+        toolName === 'share_drive_item'
       ) {
         const { executeTool } = await import('../skills/dispatcher')
         const result = await executeTool(toolName, args)
@@ -112,6 +121,27 @@ export function registerCoreIpc(deps: Deps): void {
           ok: true,
           totalCount: result.messages.length,
           accounts: result.accounts.map((a) => `${a.account} (${a.count} items)`),
+        }
+      }
+      if (toolName === 'search_drive') {
+        const { searchDriveFiles } = await import('../skills/drive/index')
+        const { pushPayload } = await import('../display/show-panel')
+        const query = String(args.query ?? '').trim()
+        if (!query) return { error: 'query is required' }
+        const result = await searchDriveFiles({
+          query,
+          mimeType: typeof args.mimeType === 'string' ? args.mimeType : undefined,
+          maxResults: typeof args.maxResults === 'number' ? args.maxResults : undefined,
+          account: typeof args.account === 'string' ? args.account : undefined,
+        })
+        const { win, ready } = await deps.getOrCreateDisplayWindow()
+        win.show()
+        pushPayload(win, { type: 'drive_search', data: result, fetchedAt: Date.now() }, ready)
+        return {
+          ok: true,
+          account: result.account,
+          query: result.query,
+          totalCount: result.files.length,
         }
       }
       if (toolName === 'open_app') {

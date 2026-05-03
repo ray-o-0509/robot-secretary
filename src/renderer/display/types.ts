@@ -10,6 +10,8 @@ export type PanelType =
   | 'movies'
   | 'terminal_output'
   | 'timer'
+  | 'drive_recent'
+  | 'drive_search'
 
 export type PanelPayload = {
   type: PanelType
@@ -31,6 +33,8 @@ export const PANEL_LABELS: Record<PanelType, string> = {
   movies: '◢ CINEMA // RELEASES',
   terminal_output: '◢ TERMINAL // OUTPUT',
   timer: '◢ TIMER // STOPWATCH',
+  drive_recent: '◢ DRIVE // RECENT',
+  drive_search: '◢ DRIVE // SEARCH',
 }
 
 export type TimerEntry = {
