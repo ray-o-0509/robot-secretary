@@ -1,5 +1,6 @@
 import { ipcMain, shell, type BrowserWindow } from 'electron'
 import { homedir } from 'node:os'
+import * as fs from 'node:fs'
 
 type Deps = {
   getDisplayWindow: () => BrowserWindow | null
@@ -214,14 +215,31 @@ export function registerCoreIpc(deps: Deps): void {
         return { result: { ok: true, items: profile.items } }
       }
       if (toolName === 'cd') {
-        const target = String(args.path ?? '').trim()
-        if (!target) return { error: 'path is required' }
-        currentCwd = target.startsWith('~') ? target.replace('~', homedir()) : target
-        // Mirror to the live pty so its cwd stays in sync with currentCwd.
-        // \x15 (Ctrl-U) wipes any partial input the user may have started before the cd lands.
+        const raw = String(args.path ?? '').trim()
+        if (!raw) return { error: 'path is required' }
+        const target = raw.startsWith('~') ? raw.replace('~', homedir()) : raw
+
+        // Verify the target before changing state. If this returns an error, the caller
+        // (Gemini) will see it and can retry with a corrected path.
+        let stat: fs.Stats
+        try {
+          stat = fs.statSync(target)
+        } catch (e) {
+          return { error: `cd failed: ${(e as Error).message}` }
+        }
+        if (!stat.isDirectory()) return { error: `cd failed: not a directory: ${target}` }
+
+        // Run ls first so the user (and Gemini) sees what's in the destination.
+        const { runCommand } = await import('../skills/shell/index')
+        const ls = await runCommand('ls -la', target)
+        ptyMod?.ptyInject(formatVoiceLine(`ls -la ${target}`, ls.stdout, ls.stderr))
+
+        // Then mirror cd into the live pty + update tracked cwd.
+        // \x15 (Ctrl-U) wipes any partial input before the cd lands.
+        currentCwd = target
         ptyMod?.ptyWrite(`\x15cd ${shellQuote(currentCwd)}\n`)
         await showTerminalPanel()
-        return { cwd: currentCwd }
+        return { cwd: currentCwd, contents: ls.stdout }
       }
       if (toolName === 'run_command') {
         const { runCommand } = await import('../skills/shell/index')

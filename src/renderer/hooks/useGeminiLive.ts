@@ -409,13 +409,13 @@ const secretaryTools = [
   {
     name: 'cd',
     description:
-      'Change the working directory. Subsequent run_command and run_claude calls will execute here.',
+      'Change the working directory. Validates that the path exists and is a directory before switching, runs `ls -la` so the contents show up in the terminal panel, and mirrors the cd into the live pty. Subsequent run_command / run_claude calls execute in the new cwd. If the response contains an `error` field the cd did NOT happen — surface the failure or retry with a corrected path; do NOT claim success.',
     parameters: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
-          description: 'Destination path (~/... format is accepted)',
+          description: 'Destination path (~/... format accepted)',
         },
       },
       required: ['path'],
