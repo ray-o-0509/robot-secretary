@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n, { toLng } from '../i18n'
+import { getGeminiApiKey, setGeminiApiKey, getLanguageCode, setLanguageCode } from '../lib/persistedSettings'
 import type { MemorySnapshot, Procedure } from '../App'
 
 type Tab = 'profile' | 'memory' | 'apps' | 'api' | 'language'
@@ -631,12 +632,11 @@ function AppsTab({ appRows }: { appRows: { key: keyof DefaultApps; label: string
 
 function ApiTab() {
   const { t } = useTranslation()
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
+  const [geminiKey, setGeminiKey] = useState(getGeminiApiKey())
   const [saved, setSaved] = useState(false)
 
   const save = () => {
-    if (geminiKey.trim()) localStorage.setItem('GEMINI_API_KEY', geminiKey.trim())
-    else localStorage.removeItem('GEMINI_API_KEY')
+    setGeminiApiKey(geminiKey)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -679,12 +679,10 @@ const LANGUAGE_OPTIONS = [
 
 function LanguageTab() {
   const { t } = useTranslation()
-  const [current, setCurrent] = useState(
-    () => localStorage.getItem('LANGUAGE_CODE') ?? 'ja-JP',
-  )
+  const [current, setCurrent] = useState(() => getLanguageCode())
 
   const select = (code: string) => {
-    localStorage.setItem('LANGUAGE_CODE', code)
+    setLanguageCode(code)
     setCurrent(code)
     i18n.changeLanguage(toLng(code))
     window.electronAPI?.setLanguage(code)

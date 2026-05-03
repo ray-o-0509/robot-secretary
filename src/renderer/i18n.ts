@@ -2,8 +2,9 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
 import ja from './locales/ja.json'
+import { getLanguageCode } from './lib/persistedSettings'
 
-const stored = typeof localStorage !== 'undefined' ? (localStorage.getItem('LANGUAGE_CODE') ?? '') : ''
+const stored = getLanguageCode('')
 
 export function toLng(langCode: string): string {
   if (langCode.startsWith('en')) return 'en'

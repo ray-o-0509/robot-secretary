@@ -12,7 +12,7 @@ There is no test runner, linter, or formatter configured. Don't fabricate one; a
 
 ## Architecture
 
-This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Slack / Gmail / Google Calendar / TickTick.
+This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Gmail / Google Calendar / TickTick.
 
 ### Three processes (electron-vite layout)
 
@@ -46,19 +46,18 @@ Each tool reads its credentials from `process.env` at call time and constructs i
 
 - **Gmail and Calendar reuse the user's `gmail-triage` Codex skill tokens** at `~/.config/gmail-triage/tokens/<email>.json` via `src/main/tools/googleAuth.ts`. Each token JSON has embedded `client_id` / `client_secret` / `scopes` (gmail.readonly + gmail.send + calendar). `gmail.ts` and `calendar.ts` both call `listAccounts()` and fan out to every token by default; pass an explicit `account` (Gmail) or use `GMAIL_ACCOUNT` env (single-account fallback in `getGoogleAuth`) to scope down. Calendar de-duplicates events by id across accounts. Run `node scripts/auth-google.mjs <email>` to (re)authorize when the refresh token expires or when adding new scopes.
 - **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/tools/tickTickAuth.ts`). Token is shared with the user's `daily-dashboard` Vercel project; if it expires, pull from there with `vercel env pull` against `daily-viewer`.
-- **Slack is currently NOT wired** — `slack.ts` exists but `.env.local` only has placeholder `xoxb-...` / `xoxp-...` values. To enable, create a Slack App, install to the workspace, then drop the bot token into `SLACK_BOT_TOKEN`. Note: `getUnreadMessages` without a channel iterates every joined channel and is slow for users in many workspaces — fix before relying on it.
 - **Dashboard** (`dashboard.ts`) reads daily summary entries from the user's `daily-dashboard` Turso (libSQL) DB via `@libsql/client`. Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local` (copy from `daily-dashboard/.env.local`). Read-only; the `entries` rows are written by `daily-dashboard`'s skill scripts. `getDashboardEntry(skill, id?)` resolves `id` to the latest row when omitted; supported skills are `ai-news` / `best-tools` / `movies` / `spending`.
 
 ### Configuration: split between two stores
 
 Two separate configuration mechanisms exist and they are not unified:
 
-- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Tool modules in `src/main/tools/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Slack / Turso / TickTick) live; Google instead reads from external token files (see Tool modules above).
-- **`localStorage`** in the renderer — written by `SettingsPanel.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). The Slack field in the settings panel is written but never read — main-process tools only see `process.env`. Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the tool calls will keep using `.env`.
+- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Tool modules in `src/main/tools/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Turso / TickTick) live; Google instead reads from external token files (see Tool modules above).
+- **`localStorage`** in the renderer — written by `SettingsPanel.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). Main-process tools only see `process.env`. Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the tool calls will keep using `.env`.
 
 ### TypeScript configs
 
-`tsconfig.json` is a project-references root pointing to `tsconfig.node.json` (main + preload + vite config) and `tsconfig.web.json` (renderer). `tsconfig.electron.json` exists but references a nonexistent `electron/` directory and is **not** part of the active build — ignore it unless you're cleaning up.
+`tsconfig.json` is a project-references root pointing to `tsconfig.node.json` (main + preload + vite config) and `tsconfig.web.json` (renderer).
 
 ### 3D robot asset
 

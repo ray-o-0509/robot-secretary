@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { getGeminiApiKey, setGeminiApiKey } from '../lib/persistedSettings'
 
 interface Props {
   onClose: () => void
@@ -7,14 +8,10 @@ interface Props {
 
 export function SettingsPanel({ onClose }: Props) {
   const { t } = useTranslation()
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem('GEMINI_API_KEY') ?? '')
+  const [geminiKey, setGeminiKey] = useState(getGeminiApiKey())
 
   function save() {
-    const trimmedGeminiKey = geminiKey.trim()
-
-    if (trimmedGeminiKey) localStorage.setItem('GEMINI_API_KEY', trimmedGeminiKey)
-    else localStorage.removeItem('GEMINI_API_KEY')
-
+    setGeminiApiKey(geminiKey)
     onClose()
   }
 

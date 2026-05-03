@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import i18n, { toLng } from './i18n'
+import { getLanguageCode, setLanguageCode as persistLanguageCode } from './lib/persistedSettings'
 import { RobotScene } from './components/RobotScene'
 import { StatusBanner } from './components/StatusBanner'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -112,7 +113,7 @@ const isSettingsWindow = hash === '#settings'
 export default function App() {
   useEffect(() => {
     const off = window.electronAPI?.onLanguageChange((lang) => {
-      localStorage.setItem('LANGUAGE_CODE', lang)
+      persistLanguageCode(lang)
       i18n.changeLanguage(toLng(lang))
     })
     return () => off?.()
@@ -135,9 +136,7 @@ function RobotWindowApp() {
   const [isMuted, setIsMuted] = useState(false)
   const [interactive, setInteractive] = useState(false)
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null)
-  const [languageCode, setLanguageCode] = useState<string>(
-    () => localStorage.getItem('LANGUAGE_CODE') ?? DEFAULT_LANGUAGE,
-  )
+  const [languageCode, setLanguageCode] = useState<string>(() => getLanguageCode(DEFAULT_LANGUAGE))
 
   const { connect, isConnected, messages, connectionError, retry } = useGeminiLive({
     onStateChange: (state, processor) => {
@@ -157,7 +156,7 @@ function RobotWindowApp() {
     const offMute = window.electronAPI?.onMuteChanged((muted) => setIsMuted(muted))
     const offSettings = window.electronAPI?.onOpenSettings(() => setShowSettings(true))
     const offLang = window.electronAPI?.onLanguageChange((lang) => {
-      localStorage.setItem('LANGUAGE_CODE', lang)
+      persistLanguageCode(lang)
       setLanguageCode(lang)
     })
     const offConfirm = window.electronAPI?.onConfirmationRequest((req) => {

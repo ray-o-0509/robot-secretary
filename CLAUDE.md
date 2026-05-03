@@ -139,7 +139,7 @@ codesign -d --entitlements - "/Applications/Robot Secretary.app" 2>/dev/null | g
 
 ## Architecture
 
-This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Slack / Gmail / Google Calendar / TickTick.
+This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Gmail / Google Calendar / TickTick.
 
 ### Three processes (electron-vite layout)
 
@@ -173,19 +173,18 @@ Each tool reads its credentials from `process.env` at call time and constructs i
 
 - **Gmail and Calendar** use Google OAuth2 tokens via `src/main/tools/googleAuth.ts`. トークンは **`~/.config/robot-secretary/google-tokens/<email>.json`** に置く（プロジェクト専用ディレクトリ）。このディレクトリがなければ旧 `~/.config/gmail-triage/tokens/` にフォールバックする。各トークン JSON には `client_id` / `client_secret` / `refresh_token` / `scopes` (gmail.readonly + gmail.send + calendar) が含まれる。`gmail.ts` と `calendar.ts` は `listAccounts()` で全トークンを自動検出しファンアウト。`GMAIL_ACCOUNT` env で絞り込み可能。refresh token は有効期限なし（手動失効しない限り）のでコピーするだけで再認証不要。トークンを再発行する場合は `node scripts/auth-google.mjs <email>` を実行し出力を `~/.config/robot-secretary/google-tokens/<email>.json` に保存する。
 - **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/tools/tickTickAuth.ts`). Obtain the token via TickTick's OAuth flow and place it in `.env.local`.
-- **Slack is currently NOT wired** — `slack.ts` exists but `.env.local` only has placeholder `xoxb-...` / `xoxp-...` values. To enable, create a Slack App, install to the workspace, then drop the bot token into `SLACK_BOT_TOKEN`. Note: `getUnreadMessages` without a channel iterates every joined channel and is slow for users in many workspaces — fix before relying on it.
 - **Dashboard** (`dashboard.ts`) reads daily summary entries from a Turso (libSQL) DB via `@libsql/client`. Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local`. Read-only; the `entries` table is expected to have rows keyed by skill name. `getDashboardEntry(skill, id?)` resolves `id` to the latest row when omitted; supported skills are `ai-news` / `best-tools` / `movies` / `spending`.
 
 ### Configuration: split between two stores
 
 Two separate configuration mechanisms exist and they are not unified:
 
-- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Tool modules in `src/main/tools/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Slack / Turso / TickTick) live; Google instead reads from external token files (see Tool modules above).
-- **`localStorage`** in the renderer — written by `SettingsPanel.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). The Slack field in the settings panel is written but never read — main-process tools only see `process.env`. Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the tool calls will keep using `.env`.
+- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Tool modules in `src/main/tools/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Turso / TickTick) live; Google instead reads from external token files (see Tool modules above).
+- **`localStorage`** in the renderer — written by `SettingsPanel.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). Main-process tools only see `process.env`. Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the tool calls will keep using `.env`.
 
 ### TypeScript configs
 
-`tsconfig.json` is a project-references root pointing to `tsconfig.node.json` (main + preload + vite config) and `tsconfig.web.json` (renderer). `tsconfig.electron.json` exists but references a nonexistent `electron/` directory and is **not** part of the active build — ignore it unless you're cleaning up.
+`tsconfig.json` is a project-references root pointing to `tsconfig.node.json` (main + preload + vite config) and `tsconfig.web.json` (renderer).
 
 ### 3D robot asset
 

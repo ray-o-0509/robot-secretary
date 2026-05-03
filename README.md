@@ -92,7 +92,6 @@ ANTHROPIC_API_KEY=sk-ant-...      # for Claude agent (screen analysis, complex t
 TICKTICK_ACCESS_TOKEN=...          # TickTick OAuth token
 TURSO_DATABASE_URL=libsql://...    # daily-dashboard DB (optional)
 TURSO_AUTH_TOKEN=...               # (optional)
-SLACK_BOT_TOKEN=xoxb-...           # (optional, not fully wired)
 ```
 
 For production builds, copy this file to the app's userData directory:
@@ -184,7 +183,7 @@ tccutil reset ScreenCapture com.rayotsuka.robot-secretary
 
 VEGA monitors macOS notifications in the background via `log stream` + Accessibility API:
 
-- **When idle** — announces incoming notifications immediately ("Hey, you got a Slack message from…")
+- **When idle** — announces incoming notifications immediately ("Hey, you got an email from…")
 - **During conversation** — buffers notifications and announces them when the conversation ends
 - **Before Gemini connects** — buffers from app launch and delivers on first session connect
 
