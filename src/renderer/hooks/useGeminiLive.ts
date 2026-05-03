@@ -547,6 +547,40 @@ const secretaryTools = [
       required: ['prompt'],
     },
   },
+  {
+    name: 'learn_procedure',
+    description:
+      'Save a new procedure for future use. Call this AFTER the user has taught you how to do something ' +
+      'and you have successfully executed it once. Use a short identifier name (in the user language) and a ' +
+      'description that includes concrete URLs/commands/app names so future-you can re-execute via ' +
+      'run_command/open_app/etc. Re-calling with the SAME name overwrites the existing procedure.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Short identifier (e.g. "大学のコースページを開く")',
+        },
+        description: {
+          type: 'string',
+          description: 'Concrete steps including full URLs, exact commands, exact app names',
+        },
+      },
+      required: ['name', 'description'],
+    },
+  },
+  {
+    name: 'forget_procedure',
+    description:
+      'Remove a previously learned procedure by exact name. Use only when the user explicitly asks to forget.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Exact name of the procedure to remove' },
+      },
+      required: ['name'],
+    },
+  },
 ]
 
 const OPERATIONAL_PROMPT = `
@@ -584,6 +618,13 @@ Tool result handling:
 - After every tool call, inspect the actual result before answering.
 - If a result contains error, ok:false, nonzero exitCode, or stderr, report the failure honestly or retry with corrected inputs.
 - For multi-step tasks, decide the next tool only after seeing the previous tool result.
+
+Self-learning:
+- Before saying you do not know how to do something, check the "Learned procedures" section in the memory block. If a matching procedure exists, execute it using existing tools (run_command, open_app, web_search, etc.) without asking the user again.
+- When the user teaches you how to do a new procedure (e.g. tells you which URL to open, which app to launch, or which command to run), execute it ONCE to verify it works. After it succeeds, decide on your own whether to call learn_procedure to remember it. Use learn_procedure for procedures likely to be requested again (URLs to open, app launches, repeatable shell sequences). Skip it for one-off actions (one-time searches, one-time file paths).
+- The description field of learn_procedure must contain CONCRETE re-executable info (full URL, exact command, exact app name) — not vague summaries. Future-you only sees this string.
+- If the user explicitly says "覚えなくていい" / "don't remember this" or similar, do NOT call learn_procedure even if it looks teachable.
+- If a learned procedure is now wrong and the user gives a correction (e.g. "URL changed to ..."), call learn_procedure with the SAME name and the new description to overwrite. Use forget_procedure only when the user explicitly asks to forget a procedure entirely.
 `.trim()
 
 

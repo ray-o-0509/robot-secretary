@@ -317,6 +317,21 @@ export function registerCoreIpc(deps: Deps): void {
         const profile = await deleteProfileItem(String(args.key ?? ''))
         return { result: { ok: true, items: profile.items } }
       }
+      if (toolName === 'learn_procedure') {
+        const { addProcedure } = await import('../memory/store')
+        const name = String(args.name ?? '').trim()
+        const description = String(args.description ?? '').trim()
+        if (!name || !description) return { error: 'name and description are required' }
+        const memory = await addProcedure(name, description)
+        return { result: { ok: true, name, count: memory.procedures.length } }
+      }
+      if (toolName === 'forget_procedure') {
+        const { removeProcedure } = await import('../memory/store')
+        const name = String(args.name ?? '').trim()
+        if (!name) return { error: 'name is required' }
+        const memory = await removeProcedure(name)
+        return { result: { ok: true, name, count: memory.procedures.length } }
+      }
       if (toolName === 'cd') {
         const raw = String(args.path ?? '').trim()
         if (!raw) return { error: 'path is required' }

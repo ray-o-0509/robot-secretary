@@ -45,6 +45,13 @@ async function buildInjection(memory: Memory): Promise<string> {
   if (memory.ongoing_topics.length)
     sections.push('## Ongoing topics\n- ' + memory.ongoing_topics.join('\n- '))
 
+  if (memory.procedures.length) {
+    sections.push(
+      '## Learned procedures (you can execute these using existing tools)\n' +
+        memory.procedures.map((p) => `- **${p.name}**: ${p.description}`).join('\n'),
+    )
+  }
+
   if (!sections.length) return ''
   return '\n\n# What I know about you\n' + sections.join('\n\n')
 }

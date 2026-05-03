@@ -15,14 +15,28 @@ export type SessionRecord = {
   logFile: string
 }
 
+export type Procedure = {
+  name: string
+  description: string
+  learnedAt: string
+  updatedAt: string
+}
+
 export type Memory = {
   facts: string[]
   preferences: string[]
   ongoing_topics: string[]
+  procedures: Procedure[]
   updatedAt: string | null
 }
 
-const EMPTY_MEMORY: Memory = { facts: [], preferences: [], ongoing_topics: [], updatedAt: null }
+const EMPTY_MEMORY: Memory = {
+  facts: [],
+  preferences: [],
+  ongoing_topics: [],
+  procedures: [],
+  updatedAt: null,
+}
 
 function dirs() {
   const root = path.join(app.getPath('userData'), 'conversations')
@@ -124,6 +138,7 @@ export async function loadMemory(): Promise<Memory> {
       facts: parsed.facts ?? [],
       preferences: parsed.preferences ?? [],
       ongoing_topics: parsed.ongoing_topics ?? [],
+      procedures: Array.isArray(parsed.procedures) ? parsed.procedures : [],
       updatedAt: parsed.updatedAt ?? null,
     }
   } catch (err) {
@@ -136,6 +151,51 @@ export async function loadMemory(): Promise<Memory> {
 export async function saveMemory(memory: Memory): Promise<void> {
   await ensureDir()
   await atomicWrite(dirs().memoryFile, JSON.stringify(memory, null, 2))
+}
+
+export async function addProcedure(name: string, description: string): Promise<Memory> {
+  const trimmedName = name.trim()
+  const trimmedDesc = description.trim()
+  if (!trimmedName || !trimmedDesc) {
+    throw new Error('addProcedure: name and description must be non-empty')
+  }
+  const memory = await loadMemory()
+  const now = new Date().toISOString()
+  const idx = memory.procedures.findIndex((p) => p.name === trimmedName)
+  if (idx >= 0) {
+    memory.procedures[idx] = {
+      ...memory.procedures[idx],
+      description: trimmedDesc,
+      updatedAt: now,
+    }
+  } else {
+    memory.procedures.push({
+      name: trimmedName,
+      description: trimmedDesc,
+      learnedAt: now,
+      updatedAt: now,
+    })
+  }
+  memory.updatedAt = now
+  await saveMemory(memory)
+  return memory
+}
+
+export async function removeProcedure(name: string): Promise<Memory> {
+  const trimmedName = name.trim()
+  const memory = await loadMemory()
+  const before = memory.procedures.length
+  memory.procedures = memory.procedures.filter((p) => p.name !== trimmedName)
+  if (memory.procedures.length !== before) {
+    memory.updatedAt = new Date().toISOString()
+    await saveMemory(memory)
+  }
+  return memory
+}
+
+export async function listProcedures(): Promise<Procedure[]> {
+  const memory = await loadMemory()
+  return memory.procedures
 }
 
 export async function appendEvent(event: LogEvent): Promise<void> {

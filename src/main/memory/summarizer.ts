@@ -134,6 +134,7 @@ export async function summarize(
     facts: clamp(parsed.facts),
     preferences: clamp(parsed.preferences),
     ongoing_topics: clamp(parsed.ongoing_topics),
+    procedures: existing.procedures,
     updatedAt: new Date().toISOString(),
   }
 }
