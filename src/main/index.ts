@@ -543,19 +543,30 @@ async function requestScreenPermission() {
 // ========== 画面内ふわふわ移動 ==========
 
 function pickNewTarget() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const margin = 50
-  // チャットウィンドウ（左上）と被らないよう、ロボットの可動域を右側に制限
-  const chatRight = 24 + 360 + 24
-  const minX = Math.max(margin, chatRight)
-  // 表示ウィンドウ（右上）が出ているときは右側も避ける
-  const displayVisible = displayWin && !displayWin.isDestroyed() && displayWin.isVisible()
-  const maxX = displayVisible
-    ? width - DISPLAY_WIDTH - DISPLAY_RIGHT_MARGIN - 300 - margin
-    : width - 300 - margin
+  const robotSize = 300
+  const displays = screen.getAllDisplays()
+  const primaryId = screen.getPrimaryDisplay().id
+  // モニターをランダムに選ぶ（全モニターを等確率で）
+  const display = displays[Math.floor(Math.random() * displays.length)]
+  const { x: dx, y: dy, width, height } = display.workArea
+
+  let minX = dx + margin
+  let maxX = dx + width - robotSize - margin
+
+  // プライマリモニターのときだけチャット/表示パネル回避を適用
+  if (display.id === primaryId) {
+    const chatRight = 24 + 360 + 24
+    minX = Math.max(minX, dx + chatRight)
+    const displayVisible = displayWin && !displayWin.isDestroyed() && displayWin.isVisible()
+    if (displayVisible) {
+      maxX = dx + width - DISPLAY_WIDTH - DISPLAY_RIGHT_MARGIN - robotSize - margin
+    }
+  }
+
   const span = Math.max(1, maxX - minX)
   targetX = minX + Math.random() * span
-  targetY = margin + Math.random() * (height - 300 - margin * 2)
+  targetY = dy + margin + Math.random() * Math.max(1, height - robotSize - margin * 2)
 }
 
 function startWandering() {
