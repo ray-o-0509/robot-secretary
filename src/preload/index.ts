@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsDeleteProfile: (key: string) => ipcRenderer.invoke('settings:delete-profile', key),
   settingsGetDefaultApps: () => ipcRenderer.invoke('settings:get-default-apps'),
   settingsSaveDefaultApps: (apps: unknown) => ipcRenderer.invoke('settings:save-default-apps', apps),
+  settingsGetMemory: () => ipcRenderer.invoke('settings:get-memory'),
+  settingsSaveMemory: (memory: unknown) => ipcRenderer.invoke('settings:save-memory', memory),
+  settingsResetMemory: () => ipcRenderer.invoke('settings:reset-memory'),
 
   // Interactive PTY (xterm.js front-end ↔ node-pty back-end)
   ptyOnData: (cb: (data: string) => void) => on<[string]>('pty:data', cb),

@@ -17,6 +17,20 @@ import { useGeminiLive } from './hooks/useGeminiLive'
 export type RobotState = 'idle' | 'listening' | 'speaking' | 'thinking'
 export type RobotProcessor = 'gemini' | 'claude'
 
+export type Procedure = {
+  name: string
+  description: string
+  learnedAt: string
+  updatedAt: string
+}
+export type MemorySnapshot = {
+  facts: string[]
+  preferences: string[]
+  ongoing_topics: string[]
+  procedures: Procedure[]
+  updatedAt: string | null
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -71,6 +85,9 @@ declare global {
       settingsDeleteProfile: (key: string) => Promise<Record<string, string>>
       settingsGetDefaultApps: () => Promise<{ email?: string; browser?: string; terminal?: string; editor?: string }>
       settingsSaveDefaultApps: (apps: { email?: string; browser?: string; terminal?: string; editor?: string }) => Promise<{ ok: boolean }>
+      settingsGetMemory: () => Promise<MemorySnapshot>
+      settingsSaveMemory: (memory: MemorySnapshot) => Promise<MemorySnapshot>
+      settingsResetMemory: () => Promise<MemorySnapshot>
 
       // Interactive PTY
       ptyOnData: (cb: (data: string) => void) => () => void

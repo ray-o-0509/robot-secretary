@@ -1,6 +1,7 @@
 {
   "common": {
     "save": "Save",
+    "saving": "Saving...",
     "cancel": "Cancel",
     "edit": "Edit",
     "delete": "Delete",
@@ -59,6 +60,7 @@
     "title": "Settings",
     "tabs": {
       "profile": "Profile",
+      "memory": "Memory",
       "apps": "Default Apps",
       "api": "API Keys",
       "language": "Language"
@@ -83,6 +85,28 @@
     "api": {
       "restartRequired": "Restart the app to apply changes",
       "googleAuthNote": "Google auth (Gmail / Calendar) is configured in .env.local"
+    },
+    "memory": {
+      "description": "What Vega has learned and remembered from your conversations. Edit procedures, facts, preferences, and ongoing topics. Profile (personal info) is in a separate tab.",
+      "empty": "Nothing here yet",
+      "procedures": "Learned procedures",
+      "proceduresDescription": "Steps Vega replays when you ask for a known action. Auto-added when Vega learns; you can also edit them by hand.",
+      "addProcedure": "+ Add procedure",
+      "procedureNamePlaceholder": "Name (e.g. 'open the university course page')",
+      "procedureDescPlaceholder": "Concrete steps — include URLs, exact commands, app names so future-Vega can re-execute",
+      "learnedAt": "Learned: {{date}}",
+      "facts": "Facts",
+      "factsDescription": "Facts summarized from conversation.",
+      "factPlaceholder": "Add a fact",
+      "preferences": "Preferences & style",
+      "preferencesDescription": "Preferences Vega uses to match your communication style.",
+      "preferencePlaceholder": "Add a preference",
+      "topics": "Ongoing topics",
+      "topicsDescription": "What's currently on your mind.",
+      "topicPlaceholder": "Add a topic",
+      "resetAll": "Reset all",
+      "resetConfirm": "This wipes all procedures, facts, preferences, and topics. (Profile is preserved.) Continue?",
+      "lastUpdated": "Last updated: {{date}}"
     }
   },
   "setup": {

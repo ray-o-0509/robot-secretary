@@ -1,6 +1,7 @@
 {
   "common": {
     "save": "保存",
+    "saving": "保存中...",
     "cancel": "取消",
     "edit": "編集",
     "delete": "削除",
@@ -59,6 +60,7 @@
     "title": "設定",
     "tabs": {
       "profile": "プロフィール",
+      "memory": "メモリ",
       "apps": "デフォルトアプリ",
       "api": "APIキー",
       "language": "言語"
@@ -83,6 +85,28 @@
     "api": {
       "restartRequired": "変更後はアプリの再起動が必要です",
       "googleAuthNote": "Google認証（Gmail / Calendar）は .env.local で設定してください"
+    },
+    "memory": {
+      "description": "ベガが会話から学習・記憶している情報。手順・事実・好み・進行中の話題を編集できる。プロフィール（個人情報）は別タブ。",
+      "empty": "登録なし",
+      "procedures": "覚えた手順",
+      "proceduresDescription": "「○○して」と言われた時に再現する操作手順。ベガが学習時に自動追加する。手動で書き換えてもよい。",
+      "addProcedure": "+ 手順を追加",
+      "procedureNamePlaceholder": "名前（例: 大学のコースページを開く）",
+      "procedureDescPlaceholder": "具体的な操作（URL・コマンド・アプリ名を含めると未来のベガが再現できる）",
+      "learnedAt": "学習日: {{date}}",
+      "facts": "事実",
+      "factsDescription": "会話から要約された事実。",
+      "factPlaceholder": "事実を追加",
+      "preferences": "好み・話し方",
+      "preferencesDescription": "ベガが会話の調子を合わせるための好み。",
+      "preferencePlaceholder": "好みを追加",
+      "topics": "進行中の話題",
+      "topicsDescription": "今気にかけている話題・案件。",
+      "topicPlaceholder": "話題を追加",
+      "resetAll": "全て削除",
+      "resetConfirm": "覚えた手順・事実・好み・話題を全て消すぞ。本当にいいか？（プロフィールは消えない）",
+      "lastUpdated": "最終更新: {{date}}"
     }
   },
   "setup": {

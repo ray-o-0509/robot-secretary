@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n, { toLng } from '../i18n'
+import type { MemorySnapshot, Procedure } from '../App'
 
-type Tab = 'profile' | 'apps' | 'api' | 'language'
+type Tab = 'profile' | 'memory' | 'apps' | 'api' | 'language'
 
 type ProfileItems = Record<string, string>
 
@@ -43,6 +44,7 @@ export function SettingsApp() {
         <div style={{ ...noDrag, display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           {([
             { id: 'profile',  label: t('settings.tabs.profile') },
+            { id: 'memory',   label: t('settings.tabs.memory') },
             { id: 'apps',     label: t('settings.tabs.apps') },
             { id: 'api',      label: t('settings.tabs.api') },
             { id: 'language', label: t('settings.tabs.language') },
@@ -72,6 +74,7 @@ export function SettingsApp() {
       {/* Scrollable body — no-drag */}
       <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
         {tab === 'profile'  && <ProfileTab />}
+        {tab === 'memory'   && <MemoryTab />}
         {tab === 'apps'     && <AppsTab appRows={APP_ROWS} />}
         {tab === 'api'      && <ApiTab />}
         {tab === 'language' && <LanguageTab />}
@@ -217,6 +220,365 @@ function ProfileTab() {
           }}
         >
           {t('settings.profile.addItem')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Memory Tab ───────────────────────────────────────────────────────────────
+
+const EMPTY_MEMORY: MemorySnapshot = {
+  facts: [], preferences: [], ongoing_topics: [], procedures: [], updatedAt: null,
+}
+
+function MemoryTab() {
+  const { t } = useTranslation()
+  const [memory, setMemory] = useState<MemorySnapshot>(EMPTY_MEMORY)
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
+
+  const load = useCallback(async () => {
+    const m = await window.electronAPI.settingsGetMemory()
+    setMemory(m)
+    setDirty(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const updateList = (key: 'facts' | 'preferences' | 'ongoing_topics', list: string[]) => {
+    setMemory((m) => ({ ...m, [key]: list }))
+    setDirty(true)
+  }
+  const updateProcedures = (list: Procedure[]) => {
+    setMemory((m) => ({ ...m, procedures: list }))
+    setDirty(true)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const saved = await window.electronAPI.settingsSaveMemory(memory)
+      setMemory(saved)
+      setDirty(false)
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 1500)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const reset = async () => {
+    if (!confirm(t('settings.memory.resetConfirm'))) return
+    const wiped = await window.electronAPI.settingsResetMemory()
+    setMemory(wiped)
+    setDirty(false)
+    setSavedFlash(true)
+    setTimeout(() => setSavedFlash(false), 1500)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+        {t('settings.memory.description')}
+      </p>
+
+      <ProcedureSection
+        items={memory.procedures}
+        onChange={updateProcedures}
+      />
+
+      <StringListSection
+        title={t('settings.memory.facts')}
+        description={t('settings.memory.factsDescription')}
+        items={memory.facts}
+        onChange={(list) => updateList('facts', list)}
+        placeholder={t('settings.memory.factPlaceholder')}
+      />
+
+      <StringListSection
+        title={t('settings.memory.preferences')}
+        description={t('settings.memory.preferencesDescription')}
+        items={memory.preferences}
+        onChange={(list) => updateList('preferences', list)}
+        placeholder={t('settings.memory.preferencePlaceholder')}
+      />
+
+      <StringListSection
+        title={t('settings.memory.topics')}
+        description={t('settings.memory.topicsDescription')}
+        items={memory.ongoing_topics}
+        onChange={(list) => updateList('ongoing_topics', list)}
+        placeholder={t('settings.memory.topicPlaceholder')}
+      />
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+        <button
+          onClick={save}
+          disabled={!dirty || saving}
+          style={{
+            ...saveButtonStyle(savedFlash),
+            flex: 1,
+            opacity: !dirty && !savedFlash ? 0.4 : 1,
+            cursor: !dirty || saving ? 'default' : 'pointer',
+          }}
+        >
+          {savedFlash ? t('common.saved') : saving ? t('common.saving') : t('common.save')}
+        </button>
+        <button
+          onClick={reset}
+          style={{
+            padding: '9px 18px',
+            fontSize: 12,
+            fontFamily: 'monospace',
+            background: 'rgba(127,29,29,0.25)',
+            border: '1px solid rgba(220,38,38,0.4)',
+            borderRadius: 8,
+            color: '#fca5a5',
+            cursor: 'pointer',
+            marginTop: 4,
+          }}
+        >
+          {t('settings.memory.resetAll')}
+        </button>
+      </div>
+
+      {memory.updatedAt && (
+        <p style={{ fontSize: 10, color: '#475569', margin: 0 }}>
+          {t('settings.memory.lastUpdated', { date: new Date(memory.updatedAt).toLocaleString() })}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function StringListSection({
+  title, description, items, onChange, placeholder,
+}: {
+  title: string
+  description: string
+  items: string[]
+  onChange: (next: string[]) => void
+  placeholder: string
+}) {
+  const { t } = useTranslation()
+  const [draft, setDraft] = useState('')
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState('')
+
+  const add = () => {
+    const v = draft.trim()
+    if (!v) return
+    onChange([...items, v])
+    setDraft('')
+  }
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx))
+  const startEdit = (idx: number) => { setEditingIdx(idx); setEditValue(items[idx]) }
+  const saveEdit = () => {
+    if (editingIdx === null) return
+    const v = editValue.trim()
+    if (!v) { setEditingIdx(null); return }
+    onChange(items.map((x, i) => (i === editingIdx ? v : x)))
+    setEditingIdx(null)
+  }
+  const cancelEdit = () => setEditingIdx(null)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>{title}</div>
+      <div style={{ fontSize: 11, color: '#64748b' }}>{description}</div>
+
+      {items.length === 0 && (
+        <div style={{ fontSize: 12, color: '#475569', padding: '6px 0' }}>
+          {t('settings.memory.empty')}
+        </div>
+      )}
+
+      {items.map((item, idx) => (
+        <div key={idx} style={rowStyle}>
+          {editingIdx === idx ? (
+            <>
+              <input
+                autoFocus
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                style={inputStyle}
+              />
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <SmallBtn onClick={saveEdit} color="#6366f1">{t('common.save')}</SmallBtn>
+                <SmallBtn onClick={cancelEdit} color="#475569">{t('common.cancel')}</SmallBtn>
+              </div>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: 1, fontSize: 13, color: '#e2e8f0', minWidth: 0, wordBreak: 'break-word' }}>
+                {item}
+              </span>
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <SmallBtn onClick={() => startEdit(idx)} color="#334155">{t('common.edit')}</SmallBtn>
+                <SmallBtn onClick={() => remove(idx)} color="#7f1d1d">{t('common.delete')}</SmallBtn>
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+
+      <div style={{ ...rowStyle, gap: 6 }}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+          placeholder={placeholder}
+          style={inputStyle}
+        />
+        <SmallBtn onClick={add} color="#6366f1">{t('common.add')}</SmallBtn>
+      </div>
+    </div>
+  )
+}
+
+function ProcedureSection({
+  items, onChange,
+}: {
+  items: Procedure[]
+  onChange: (next: Procedure[]) => void
+}) {
+  const { t } = useTranslation()
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+
+  const startEdit = (idx: number) => {
+    setEditingIdx(idx)
+    setEditName(items[idx].name)
+    setEditDesc(items[idx].description)
+  }
+  const saveEdit = () => {
+    if (editingIdx === null) return
+    const name = editName.trim()
+    const description = editDesc.trim()
+    if (!name || !description) { setEditingIdx(null); return }
+    const now = new Date().toISOString()
+    onChange(items.map((p, i) => (
+      i === editingIdx ? { ...p, name, description, updatedAt: now } : p
+    )))
+    setEditingIdx(null)
+  }
+  const cancelEdit = () => setEditingIdx(null)
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx))
+  const addNew = () => {
+    const name = newName.trim()
+    const description = newDesc.trim()
+    if (!name || !description) return
+    const now = new Date().toISOString()
+    onChange([...items, { name, description, learnedAt: now, updatedAt: now }])
+    setAdding(false); setNewName(''); setNewDesc('')
+  }
+  const cancelNew = () => { setAdding(false); setNewName(''); setNewDesc('') }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>
+        {t('settings.memory.procedures')}
+      </div>
+      <div style={{ fontSize: 11, color: '#64748b' }}>
+        {t('settings.memory.proceduresDescription')}
+      </div>
+
+      {items.length === 0 && !adding && (
+        <div style={{ fontSize: 12, color: '#475569', padding: '6px 0' }}>
+          {t('settings.memory.empty')}
+        </div>
+      )}
+
+      {items.map((p, idx) => (
+        <div key={idx} style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+          {editingIdx === idx ? (
+            <>
+              <input
+                autoFocus
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder={t('settings.memory.procedureNamePlaceholder')}
+                style={inputStyle}
+              />
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                placeholder={t('settings.memory.procedureDescPlaceholder')}
+                rows={3}
+                style={{ ...inputStyle, fontFamily: 'inherit', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                <SmallBtn onClick={saveEdit} color="#6366f1">{t('common.save')}</SmallBtn>
+                <SmallBtn onClick={cancelEdit} color="#475569">{t('common.cancel')}</SmallBtn>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#a5b4fc', minWidth: 0, wordBreak: 'break-word' }}>
+                  {p.name}
+                </span>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <SmallBtn onClick={() => startEdit(idx)} color="#334155">{t('common.edit')}</SmallBtn>
+                  <SmallBtn onClick={() => remove(idx)} color="#7f1d1d">{t('common.delete')}</SmallBtn>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#cbd5e1', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {p.description}
+              </div>
+              <div style={{ fontSize: 10, color: '#475569' }}>
+                {t('settings.memory.learnedAt', { date: new Date(p.learnedAt).toLocaleDateString() })}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+
+      {adding && (
+        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={t('settings.memory.procedureNamePlaceholder')}
+            style={inputStyle}
+          />
+          <textarea
+            value={newDesc}
+            onChange={(e) => setNewDesc(e.target.value)}
+            placeholder={t('settings.memory.procedureDescPlaceholder')}
+            rows={3}
+            style={{ ...inputStyle, fontFamily: 'inherit', resize: 'vertical' }}
+          />
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+            <SmallBtn onClick={addNew} color="#6366f1">{t('common.add')}</SmallBtn>
+            <SmallBtn onClick={cancelNew} color="#475569">{t('common.cancel')}</SmallBtn>
+          </div>
+        </div>
+      )}
+
+      {!adding && (
+        <button
+          onClick={() => setAdding(true)}
+          style={{
+            padding: '7px 14px',
+            fontSize: 12,
+            background: 'rgba(99,102,241,0.15)',
+            border: '1px dashed rgba(99,102,241,0.4)',
+            borderRadius: 7,
+            color: '#a5b4fc',
+            cursor: 'pointer',
+            alignSelf: 'flex-start',
+          }}
+        >
+          {t('settings.memory.addProcedure')}
         </button>
       )}
     </div>

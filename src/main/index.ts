@@ -166,6 +166,60 @@ function registerSettingsIpc() {
     }
     return { ok: true }
   })
+
+  ipcMain.handle('settings:get-memory', async () => {
+    const { loadMemory } = await import('./memory/store')
+    return await loadMemory()
+  })
+
+  ipcMain.handle('settings:save-memory', async (_event, raw: unknown) => {
+    const { saveMemory } = await import('./memory/store')
+    const sanitized = sanitizeMemoryInput(raw)
+    await saveMemory(sanitized)
+    return sanitized
+  })
+
+  ipcMain.handle('settings:reset-memory', async () => {
+    const { saveMemory } = await import('./memory/store')
+    const empty = {
+      facts: [],
+      preferences: [],
+      ongoing_topics: [],
+      procedures: [],
+      updatedAt: new Date().toISOString(),
+    }
+    await saveMemory(empty)
+    return empty
+  })
+}
+
+function sanitizeMemoryInput(raw: unknown): import('./memory/store').Memory {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const strArray = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : []
+  const procs = Array.isArray(r.procedures)
+    ? (r.procedures as unknown[]).flatMap((p) => {
+        if (!p || typeof p !== 'object') return []
+        const o = p as Record<string, unknown>
+        const name = String(o.name ?? '').trim()
+        const description = String(o.description ?? '').trim()
+        if (!name || !description) return []
+        const now = new Date().toISOString()
+        return [{
+          name,
+          description,
+          learnedAt: typeof o.learnedAt === 'string' ? o.learnedAt : now,
+          updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : now,
+        }]
+      })
+    : []
+  return {
+    facts: strArray(r.facts),
+    preferences: strArray(r.preferences),
+    ongoing_topics: strArray(r.ongoing_topics),
+    procedures: procs,
+    updatedAt: new Date().toISOString(),
+  }
 }
 
 // ========== Setup Window ==========
