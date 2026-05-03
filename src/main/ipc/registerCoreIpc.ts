@@ -15,6 +15,11 @@ type Deps = {
 
 const CHAT_HIDE_DELAY_MS = 10_000 // 10秒会話がなければチャットウィンドウを非表示
 
+// POSIX-shell single-quote escape so paths with spaces / quotes survive.
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`
+}
+
 // Render a voice-issued command + its captured output as ANSI-colored lines for the pty stream.
 // Uses \r\n for terminal newlines so xterm renders correctly mid-prompt.
 function formatVoiceLine(command: string, stdout: string, stderr: string): string {
@@ -84,12 +89,16 @@ export function registerCoreIpc(deps: Deps): void {
   ipcMain.on('pty:resize', (_event, cols: number, rows: number) => ptyMod?.ptyResize(cols, rows))
   ipcMain.handle('pty:get-buffer', () => ptyMod?.ptyGetBuffer() ?? '')
 
-  async function injectAndShowTerminal(command: string, stdout: string, stderr: string) {
+  async function showTerminalPanel() {
     const { pushPayload } = await import('../display/show-panel')
-    ptyMod?.ptyInject(formatVoiceLine(command, stdout, stderr))
     const { win, ready } = await deps.getOrCreateDisplayWindow()
     win.show()
     pushPayload(win, { type: 'terminal_output', data: null, fetchedAt: Date.now() }, ready)
+  }
+
+  async function injectAndShowTerminal(command: string, stdout: string, stderr: string) {
+    ptyMod?.ptyInject(formatVoiceLine(command, stdout, stderr))
+    await showTerminalPanel()
   }
 
   ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
@@ -208,6 +217,10 @@ export function registerCoreIpc(deps: Deps): void {
         const target = String(args.path ?? '').trim()
         if (!target) return { error: 'path is required' }
         currentCwd = target.startsWith('~') ? target.replace('~', homedir()) : target
+        // Mirror to the live pty so its cwd stays in sync with currentCwd.
+        // \x15 (Ctrl-U) wipes any partial input the user may have started before the cd lands.
+        ptyMod?.ptyWrite(`\x15cd ${shellQuote(currentCwd)}\n`)
+        await showTerminalPanel()
         return { cwd: currentCwd }
       }
       if (toolName === 'run_command') {
