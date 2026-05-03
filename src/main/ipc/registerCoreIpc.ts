@@ -531,10 +531,10 @@ export function registerCoreIpc(deps: Deps): void {
     deps.setWanderingByState(state)
     const chat = deps.getChatWindow()
     if (chat && !chat.isDestroyed()) {
-      // 会話中はチャットウィンドウを表示、タイマーをリセット
       if (state !== 'idle') {
+        // 会話中はチャットウィンドウを表示し、タイマーを止める
         if (!chat.isVisible()) chat.show()
-        resetChatHideTimer()
+        if (chatHideTimer) { clearTimeout(chatHideTimer); chatHideTimer = null }
       } else {
         // idle になったら10秒タイマー開始
         resetChatHideTimer()
