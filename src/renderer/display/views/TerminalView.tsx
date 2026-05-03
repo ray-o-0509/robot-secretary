@@ -23,10 +23,10 @@ export function TerminalView(_props: Props) {
       fontSize: 12,
       lineHeight: 1.2,
       theme: {
-        background: '#04081266',
+        background: 'rgba(0, 0, 0, 0)',
         foreground: '#e8f6ff',
         cursor: '#00f0ff',
-        cursorAccent: '#04081266',
+        cursorAccent: 'rgba(0, 0, 0, 0)',
         selectionBackground: 'rgba(0, 240, 255, 0.25)',
         black: '#04081299',
         brightBlack: '#1a2238',
@@ -93,7 +93,7 @@ export function TerminalView(_props: Props) {
       style={{
         width: '100%',
         height: 360,
-        background: 'rgba(4, 8, 18, 0.95)',
+        background: 'transparent',
         border: '1px solid rgba(0, 240, 255, 0.15)',
         padding: 6,
         boxSizing: 'border-box',
