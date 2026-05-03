@@ -208,6 +208,20 @@ export async function uploadDriveFile(opts: {
 
   const { drive, account: acc } = getDriveClient(opts.account)
   const name = opts.name ?? path.basename(expanded)
+  const { requireConfirmation } = await import('../confirmation/index')
+  const confirmed = await requireConfirmation({
+    action: 'Upload local file to Drive',
+    summary: `Upload "${expanded}" to Google Drive as "${name}"`,
+    details: {
+      Account: acc,
+      'Local path': expanded,
+      Name: name,
+      Size: `${stat.size} bytes`,
+      Destination: opts.parentId ? `Folder ${opts.parentId}` : 'My Drive root',
+    },
+  })
+  if (!confirmed) return { ok: false, cancelled: true as const, account: acc }
+
   // Drive infers mimeType from upload by default; we leave it unset
   const res = await drive.files.create({
     requestBody: {

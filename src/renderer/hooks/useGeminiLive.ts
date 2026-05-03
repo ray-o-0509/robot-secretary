@@ -209,7 +209,7 @@ const secretaryTools = [
   },
   {
     name: 'upload_drive_file',
-    description: 'Upload a local file to Drive. mimeType is inferred. Pass parentId to upload into a specific folder.',
+    description: 'Upload a local file to Drive after user confirmation. mimeType is inferred. Pass parentId to upload into a specific folder.',
     parameters: {
       type: 'object',
       properties: {

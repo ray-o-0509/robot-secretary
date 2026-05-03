@@ -58,13 +58,14 @@ export function DisplayApp() {
     setLoading(true)
     window.electronAPI?.displayRefresh(payload.type)
   }
+  const canRefresh = payload.type !== 'drive_search'
 
   return (
     <DisplayShell
       label={PANEL_LABELS[payload.type]}
       fetchedAt={payload.fetchedAt}
       loading={loading}
-      onRefresh={refresh}
+      onRefresh={canRefresh ? refresh : undefined}
       onClose={() => window.electronAPI?.displayClose()}
     >
       {renderView(payload)}

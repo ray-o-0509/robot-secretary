@@ -152,7 +152,7 @@ Build outputs land in `out/{main,preload,renderer}/` and are referenced by `pack
 ### Voice loop (`src/renderer/hooks/useGeminiLive.ts`)
 
 This is the central piece. On startup the renderer:
-1. Opens a Gemini Live session (`gemini-2.0-flash-live-001`, audio modality, voice `Kore`) with a Japanese system prompt and a static `secretaryTools` function-declaration list.
+1. Opens a Gemini Live session (model from `MODELS.geminiLive` in `src/config/models.ts`, currently `gemini-3.1-flash-live-preview`; audio modality, voice `Kore`) with a Japanese system prompt and a static `secretaryTools` function-declaration list.
 2. Opens the mic at 16 kHz via `getUserMedia` and pipes PCM into `sendRealtimeInput` — but **only when `isPTTActiveRef.current` is true**. The mic stream is always live; PTT just gates upload.
 3. PTT is driven by main-process events `ptt-start` / `ptt-stop`. On release, the renderer sends a small silence buffer so Gemini's VAD detects end-of-utterance.
 4. Incoming `serverContent.modelTurn.parts[].inlineData` is base64 PCM at 24 kHz, scheduled sequentially on `playbackCtxRef` using `nextPlayTimeRef` so chunks don't overlap.

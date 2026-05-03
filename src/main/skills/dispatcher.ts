@@ -244,7 +244,7 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'upload_drive_file',
-    description: 'Upload a local file to Drive. Mime type is inferred. Pass parentId to upload into a specific folder.',
+    description: 'Upload a local file to Drive after user confirmation. Mime type is inferred. Pass parentId to upload into a specific folder.',
     input_schema: {
       type: 'object',
       properties: {
