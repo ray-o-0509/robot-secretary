@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CYAN, FONT_MONO, CYBER_STYLES } from './styles'
 import { DisplayShell } from './DisplayShell'
 import { TopButtons } from './TopButtons'
@@ -17,14 +17,15 @@ import { PANEL_LABELS, type PanelPayload } from './types'
 export function DisplayApp() {
   const [payload, setPayload] = useState<PanelPayload | null>(null)
   const [loading, setLoading] = useState(false)
+  // Track the newest fetchedAt we've accepted. A stale fetch of a *different* panel
+  // type that finishes after the user switched would otherwise clobber the new view.
+  const lastFetchedAtRef = useRef(0)
 
   useEffect(() => {
     window.electronAPI?.onDisplayData((p) => {
-      setPayload((prev) => {
-        // 古い fetchedAt のペイロードが後着しても捨てる
-        if (prev && p.fetchedAt < prev.fetchedAt && prev.type === p.type) return prev
-        return p
-      })
+      if (p.fetchedAt < lastFetchedAtRef.current) return
+      lastFetchedAtRef.current = p.fetchedAt
+      setPayload(p)
       setLoading(p.loading === true)
     })
   }, [])
