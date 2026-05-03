@@ -15,6 +15,16 @@ type Deps = {
 
 const CHAT_HIDE_DELAY_MS = 10_000 // 10秒会話がなければチャットウィンドウを非表示
 
+// Render a voice-issued command + its captured output as ANSI-colored lines for the pty stream.
+// Uses \r\n for terminal newlines so xterm renders correctly mid-prompt.
+function formatVoiceLine(command: string, stdout: string, stderr: string): string {
+  const toLF = (s: string) => s.replace(/\r?\n/g, '\r\n')
+  const head = `\r\n\x1b[36;1m[voice]\x1b[0m \x1b[1m${command}\x1b[0m\r\n`
+  const out = stdout ? toLF(stdout) + '\r\n' : ''
+  const err = stderr ? '\x1b[31m' + toLF(stderr) + '\x1b[0m\r\n' : ''
+  return head + out + err
+}
+
 export function registerCoreIpc(deps: Deps): void {
   let chatHideTimer: ReturnType<typeof setTimeout> | null = null
   let currentCwd = homedir()
@@ -48,6 +58,39 @@ export function registerCoreIpc(deps: Deps): void {
       respondToConfirmation(id, confirmed)
     })
   })
+
+  // Interactive PTY: hoist module once and coalesce per-keystroke broadcasts so
+  // bursty output produces fewer IPC sends and fewer xterm writes downstream.
+  let ptyMod: typeof import('../skills/shell/pty') | null = null
+  let pendingPtyData = ''
+  let ptyFlushScheduled = false
+  import('../skills/shell/pty').then((mod) => {
+    ptyMod = mod
+    mod.ptySubscribe((data) => {
+      pendingPtyData += data
+      if (ptyFlushScheduled) return
+      ptyFlushScheduled = true
+      setImmediate(() => {
+        const out = pendingPtyData
+        pendingPtyData = ''
+        ptyFlushScheduled = false
+        const w = deps.getDisplayWindow()
+        if (w && !w.isDestroyed()) w.webContents.send('pty:data', out)
+      })
+    })
+  })
+
+  ipcMain.on('pty:write', (_event, data: string) => ptyMod?.ptyWrite(data))
+  ipcMain.on('pty:resize', (_event, cols: number, rows: number) => ptyMod?.ptyResize(cols, rows))
+  ipcMain.handle('pty:get-buffer', () => ptyMod?.ptyGetBuffer() ?? '')
+
+  async function injectAndShowTerminal(command: string, stdout: string, stderr: string) {
+    const { pushPayload } = await import('../display/show-panel')
+    ptyMod?.ptyInject(formatVoiceLine(command, stdout, stderr))
+    const { win, ready } = await deps.getOrCreateDisplayWindow()
+    win.show()
+    pushPayload(win, { type: 'terminal_output', data: null, fetchedAt: Date.now() }, ready)
+  }
 
   ipcMain.handle('call-tool', async (_event, toolName: string, args: Record<string, unknown>) => {
     try {
@@ -169,22 +212,18 @@ export function registerCoreIpc(deps: Deps): void {
       }
       if (toolName === 'run_command') {
         const { runCommand } = await import('../skills/shell/index')
+        const command = String(args.command ?? '')
         const cwd = (args.cwd as string | undefined) ?? currentCwd
-        const result = await runCommand(String(args.command ?? ''), cwd)
-        const { pushPayload } = await import('../display/show-panel')
-        const { win, ready } = await deps.getOrCreateDisplayWindow()
-        win.show()
-        pushPayload(win, { type: 'terminal_output', data: { command: args.command, ...result }, fetchedAt: Date.now() }, ready)
+        const result = await runCommand(command, cwd)
+        await injectAndShowTerminal(command, result.stdout, result.stderr)
         return { result }
       }
       if (toolName === 'run_claude') {
         const { runClaude } = await import('../skills/shell/index')
+        const prompt = String(args.prompt ?? '')
         const cwd = (args.cwd as string | undefined) ?? currentCwd
-        const result = await runClaude(String(args.prompt ?? ''), cwd)
-        const { pushPayload } = await import('../display/show-panel')
-        const { win, ready } = await deps.getOrCreateDisplayWindow()
-        win.show()
-        pushPayload(win, { type: 'terminal_output', data: { command: `claude -p "${args.prompt}"`, stdout: String(result.result ?? ''), stderr: '', cwd }, fetchedAt: Date.now() }, ready)
+        const result = await runClaude(prompt, cwd)
+        await injectAndShowTerminal(`claude -p "${prompt}"`, String(result.result ?? ''), '')
         return { result }
       }
       if (

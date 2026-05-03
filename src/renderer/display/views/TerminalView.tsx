@@ -1,108 +1,103 @@
-import { useTranslation } from 'react-i18next'
-import { LuMapPin } from 'react-icons/lu'
-import { CYAN, FONT_MONO, MAGENTA } from '../styles'
-import { EmptyState } from '../components/EmptyState'
-import type { PanelPayload, TerminalOutputData } from '../types'
+import { useEffect, useRef } from 'react'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import '@xterm/xterm/css/xterm.css'
+import type { PanelPayload } from '../types'
 
 interface Props {
   payload: PanelPayload
 }
 
-export function TerminalView({ payload }: Props) {
-  const { t } = useTranslation()
-  const d = payload.data as TerminalOutputData | null
+// payload is unused: the terminal mirrors the singleton pty in main, not the panel data.
+export function TerminalView(_props: Props) {
+  const hostRef = useRef<HTMLDivElement>(null)
 
-  if (!d) {
-    return <EmptyState message={t('terminal.noOutput')} />
-  }
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: '"SF Mono", Menlo, Monaco, "Courier New", monospace',
+      fontSize: 12,
+      lineHeight: 1.2,
+      theme: {
+        background: '#04081266',
+        foreground: '#e8f6ff',
+        cursor: '#00f0ff',
+        cursorAccent: '#04081266',
+        selectionBackground: 'rgba(0, 240, 255, 0.25)',
+        black: '#04081299',
+        brightBlack: '#1a2238',
+      },
+      allowTransparency: true,
+      scrollback: 5000,
+    })
+
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.loadAddon(
+      new WebLinksAddon((_event, uri) => {
+        window.electronAPI?.openUrl?.(uri)
+      }),
+    )
+    term.open(host)
+    fit.fit()
+    window.electronAPI?.ptyResize?.(term.cols, term.rows)
+
+    let cancelled = false
+    let unsubscribe: (() => void) | undefined
+
+    // Buffer first, then subscribe. Data emitted during the await is dropped from this
+    // mount but persists in main's scrollback, so it reappears on the next mount/refresh.
+    window.electronAPI
+      ?.ptyGetBuffer?.()
+      .then((buf) => {
+        if (cancelled) return
+        if (buf) term.write(buf)
+        unsubscribe = window.electronAPI?.ptyOnData?.((data) => term.write(data))
+      })
+      .catch(() => {/* ignore — pty may not be available in older builds */})
+
+    const onInput = term.onData((data) => {
+      window.electronAPI?.ptyWrite?.(data)
+    })
+
+    let rafId = 0
+    const ro = new ResizeObserver(() => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        try {
+          fit.fit()
+          window.electronAPI?.ptyResize?.(term.cols, term.rows)
+        } catch {/* host detached mid-resize */}
+      })
+    })
+    ro.observe(host)
+
+    return () => {
+      cancelled = true
+      ro.disconnect()
+      if (rafId) cancelAnimationFrame(rafId)
+      unsubscribe?.()
+      onInput.dispose()
+      term.dispose()
+    }
+  }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div
-        style={{
-          padding: '8px 12px',
-          fontFamily: FONT_MONO,
-          fontSize: 12,
-          color: CYAN,
-          background: 'rgba(0, 240, 255, 0.07)',
-          border: `1px solid rgba(0, 240, 255, 0.3)`,
-          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-          wordBreak: 'break-all',
-        }}
-      >
-        <span style={{ opacity: 0.6, marginRight: 6 }}>$</span>
-        <span style={{ textShadow: `0 0 6px ${CYAN}` }}>{d.command}</span>
-      </div>
-
-      <div
-        style={{
-          fontFamily: FONT_MONO,
-          fontSize: 10,
-          color: 'rgba(0, 240, 255, 0.5)',
-          letterSpacing: 0.8,
-          paddingLeft: 2,
-        }}
-      >
-        <LuMapPin size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />{d.cwd}
-      </div>
-
-      {d.stdout ? (
-        <pre
-          style={{
-            margin: 0,
-            padding: '10px 12px',
-            fontFamily: FONT_MONO,
-            fontSize: 11,
-            lineHeight: 1.6,
-            color: '#e8f6ff',
-            background: 'rgba(4, 8, 18, 0.95)',
-            border: '1px solid rgba(0, 240, 255, 0.15)',
-            overflowX: 'auto',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            maxHeight: 320,
-            overflowY: 'auto',
-          }}
-        >
-          {d.stdout}
-        </pre>
-      ) : null}
-
-      {d.stderr ? (
-        <pre
-          style={{
-            margin: 0,
-            padding: '10px 12px',
-            fontFamily: FONT_MONO,
-            fontSize: 11,
-            lineHeight: 1.6,
-            color: '#ffd0d0',
-            background: 'rgba(28, 4, 4, 0.95)',
-            border: `1px solid rgba(255, 43, 214, 0.3)`,
-            overflowX: 'auto',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            maxHeight: 160,
-            overflowY: 'auto',
-          }}
-        >
-          <span style={{ color: MAGENTA, fontWeight: 700, display: 'block', marginBottom: 4 }}>stderr</span>
-          {d.stderr}
-        </pre>
-      ) : null}
-
-      {!d.stdout && !d.stderr && (
-        <div
-          style={{
-            fontFamily: FONT_MONO,
-            fontSize: 11,
-            color: 'rgba(0, 240, 255, 0.4)',
-            padding: '8px 2px',
-          }}
-        >
-          {t('terminal.emptyOutput')}
-        </div>
-      )}
-    </div>
+    <div
+      ref={hostRef}
+      style={{
+        width: '100%',
+        height: 360,
+        background: 'rgba(4, 8, 18, 0.95)',
+        border: '1px solid rgba(0, 240, 255, 0.15)',
+        padding: 6,
+        boxSizing: 'border-box',
+      }}
+    />
   )
 }

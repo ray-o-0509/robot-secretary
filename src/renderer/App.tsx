@@ -71,6 +71,12 @@ declare global {
       settingsDeleteProfile: (key: string) => Promise<Record<string, string>>
       settingsGetDefaultApps: () => Promise<{ email?: string; browser?: string; terminal?: string; editor?: string }>
       settingsSaveDefaultApps: (apps: { email?: string; browser?: string; terminal?: string; editor?: string }) => Promise<{ ok: boolean }>
+
+      // Interactive PTY
+      ptyOnData: (cb: (data: string) => void) => () => void
+      ptyWrite: (data: string) => void
+      ptyResize: (cols: number, rows: number) => void
+      ptyGetBuffer: () => Promise<string>
     }
   }
 }

@@ -88,6 +88,10 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
         const { listRecentDriveFiles } = await import('../skills/drive/index')
         return { type, data: await listRecentDriveFiles(30), fetchedAt }
       }
+      case 'terminal_output': {
+        // The terminal panel renders the singleton pty directly; payload data is unused.
+        return { type, data: null, fetchedAt }
+      }
     }
   } catch (err) {
     return { type, data: null, fetchedAt, error: String(err instanceof Error ? err.message : err) }
@@ -146,11 +150,8 @@ export function buildSummary(payload: PanelPayload): string {
       const upN = d.data?.upcoming?.length ?? 0
       return `Movies: ${nowN} now playing, ${upN} upcoming`
     }
-    case 'terminal_output': {
-      const d = payload.data as { command: string; stdout: string; stderr: string } | null
-      if (!d) return 'no output'
-      return `Command executed: ${d.command}`
-    }
+    case 'terminal_output':
+      return 'Interactive terminal'
     case 'timer': {
       const d = payload.data as { id: string; kind: string; state: string }[] | null
       if (!d) return '0 entries'

@@ -309,9 +309,10 @@ const secretaryTools = [
             'movies',
             'timer',
             'drive_recent',
+            'terminal_output',
           ],
           description:
-            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies, timer=active timers and stopwatches, drive_recent=recently modified Google Drive files',
+            'email=Gmail inbox, calendar_today=today\'s events, calendar_tomorrow=tomorrow, calendar_week=next 7 days, tasks=TickTick incomplete, news=AI news daily digest, tools=recommended tools, movies=now-playing/upcoming movies, timer=active timers and stopwatches, drive_recent=recently modified Google Drive files, terminal_output=interactive shell terminal',
         },
       },
       required: ['type'],

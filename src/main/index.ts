@@ -975,6 +975,7 @@ app.on('before-quit', async (e) => {
 app.on('window-all-closed', () => {
   uIOhook.stop()
   stopWandering()
+  import('./skills/shell/pty').then(({ ptyKill }) => ptyKill()).catch(() => {/* not loaded */})
   if (process.platform !== 'darwin') app.quit()
 })
 

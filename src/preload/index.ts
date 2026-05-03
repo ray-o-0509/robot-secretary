@@ -62,4 +62,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsDeleteProfile: (key: string) => ipcRenderer.invoke('settings:delete-profile', key),
   settingsGetDefaultApps: () => ipcRenderer.invoke('settings:get-default-apps'),
   settingsSaveDefaultApps: (apps: unknown) => ipcRenderer.invoke('settings:save-default-apps', apps),
+
+  // Interactive PTY (xterm.js front-end ↔ node-pty back-end)
+  ptyOnData: (cb: (data: string) => void) => on<[string]>('pty:data', cb),
+  ptyWrite: (data: string) => ipcRenderer.send('pty:write', data),
+  ptyResize: (cols: number, rows: number) => ipcRenderer.send('pty:resize', cols, rows),
+  ptyGetBuffer: (): Promise<string> => ipcRenderer.invoke('pty:get-buffer'),
 })

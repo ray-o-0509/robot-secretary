@@ -39,9 +39,13 @@
     "@react-three/drei": "^9.115.0",
     "@react-three/fiber": "^8.17.0",
     "@react-three/postprocessing": "^2.19.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
     "dotenv": "^16.4.0",
     "googleapis": "^144.0.0",
     "i18next": "^26.0.8",
+    "node-pty": "^1.1.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-i18next": "^17.0.6",
@@ -54,6 +58,7 @@
       "@google/genai",
       "electron",
       "esbuild",
+      "node-pty",
       "protobufjs",
       "uiohook-napi"
     ],
@@ -77,6 +82,11 @@
     "files": [
       "out/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-pty/lib/**",
+      "**/node_modules/node-pty/prebuilds/**",
+      "**/node_modules/node-pty/package.json"
     ]
   }
 }

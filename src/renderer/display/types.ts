@@ -47,12 +47,6 @@ export type TimerEntry = {
   state: 'running' | 'paused' | 'done' | 'stopped'
 }
 
-export type TerminalOutputData = {
-  command: string
-  cwd: string
-  stdout: string
-  stderr: string
-}
 
 // daily-dashboard の getDashboardEntry が返す共通形状
 export type DashboardEntry<T = unknown> = {
