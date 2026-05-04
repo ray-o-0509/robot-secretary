@@ -28,7 +28,11 @@ export async function runClaudeTask(opts: {
 
   let client: Anthropic
   try {
-    client = new Anthropic()
+    // The default of 2 retries (≈1.5s total backoff) is too short for the cold
+    // DNS/TLS warmup we hit on first request from a freshly launched Electron
+    // main process — bump it so the first call doesn't surface as a
+    // user-visible "connection error".
+    client = new Anthropic({ maxRetries: 5 })
   } catch (err) {
     return `Failed to initialize Anthropic client: ${String(err)}`
   }
