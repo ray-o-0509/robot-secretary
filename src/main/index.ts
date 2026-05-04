@@ -194,6 +194,61 @@ function registerSettingsIpc() {
     }
   })
 
+  const memoryToSnapshot = (m: import('./memory/store').Memory) => ({
+    facts: m.facts.map((x) => x.text),
+    preferences: m.preferences.map((x) => x.text),
+    ongoing_topics: m.ongoing_topics.map((x) => x.text),
+    procedures: m.procedures,
+    updatedAt: m.updatedAt,
+  })
+
+  ipcMain.handle(
+    'settings:upsert-procedure',
+    async (_event, oldName: string | null, name: string, description: string) => {
+      const { upsertProcedure } = await import('./memory/store')
+      const memory = await upsertProcedure(
+        typeof oldName === 'string' ? oldName : null,
+        String(name ?? ''),
+        String(description ?? ''),
+      )
+      return memoryToSnapshot(memory)
+    },
+  )
+
+  ipcMain.handle('settings:delete-procedure', async (_event, name: string) => {
+    const { removeProcedure, loadMemory } = await import('./memory/store')
+    await removeProcedure(String(name ?? ''))
+    return memoryToSnapshot(await loadMemory())
+  })
+
+  ipcMain.handle(
+    'settings:upsert-memory-item',
+    async (_event, kind: string, oldText: string | null, text: string) => {
+      const { upsertMemoryItem } = await import('./memory/store')
+      if (kind !== 'facts' && kind !== 'preferences' && kind !== 'ongoing_topics') {
+        throw new Error(`settings:upsert-memory-item: invalid kind ${kind}`)
+      }
+      const memory = await upsertMemoryItem(
+        kind,
+        typeof oldText === 'string' ? oldText : null,
+        String(text ?? ''),
+      )
+      return memoryToSnapshot(memory)
+    },
+  )
+
+  ipcMain.handle(
+    'settings:delete-memory-item',
+    async (_event, kind: string, text: string) => {
+      const { removeMemoryItem } = await import('./memory/store')
+      if (kind !== 'facts' && kind !== 'preferences' && kind !== 'ongoing_topics') {
+        throw new Error(`settings:delete-memory-item: invalid kind ${kind}`)
+      }
+      const memory = await removeMemoryItem(kind, String(text ?? ''))
+      return memoryToSnapshot(memory)
+    },
+  )
+
   ipcMain.handle('settings:reset-memory', async () => {
     const { saveMemory } = await import('./memory/store')
     const empty: import('./memory/store').Memory = {

@@ -87,6 +87,21 @@ declare global {
       settingsGetMemory: () => Promise<MemorySnapshot>
       settingsSaveMemory: (memory: MemorySnapshot) => Promise<MemorySnapshot>
       settingsResetMemory: () => Promise<MemorySnapshot>
+      settingsUpsertProcedure: (
+        oldName: string | null,
+        name: string,
+        description: string,
+      ) => Promise<MemorySnapshot>
+      settingsDeleteProcedure: (name: string) => Promise<MemorySnapshot>
+      settingsUpsertMemoryItem: (
+        kind: 'facts' | 'preferences' | 'ongoing_topics',
+        oldText: string | null,
+        text: string,
+      ) => Promise<MemorySnapshot>
+      settingsDeleteMemoryItem: (
+        kind: 'facts' | 'preferences' | 'ongoing_topics',
+        text: string,
+      ) => Promise<MemorySnapshot>
       settingsGetLanguage: () => Promise<string>
 
       // Interactive PTY

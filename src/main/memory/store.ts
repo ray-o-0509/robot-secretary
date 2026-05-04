@@ -213,6 +213,94 @@ export async function listProcedures(): Promise<Procedure[]> {
   return memory.procedures
 }
 
+export type MemoryListKind = 'facts' | 'preferences' | 'ongoing_topics'
+
+export async function upsertProcedure(
+  oldName: string | null,
+  name: string,
+  description: string,
+): Promise<Memory> {
+  const trimmedName = name.trim()
+  const trimmedDesc = description.trim()
+  if (!trimmedName || !trimmedDesc) {
+    throw new Error('upsertProcedure: name and description must be non-empty')
+  }
+  const memory = await loadMemory()
+  const now = new Date().toISOString()
+  const targetKey = oldName?.trim() || trimmedName
+  const idx = memory.procedures.findIndex((p) => p.name === targetKey)
+  // Drop any other entry that already has the new name to keep names unique
+  if (idx >= 0) {
+    const existing = memory.procedures[idx]
+    memory.procedures = memory.procedures.filter(
+      (p, i) => i === idx || p.name !== trimmedName,
+    )
+    const newIdx = memory.procedures.indexOf(existing)
+    memory.procedures[newIdx] = {
+      ...existing,
+      name: trimmedName,
+      description: trimmedDesc,
+      updatedAt: now,
+    }
+  } else {
+    memory.procedures = memory.procedures.filter((p) => p.name !== trimmedName)
+    memory.procedures.push({
+      name: trimmedName,
+      description: trimmedDesc,
+      learnedAt: now,
+      updatedAt: now,
+    })
+  }
+  memory.updatedAt = now
+  await saveMemory(memory)
+  return memory
+}
+
+export async function upsertMemoryItem(
+  kind: MemoryListKind,
+  oldText: string | null,
+  text: string,
+): Promise<Memory> {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    throw new Error('upsertMemoryItem: text must be non-empty')
+  }
+  const memory = await loadMemory()
+  const today = new Date().toISOString().slice(0, 10)
+  const targetKey = oldText?.trim() || trimmed
+  const list = memory[kind]
+  const idx = list.findIndex((x) => x.text === targetKey)
+  if (idx >= 0) {
+    const existing = list[idx]
+    const filtered = list.filter((x, i) => i === idx || x.text !== trimmed)
+    const newIdx = filtered.indexOf(existing)
+    filtered[newIdx] = { ...existing, text: trimmed, lastSeen: today }
+    memory[kind] = filtered
+  } else {
+    const filtered = list.filter((x) => x.text !== trimmed)
+    filtered.push({ text: trimmed, importance: 2, lastSeen: today })
+    memory[kind] = filtered
+  }
+  memory.updatedAt = new Date().toISOString()
+  await saveMemory(memory)
+  return memory
+}
+
+export async function removeMemoryItem(
+  kind: MemoryListKind,
+  text: string,
+): Promise<Memory> {
+  const trimmed = text.trim()
+  const memory = await loadMemory()
+  const before = memory[kind].length
+  memory[kind] = memory[kind].filter((x) => x.text !== trimmed)
+  if (memory[kind].length !== before) {
+    memory.updatedAt = new Date().toISOString()
+    await saveMemory(memory)
+  }
+  return memory
+}
+
 export async function appendEvent(event: LogEvent): Promise<void> {
   await ensureDir()
   const file = path.join(dirs().logs, todayLogName())

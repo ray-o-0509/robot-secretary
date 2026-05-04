@@ -65,6 +65,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsGetMemory: () => ipcRenderer.invoke('settings:get-memory'),
   settingsSaveMemory: (memory: unknown) => ipcRenderer.invoke('settings:save-memory', memory),
   settingsResetMemory: () => ipcRenderer.invoke('settings:reset-memory'),
+  settingsUpsertProcedure: (oldName: string | null, name: string, description: string) =>
+    ipcRenderer.invoke('settings:upsert-procedure', oldName, name, description),
+  settingsDeleteProcedure: (name: string) =>
+    ipcRenderer.invoke('settings:delete-procedure', name),
+  settingsUpsertMemoryItem: (
+    kind: 'facts' | 'preferences' | 'ongoing_topics',
+    oldText: string | null,
+    text: string,
+  ) => ipcRenderer.invoke('settings:upsert-memory-item', kind, oldText, text),
+  settingsDeleteMemoryItem: (
+    kind: 'facts' | 'preferences' | 'ongoing_topics',
+    text: string,
+  ) => ipcRenderer.invoke('settings:delete-memory-item', kind, text),
   settingsGetLanguage: (): Promise<string> => ipcRenderer.invoke('settings:get-language'),
 
   // Interactive PTY (xterm.js front-end ↔ node-pty back-end)

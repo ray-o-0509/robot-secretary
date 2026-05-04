@@ -230,50 +230,40 @@ const EMPTY_MEMORY: MemorySnapshot = {
   facts: [], preferences: [], ongoing_topics: [], procedures: [], updatedAt: null,
 }
 
+type MemoryListKind = 'facts' | 'preferences' | 'ongoing_topics'
+
 function MemoryTab() {
   const { t } = useTranslation()
   const [memory, setMemory] = useState<MemorySnapshot>(EMPTY_MEMORY)
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [savedFlash, setSavedFlash] = useState(false)
 
   const load = useCallback(async () => {
     const m = await window.electronAPI.settingsGetMemory()
     setMemory(m)
-    setDirty(false)
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  const updateList = (key: 'facts' | 'preferences' | 'ongoing_topics', list: string[]) => {
-    setMemory((m) => ({ ...m, [key]: list }))
-    setDirty(true)
+  const upsertItem = async (kind: MemoryListKind, oldText: string | null, text: string) => {
+    const saved = await window.electronAPI.settingsUpsertMemoryItem(kind, oldText, text)
+    setMemory(saved)
   }
-  const updateProcedures = (list: Procedure[]) => {
-    setMemory((m) => ({ ...m, procedures: list }))
-    setDirty(true)
+  const deleteItem = async (kind: MemoryListKind, text: string) => {
+    const saved = await window.electronAPI.settingsDeleteMemoryItem(kind, text)
+    setMemory(saved)
   }
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      const saved = await window.electronAPI.settingsSaveMemory(memory)
-      setMemory(saved)
-      setDirty(false)
-      setSavedFlash(true)
-      setTimeout(() => setSavedFlash(false), 1500)
-    } finally {
-      setSaving(false)
-    }
+  const upsertProcedure = async (oldName: string | null, name: string, description: string) => {
+    const saved = await window.electronAPI.settingsUpsertProcedure(oldName, name, description)
+    setMemory(saved)
+  }
+  const deleteProcedure = async (name: string) => {
+    const saved = await window.electronAPI.settingsDeleteProcedure(name)
+    setMemory(saved)
   }
 
   const reset = async () => {
     if (!confirm(t('settings.memory.resetConfirm'))) return
     const wiped = await window.electronAPI.settingsResetMemory()
     setMemory(wiped)
-    setDirty(false)
-    setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 1500)
   }
 
   return (
@@ -284,14 +274,16 @@ function MemoryTab() {
 
       <ProcedureSection
         items={memory.procedures}
-        onChange={updateProcedures}
+        onUpsert={upsertProcedure}
+        onDelete={deleteProcedure}
       />
 
       <StringListSection
         title={t('settings.memory.facts')}
         description={t('settings.memory.factsDescription')}
         items={memory.facts}
-        onChange={(list) => updateList('facts', list)}
+        onUpsert={(oldText, text) => upsertItem('facts', oldText, text)}
+        onDelete={(text) => deleteItem('facts', text)}
         placeholder={t('settings.memory.factPlaceholder')}
       />
 
@@ -299,7 +291,8 @@ function MemoryTab() {
         title={t('settings.memory.preferences')}
         description={t('settings.memory.preferencesDescription')}
         items={memory.preferences}
-        onChange={(list) => updateList('preferences', list)}
+        onUpsert={(oldText, text) => upsertItem('preferences', oldText, text)}
+        onDelete={(text) => deleteItem('preferences', text)}
         placeholder={t('settings.memory.preferencePlaceholder')}
       />
 
@@ -307,40 +300,28 @@ function MemoryTab() {
         title={t('settings.memory.topics')}
         description={t('settings.memory.topicsDescription')}
         items={memory.ongoing_topics}
-        onChange={(list) => updateList('ongoing_topics', list)}
+        onUpsert={(oldText, text) => upsertItem('ongoing_topics', oldText, text)}
+        onDelete={(text) => deleteItem('ongoing_topics', text)}
         placeholder={t('settings.memory.topicPlaceholder')}
       />
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
-        <button
-          onClick={save}
-          disabled={!dirty || saving}
-          style={{
-            ...saveButtonStyle(savedFlash),
-            flex: 1,
-            opacity: !dirty && !savedFlash ? 0.4 : 1,
-            cursor: !dirty || saving ? 'default' : 'pointer',
-          }}
-        >
-          {savedFlash ? t('common.saved') : saving ? t('common.saving') : t('common.save')}
-        </button>
-        <button
-          onClick={reset}
-          style={{
-            padding: '9px 18px',
-            fontSize: 12,
-            fontFamily: 'monospace',
-            background: 'rgba(127,29,29,0.25)',
-            border: '1px solid rgba(220,38,38,0.4)',
-            borderRadius: 8,
-            color: '#fca5a5',
-            cursor: 'pointer',
-            marginTop: 4,
-          }}
-        >
-          {t('settings.memory.resetAll')}
-        </button>
-      </div>
+      <button
+        onClick={reset}
+        style={{
+          padding: '9px 18px',
+          fontSize: 12,
+          fontFamily: 'monospace',
+          background: 'rgba(127,29,29,0.25)',
+          border: '1px solid rgba(220,38,38,0.4)',
+          borderRadius: 8,
+          color: '#fca5a5',
+          cursor: 'pointer',
+          marginTop: 4,
+          alignSelf: 'flex-start',
+        }}
+      >
+        {t('settings.memory.resetAll')}
+      </button>
 
       {memory.updatedAt && (
         <p style={{ fontSize: 10, color: '#475569', margin: 0 }}>
@@ -352,33 +333,53 @@ function MemoryTab() {
 }
 
 function StringListSection({
-  title, description, items, onChange, placeholder,
+  title, description, items, onUpsert, onDelete, placeholder,
 }: {
   title: string
   description: string
   items: string[]
-  onChange: (next: string[]) => void
+  onUpsert: (oldText: string | null, text: string) => Promise<void>
+  onDelete: (text: string) => Promise<void>
   placeholder: string
 }) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState('')
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const add = () => {
+  const add = async () => {
     const v = draft.trim()
-    if (!v) return
-    onChange([...items, v])
-    setDraft('')
+    if (!v || busy) return
+    setBusy(true)
+    try {
+      await onUpsert(null, v)
+      setDraft('')
+    } finally {
+      setBusy(false)
+    }
   }
-  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx))
+  const remove = async (idx: number) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await onDelete(items[idx])
+    } finally {
+      setBusy(false)
+    }
+  }
   const startEdit = (idx: number) => { setEditingIdx(idx); setEditValue(items[idx]) }
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingIdx === null) return
     const v = editValue.trim()
     if (!v) { setEditingIdx(null); return }
-    onChange(items.map((x, i) => (i === editingIdx ? v : x)))
-    setEditingIdx(null)
+    setBusy(true)
+    try {
+      await onUpsert(items[editingIdx], v)
+      setEditingIdx(null)
+    } finally {
+      setBusy(false)
+    }
   }
   const cancelEdit = () => setEditingIdx(null)
 
@@ -438,10 +439,11 @@ function StringListSection({
 }
 
 function ProcedureSection({
-  items, onChange,
+  items, onUpsert, onDelete,
 }: {
   items: Procedure[]
-  onChange: (next: Procedure[]) => void
+  onUpsert: (oldName: string | null, name: string, description: string) => Promise<void>
+  onDelete: (name: string) => Promise<void>
 }) {
   const { t } = useTranslation()
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
@@ -450,32 +452,48 @@ function ProcedureSection({
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const startEdit = (idx: number) => {
     setEditingIdx(idx)
     setEditName(items[idx].name)
     setEditDesc(items[idx].description)
   }
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingIdx === null) return
     const name = editName.trim()
     const description = editDesc.trim()
     if (!name || !description) { setEditingIdx(null); return }
-    const now = new Date().toISOString()
-    onChange(items.map((p, i) => (
-      i === editingIdx ? { ...p, name, description, updatedAt: now } : p
-    )))
-    setEditingIdx(null)
+    const oldName = items[editingIdx].name
+    setBusy(true)
+    try {
+      await onUpsert(oldName, name, description)
+      setEditingIdx(null)
+    } finally {
+      setBusy(false)
+    }
   }
   const cancelEdit = () => setEditingIdx(null)
-  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx))
-  const addNew = () => {
+  const remove = async (idx: number) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await onDelete(items[idx].name)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const addNew = async () => {
     const name = newName.trim()
     const description = newDesc.trim()
-    if (!name || !description) return
-    const now = new Date().toISOString()
-    onChange([...items, { name, description, learnedAt: now, updatedAt: now }])
-    setAdding(false); setNewName(''); setNewDesc('')
+    if (!name || !description || busy) return
+    setBusy(true)
+    try {
+      await onUpsert(null, name, description)
+      setAdding(false); setNewName(''); setNewDesc('')
+    } finally {
+      setBusy(false)
+    }
   }
   const cancelNew = () => { setAdding(false); setNewName(''); setNewDesc('') }
 
