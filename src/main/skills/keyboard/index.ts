@@ -1,6 +1,30 @@
 import { spawn } from 'child_process'
+import { clipboard } from 'electron'
 
 type Result = { ok: true } | { ok: false; error: string }
+
+let pendingRestore: { value: string; timer: NodeJS.Timeout } | null = null
+
+function captureClipboardForRestore(): string {
+  if (pendingRestore) {
+    clearTimeout(pendingRestore.timer)
+    const value = pendingRestore.value
+    pendingRestore = null
+    return value
+  }
+  return clipboard.readText()
+}
+
+function scheduleClipboardRestore(value: string, delayMs = 200): void {
+  if (pendingRestore) clearTimeout(pendingRestore.timer)
+  pendingRestore = {
+    value,
+    timer: setTimeout(() => {
+      clipboard.writeText(pendingRestore?.value ?? value)
+      pendingRestore = null
+    }, delayMs),
+  }
+}
 
 function runOsascript(script: string): Promise<Result> {
   return new Promise((resolve) => {
@@ -35,24 +59,27 @@ export async function typeText(text: string): Promise<Result> {
   // Always paste via clipboard so IME (kana mode etc.) doesn't intercept keystrokes.
   // Split on '\n' so newlines become real Return keypresses (submits in chat apps).
   // Saves & restores plain-text clipboard; rich content on clipboard will be lost.
+  const saved = captureClipboardForRestore()
   const lines = text.split('\n')
-  const stmts: string[] = ['set savedClip to ""', 'try', '\tset savedClip to (the clipboard as text)', 'end try']
+  const stmts: string[] = []
 
   lines.forEach((line, i) => {
     if (line.length > 0) {
       stmts.push(`set the clipboard to "${escapeForAppleScript(line)}"`)
-      stmts.push('delay 0.05')
+      stmts.push('delay 0.03')
       stmts.push('tell application "System Events" to keystroke "v" using command down')
-      stmts.push('delay 0.15')
     }
     if (i < lines.length - 1) {
-      stmts.push(`tell application "System Events" to key code ${RETURN_KEY_CODE}`)
       stmts.push('delay 0.05')
+      stmts.push(`tell application "System Events" to key code ${RETURN_KEY_CODE}`)
+      stmts.push('delay 0.03')
     }
   })
 
-  stmts.push('set the clipboard to savedClip')
-  return runOsascript(stmts.join('\n') + '\n')
+  const result = await runOsascript(stmts.join('\n') + '\n')
+  // Restore the saved clipboard asynchronously — caller doesn't block on it.
+  scheduleClipboardRestore(saved)
+  return result
 }
 
 const SPECIAL_KEY_CODES: Record<string, number> = {
