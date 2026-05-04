@@ -88,6 +88,31 @@ export async function runClaudeTask(opts: {
       )
       const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUses.map(async (tu): Promise<Anthropic.ToolResultBlockParam> => {
+          // Avoid recursing into a sub-runClaudeTask: take a fresh screenshot and
+          // attach it to the tool result so the agent can read it itself next turn.
+          if (tu.name === 'analyze_screen') {
+            try {
+              const shot = await captureScreen()
+              return {
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: [
+                  { type: 'text', text: 'Screenshot attached.' },
+                  {
+                    type: 'image',
+                    source: { type: 'base64', media_type: shot.mediaType, data: shot.base64 },
+                  },
+                ],
+              }
+            } catch (err) {
+              return {
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: `screenshot capture failed: ${String(err)}`,
+                is_error: true,
+              }
+            }
+          }
           try {
             const result = await executeTool(tu.name, tu.input as Record<string, unknown>)
             return {

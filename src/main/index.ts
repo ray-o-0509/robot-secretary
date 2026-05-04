@@ -6,6 +6,7 @@ import * as dotenv from 'dotenv'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
+import { registerDisplayWindowFactory } from './display/registry'
 
 const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
 const originalConsole = {
@@ -931,6 +932,10 @@ function showWeatherData(data: unknown) {
 }
 
 // ========== IPC ==========
+
+// Expose the display-window factory to the skills dispatcher so executeTool('show_panel')
+// (called by the Claude API agent) can reach the same window Gemini uses.
+registerDisplayWindowFactory(getOrCreateDisplayWindow)
 
 registerCoreIpc({
   getDisplayWindow: () => displayWin,

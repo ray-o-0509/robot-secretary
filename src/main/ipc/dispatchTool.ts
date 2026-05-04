@@ -4,13 +4,7 @@ import { homedir } from 'node:os'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { executeTool } from '../skills/dispatcher'
-import { pushPayload, showPanel, isPanelType } from '../display/show-panel'
-import {
-  upsertProfileItem,
-  deleteProfileItem,
-  addProcedure,
-  removeProcedure,
-} from '../memory/store'
+import { pushPayload } from '../display/show-panel'
 import { runCommand } from '../skills/shell/index'
 import * as timerMod from '../skills/timer/index'
 
@@ -125,6 +119,30 @@ const DISPATCHER_PURE_TOOLS = new Set([
   'copy_drive_item',
   'trash_drive_item',
   'share_drive_item',
+  'search_gmail',
+  'open_app',
+  'type_text',
+  'press_keys',
+  'wait',
+  'update_profile',
+  'delete_profile',
+  'learn_procedure',
+  'forget_procedure',
+  'start_timer',
+  'pause_timer',
+  'resume_timer',
+  'cancel_timer',
+  'start_stopwatch',
+  'pause_stopwatch',
+  'resume_stopwatch',
+  'stop_stopwatch',
+  'run_command',
+  'show_panel',
+])
+
+const TIMER_TOOLS = new Set([
+  'start_timer', 'pause_timer', 'resume_timer', 'cancel_timer',
+  'start_stopwatch', 'pause_stopwatch', 'resume_stopwatch', 'stop_stopwatch',
 ])
 
 const MUTATING_TOOLS = new Set([
@@ -141,17 +159,6 @@ const MUTATING_TOOLS = new Set([
   'trash_drive_item',
   'share_drive_item',
 ])
-
-const TIMER_HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
-  start_timer: (a) => timerMod.startTimer(String(a.name ?? ''), Number(a.duration_seconds)),
-  pause_timer: (a) => timerMod.pauseTimer(String(a.id ?? '')),
-  resume_timer: (a) => timerMod.resumeTimer(String(a.id ?? '')),
-  cancel_timer: (a) => timerMod.cancelTimer(String(a.id ?? '')),
-  start_stopwatch: (a) => timerMod.startStopwatch(String(a.name ?? '')),
-  pause_stopwatch: (a) => timerMod.pauseStopwatch(String(a.id ?? '')),
-  resume_stopwatch: (a) => timerMod.resumeStopwatch(String(a.id ?? '')),
-  stop_stopwatch: (a) => timerMod.stopStopwatch(String(a.id ?? '')),
-}
 
 export async function dispatchTool(
   toolName: string,
@@ -176,7 +183,15 @@ export async function dispatchTool(
   }
 
   if (DISPATCHER_PURE_TOOLS.has(toolName)) {
-    const result = await executeTool(toolName, args)
+    // Inject Gemini's session cwd into run_command when caller didn't specify one.
+    // The Claude API agent path bypasses this and falls back to homedir() inside executeTool.
+    let toolArgs = args
+    if (toolName === 'run_command' && typeof args.cwd !== 'string') {
+      toolArgs = { ...args, cwd: deps.getCwd() }
+    }
+
+    const result = await executeTool(toolName, toolArgs)
+
     if (toolName === 'get_weather') deps.showWeatherData(result)
     if (toolName === 'web_search') {
       const sw = deps.getOrCreateSearchWindow()
@@ -186,34 +201,40 @@ export async function dispatchTool(
         sw.webContents.send('search:data', result)
       }
     }
+    if (toolName === 'search_gmail') {
+      const r = result as {
+        messages: unknown[]
+        accounts: { account: string; count: number }[]
+      }
+      const query = String(args.query ?? '').trim()
+      const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 20
+      const account = typeof args.account === 'string' ? args.account : undefined
+      deps.setLastEmailSearch({ query, maxResults, account })
+      const { win, ready } = await deps.getOrCreateDisplayWindow()
+      win.show()
+      pushPayload(win, { type: 'email_search', data: r, fetchedAt: Date.now() }, ready)
+      // Return abbreviated form so Gemini doesn't read the full message list aloud.
+      return {
+        result: {
+          ok: true,
+          totalCount: r.messages.length,
+          accounts: r.accounts.map((a) => `${a.account} (${a.count} items)`),
+        },
+      }
+    }
+    if (toolName === 'run_command') {
+      const r = result as { stdout: string; stderr: string }
+      await deps.injectAndShowTerminal(String(args.command ?? ''), r.stdout, r.stderr)
+    }
+    if (TIMER_TOOLS.has(toolName)) {
+      const { win, ready } = await deps.getOrCreateDisplayWindow()
+      win.show()
+      pushPayload(win, { type: 'timer', data: timerMod.getTimerSnapshot(), fetchedAt: Date.now() }, ready)
+    }
     if (MUTATING_TOOLS.has(toolName)) {
       await deps.refreshActivePanel()
     }
     return { result }
-  }
-
-  if (toolName === 'show_panel') {
-    const t = args.type
-    if (!isPanelType(t)) return { error: `invalid type: ${String(t)}` }
-    return await showPanel(t, { getOrCreateWindow: deps.getOrCreateDisplayWindow })
-  }
-
-  if (toolName === 'search_gmail') {
-    const { searchEmails } = await import('../skills/gmail/index')
-    const query = String(args.query ?? '').trim()
-    const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 20
-    const account = typeof args.account === 'string' ? args.account : undefined
-    if (!query) return { error: 'query is required' }
-    const result = await searchEmails(query, maxResults, account)
-    deps.setLastEmailSearch({ query, maxResults, account })
-    const { win, ready } = await deps.getOrCreateDisplayWindow()
-    win.show()
-    pushPayload(win, { type: 'email_search', data: result, fetchedAt: Date.now() }, ready)
-    return {
-      ok: true,
-      totalCount: result.messages.length,
-      accounts: result.accounts.map((a) => `${a.account} (${a.count} items)`),
-    }
   }
 
   if (toolName === 'search_drive') {
@@ -239,51 +260,6 @@ export async function dispatchTool(
     }
   }
 
-  if (toolName === 'open_app') {
-    const { openApp } = await import('../skills/open-app/index')
-    return await openApp(args.app_name as string)
-  }
-
-  if (toolName === 'type_text') {
-    const { typeText } = await import('../skills/keyboard/index')
-    return await typeText(String(args.text ?? ''))
-  }
-
-  if (toolName === 'press_keys') {
-    const { pressKeys } = await import('../skills/keyboard/index')
-    return await pressKeys(String(args.combo ?? ''))
-  }
-
-  if (toolName === 'wait') {
-    const { wait } = await import('../skills/keyboard/index')
-    return await wait(typeof args.seconds === 'number' ? args.seconds : Number(args.seconds))
-  }
-
-  if (toolName === 'update_profile') {
-    const profile = await upsertProfileItem(String(args.key ?? ''), String(args.value ?? ''))
-    return { result: { ok: true, items: profile.items } }
-  }
-
-  if (toolName === 'delete_profile') {
-    const profile = await deleteProfileItem(String(args.key ?? ''))
-    return { result: { ok: true, items: profile.items } }
-  }
-
-  if (toolName === 'learn_procedure') {
-    const name = String(args.name ?? '').trim()
-    const description = String(args.description ?? '').trim()
-    if (!name || !description) return { error: 'name and description are required' }
-    const memory = await addProcedure(name, description)
-    return { result: { ok: true, name, count: memory.procedures.length } }
-  }
-
-  if (toolName === 'forget_procedure') {
-    const name = String(args.name ?? '').trim()
-    if (!name) return { error: 'name is required' }
-    const memory = await removeProcedure(name)
-    return { result: { ok: true, name, count: memory.procedures.length } }
-  }
-
   if (toolName === 'cd') {
     const raw = String(args.path ?? '').trim()
     if (!raw) return { error: 'path is required' }
@@ -305,17 +281,6 @@ export async function dispatchTool(
     deps.getPty()?.ptyWrite(`\x15cd ${shellQuote(target)}\n`)
     await deps.showTerminalPanel()
     return { ok: true, cwd: target, contents: ls.stdout, lsOk: ls.ok, lsExitCode: ls.exitCode, lsStderr: ls.stderr }
-  }
-
-  if (toolName === 'run_command') {
-    const command = String(args.command ?? '')
-    const cwd = (args.cwd as string | undefined) ?? deps.getCwd()
-    if (/^\s*(claude|cc)(\s|$)/.test(command)) {
-      return { error: 'Claude Code commands are not allowed through run_command. Use run_claude for code work.' }
-    }
-    const result = await runCommand(command, cwd)
-    await deps.injectAndShowTerminal(command, result.stdout, result.stderr)
-    return { result }
   }
 
   if (toolName === 'run_claude') {
@@ -352,15 +317,6 @@ export async function dispatchTool(
         message: 'Claude Codeへ入力しました。完了結果はターミナルパネルで確認してください。',
       },
     }
-  }
-
-  const timerHandler = TIMER_HANDLERS[toolName]
-  if (timerHandler) {
-    const result = timerHandler(args)
-    const { win, ready } = await deps.getOrCreateDisplayWindow()
-    win.show()
-    pushPayload(win, { type: 'timer', data: timerMod.getTimerSnapshot(), fetchedAt: Date.now() }, ready)
-    return { result }
   }
 
   return { error: `Unknown tool: ${toolName}` }

@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { homedir } from 'node:os'
 import { optString, reqString } from './shared/validation'
 
 type GmailTarget = { account: string; id: string }
@@ -547,6 +548,193 @@ export const toolSchemas: Anthropic.Tool[] = [
       required: ['skill'],
     },
   },
+  {
+    name: 'search_gmail',
+    description: 'Search Gmail messages across accounts (including non-inbox). Returns id and account fields for follow-up actions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Gmail search query (e.g. "from:hoge@example.com", "subject:invoice", "John")' },
+        account: { type: 'string', description: 'Restrict to a specific account (omit to search all accounts)' },
+        maxResults: { type: 'number', description: 'Max results per account (default 20)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'open_app',
+    description: 'Launch a macOS application. app_name must be the official English name (e.g. "Safari", "Finder", "Google Chrome").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        app_name: { type: 'string', description: 'Official English app name' },
+      },
+      required: ['app_name'],
+    },
+  },
+  {
+    name: 'type_text',
+    description: 'Type literal text into the currently focused application as if the user typed it. Non-ASCII text is pasted via clipboard. Newlines become Return key presses.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The text to type' },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'press_keys',
+    description: 'Press a keyboard shortcut on the currently focused application. Modifiers: cmd/shift/alt/option/ctrl. Special keys: enter/return, tab, space, delete, escape, up/down/left/right, home, end, pageup, pagedown.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        combo: { type: 'string', description: 'Key combo like "cmd+t" or single key like "enter"' },
+      },
+      required: ['combo'],
+    },
+  },
+  {
+    name: 'wait',
+    description: 'Pause for a short time before the next tool call. Capped at 5 seconds.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        seconds: { type: 'number', description: 'Seconds to wait (fractional allowed). Max 5.' },
+      },
+      required: ['seconds'],
+    },
+  },
+  {
+    name: 'update_profile',
+    description: 'Persist a piece of personal information about the user (name, job, hobby, etc.). key = field name, value = the content to store.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Field name (e.g. "name", "job", "hobby")' },
+        value: { type: 'string', description: 'Content to store' },
+      },
+      required: ['key', 'value'],
+    },
+  },
+  {
+    name: 'delete_profile',
+    description: 'Delete a specific field from the user profile by key.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Field name to delete' },
+      },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'learn_procedure',
+    description: 'Save a procedure for future re-execution. Use a short identifier name and a description that includes concrete URLs/commands/app names.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Short identifier' },
+        description: { type: 'string', description: 'Concrete steps including full URLs, exact commands, app names' },
+      },
+      required: ['name', 'description'],
+    },
+  },
+  {
+    name: 'forget_procedure',
+    description: 'Remove a previously learned procedure by exact name.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Exact name of the procedure to remove' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'start_timer',
+    description: 'Start a countdown timer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        duration_seconds: { type: 'number', description: 'Duration in seconds' },
+        name: { type: 'string', description: 'Optional label' },
+      },
+      required: ['duration_seconds'],
+    },
+  },
+  {
+    name: 'pause_timer',
+    description: 'Pause a running countdown timer by ID.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Timer ID (e.g. "timer-1")' } }, required: ['id'] },
+  },
+  {
+    name: 'resume_timer',
+    description: 'Resume a paused countdown timer by ID.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Timer ID' } }, required: ['id'] },
+  },
+  {
+    name: 'cancel_timer',
+    description: 'Cancel and remove a countdown timer by ID.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Timer ID' } }, required: ['id'] },
+  },
+  {
+    name: 'start_stopwatch',
+    description: 'Start a stopwatch.',
+    input_schema: { type: 'object', properties: { name: { type: 'string', description: 'Optional label' } } },
+  },
+  {
+    name: 'pause_stopwatch',
+    description: 'Pause a running stopwatch by ID.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Stopwatch ID (e.g. "sw-1")' } }, required: ['id'] },
+  },
+  {
+    name: 'resume_stopwatch',
+    description: 'Resume a paused stopwatch by ID.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Stopwatch ID' } }, required: ['id'] },
+  },
+  {
+    name: 'stop_stopwatch',
+    description: 'Stop and finalize a stopwatch by ID.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Stopwatch ID' } }, required: ['id'] },
+  },
+  {
+    name: 'run_command',
+    description: 'Run a shell command (zsh) and return stdout/stderr/exitCode. cwd defaults to the user home directory if omitted. Always inspect ok/exitCode/stderr before answering. Do not invoke claude/cc through this; that is blocked.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Shell command to execute' },
+        cwd: { type: 'string', description: 'Working directory (absolute path). Defaults to home directory.' },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    name: 'show_panel',
+    description: 'Display a panel on the user-visible side panel (email, calendar, tasks, news, tools, movies, timer, drive_recent, terminal_output). Use only when the user explicitly asks to see something.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['email', 'calendar_today', 'calendar_tomorrow', 'calendar_week', 'tasks', 'news', 'tools', 'movies', 'timer', 'drive_recent', 'terminal_output'],
+          description: 'Panel type to display',
+        },
+      },
+      required: ['type'],
+    },
+  },
+  {
+    name: 'analyze_screen',
+    description: 'Capture the current screen. The screenshot is attached to your context as an image so you can read it directly in the next turn. Use when asked what is on screen or what app is open.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'Optional. What you want to learn from the screen.' },
+      },
+    },
+  },
 ]
 
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -705,6 +893,108 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
         args.skill as 'ai-news' | 'best-tools' | 'movies' | 'spending',
         args.id as string | undefined,
       )
+    }
+    case 'search_gmail': {
+      const { searchEmails } = await import('./gmail/index')
+      const query = reqString(args, 'query').trim()
+      if (!query) throw new Error('query is required')
+      const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 20
+      return await searchEmails(query, maxResults, optString(args, 'account'))
+    }
+    case 'open_app': {
+      const { openApp } = await import('./open-app/index')
+      return await openApp(reqString(args, 'app_name'))
+    }
+    case 'type_text': {
+      const { typeText } = await import('./keyboard/index')
+      return await typeText(reqString(args, 'text'))
+    }
+    case 'press_keys': {
+      const { pressKeys } = await import('./keyboard/index')
+      return await pressKeys(reqString(args, 'combo'))
+    }
+    case 'wait': {
+      const { wait } = await import('./keyboard/index')
+      const seconds = typeof args.seconds === 'number' ? args.seconds : Number(args.seconds)
+      return await wait(seconds)
+    }
+    case 'update_profile': {
+      const { upsertProfileItem } = await import('../memory/store')
+      const profile = await upsertProfileItem(reqString(args, 'key'), reqString(args, 'value'))
+      return { ok: true, items: profile.items }
+    }
+    case 'delete_profile': {
+      const { deleteProfileItem } = await import('../memory/store')
+      const profile = await deleteProfileItem(reqString(args, 'key'))
+      return { ok: true, items: profile.items }
+    }
+    case 'learn_procedure': {
+      const { addProcedure } = await import('../memory/store')
+      const name = reqString(args, 'name').trim()
+      const description = reqString(args, 'description').trim()
+      if (!name || !description) throw new Error('name and description are required')
+      const memory = await addProcedure(name, description)
+      return { ok: true, name, count: memory.procedures.length }
+    }
+    case 'forget_procedure': {
+      const { removeProcedure } = await import('../memory/store')
+      const name = reqString(args, 'name').trim()
+      if (!name) throw new Error('name is required')
+      const memory = await removeProcedure(name)
+      return { ok: true, name, count: memory.procedures.length }
+    }
+    case 'start_timer': {
+      const timer = await import('./timer/index')
+      const duration = typeof args.duration_seconds === 'number'
+        ? args.duration_seconds
+        : Number(args.duration_seconds)
+      return timer.startTimer(typeof args.name === 'string' ? args.name : '', duration)
+    }
+    case 'pause_timer': {
+      const timer = await import('./timer/index')
+      return timer.pauseTimer(reqString(args, 'id'))
+    }
+    case 'resume_timer': {
+      const timer = await import('./timer/index')
+      return timer.resumeTimer(reqString(args, 'id'))
+    }
+    case 'cancel_timer': {
+      const timer = await import('./timer/index')
+      return timer.cancelTimer(reqString(args, 'id'))
+    }
+    case 'start_stopwatch': {
+      const timer = await import('./timer/index')
+      return timer.startStopwatch(typeof args.name === 'string' ? args.name : '')
+    }
+    case 'pause_stopwatch': {
+      const timer = await import('./timer/index')
+      return timer.pauseStopwatch(reqString(args, 'id'))
+    }
+    case 'resume_stopwatch': {
+      const timer = await import('./timer/index')
+      return timer.resumeStopwatch(reqString(args, 'id'))
+    }
+    case 'stop_stopwatch': {
+      const timer = await import('./timer/index')
+      return timer.stopStopwatch(reqString(args, 'id'))
+    }
+    case 'run_command': {
+      const { runCommand } = await import('./shell/index')
+      const command = reqString(args, 'command')
+      if (/^\s*(claude|cc)(\s|$)/.test(command)) {
+        return { ok: false, error: 'Claude Code commands are not allowed through run_command.' }
+      }
+      const cwd = optString(args, 'cwd') ?? homedir()
+      return await runCommand(command, cwd)
+    }
+    case 'show_panel': {
+      const { showPanel, isPanelType } = await import('../display/show-panel')
+      const { getDisplayWindowFactory } = await import('../display/registry')
+      const t = args.type
+      if (!isPanelType(t)) throw new Error(`invalid panel type: ${String(t)}`)
+      const factory = getDisplayWindowFactory()
+      if (!factory) return { ok: false, error: 'display window not initialized' }
+      return await showPanel(t, { getOrCreateWindow: factory })
     }
     default:
       throw new Error(`Unknown tool: ${name}`)
