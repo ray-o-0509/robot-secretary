@@ -63,7 +63,25 @@
       "memory": "メモリ",
       "apps": "デフォルトアプリ",
       "api": "APIキー",
-      "language": "言語"
+      "language": "言語",
+      "google": "Googleアカウント"
+    },
+    "google": {
+      "description": "Gmail / カレンダー / Drive を使うために Google アカウントを連携します。複数アカウントの追加・解除ができます。",
+      "addAccount": "アカウントを追加",
+      "adding": "ブラウザで認証を完了してください…",
+      "cancel": "キャンセル",
+      "remove": "解除",
+      "reauth": "権限を更新",
+      "empty": "連携済みのアカウントはありません",
+      "removeConfirm": "{{email}} の連携を解除しますか？\nGoogle 側の連携も併せて解除されます。",
+      "missingScopes": "権限不足: {{scopes}}",
+      "legacyBadge": "(legacy)",
+      "noRefreshToken": "refresh_tokenなし",
+      "expiry": "有効期限",
+      "scopesLabel": "スコープ",
+      "noClientSecret": "client_secret.json が見つかりません。\nGoogle Cloud Console で「Desktop app」種別の OAuth クライアントを作成し、ダウンロードした JSON を以下のパスに保存してください:",
+      "clientSecretGuide": "https://console.cloud.google.com/apis/credentials"
     },
     "language": {
       "description": "UIとベガの会話言語を切り替えます。"

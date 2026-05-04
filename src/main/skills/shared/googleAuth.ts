@@ -3,8 +3,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 // robot-secretary 専用トークンディレクトリ。なければ旧 gmail-triage 共有ディレクトリにフォールバック。
-const PRIMARY_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/robot-secretary/google-tokens')
-const FALLBACK_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/gmail-triage/tokens')
+export const PRIMARY_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/robot-secretary/google-tokens')
+export const FALLBACK_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/gmail-triage/tokens')
 const TOKENS_DIR = fs.existsSync(PRIMARY_TOKENS_DIR) ? PRIMARY_TOKENS_DIR : FALLBACK_TOKENS_DIR
 
 export function listAccounts(): string[] {
@@ -14,6 +14,27 @@ export function listAccounts(): string[] {
   const files = fs.readdirSync(TOKENS_DIR).filter((f) => f.endsWith('.json')).sort()
   if (files.length === 0) throw new Error(`No token files found in ${TOKENS_DIR}`)
   return files.map((f) => f.replace(/\.json$/, ''))
+}
+
+export type AccountEntry = { email: string; path: string; source: 'primary' | 'legacy' }
+
+// Settings UI 用: primary と legacy の両方をマージして返す。primary を優先（同 email が両方にある場合）。
+// listAccounts() と違い、空でも throw せず空配列を返す。
+export function listAccountsAll(): AccountEntry[] {
+  const map = new Map<string, AccountEntry>()
+  const collect = (dir: string, source: 'primary' | 'legacy') => {
+    if (!fs.existsSync(dir)) return
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.json')) continue
+      const email = f.replace(/\.json$/, '')
+      if (!map.has(email)) {
+        map.set(email, { email, path: path.join(dir, f), source })
+      }
+    }
+  }
+  collect(PRIMARY_TOKENS_DIR, 'primary')
+  collect(FALLBACK_TOKENS_DIR, 'legacy')
+  return Array.from(map.values()).sort((a, b) => a.email.localeCompare(b.email))
 }
 
 export function getGoogleAuth(email?: string) {

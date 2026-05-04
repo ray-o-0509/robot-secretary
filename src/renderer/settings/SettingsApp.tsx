@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import i18n, { toLng } from '../i18n'
 import type { MemorySnapshot, Procedure } from '../App'
 
-type Tab = 'profile' | 'memory' | 'apps' | 'language'
+type Tab = 'profile' | 'memory' | 'apps' | 'language' | 'google'
 
 type ProfileItems = Record<string, string>
 
@@ -45,6 +45,7 @@ export function SettingsApp() {
           {([
             { id: 'profile',  label: t('settings.tabs.profile') },
             { id: 'memory',   label: t('settings.tabs.memory') },
+            { id: 'google',   label: t('settings.tabs.google') },
             { id: 'apps',     label: t('settings.tabs.apps') },
             { id: 'language', label: t('settings.tabs.language') },
           ] as { id: Tab; label: string }[]).map(({ id, label }) => (
@@ -74,6 +75,7 @@ export function SettingsApp() {
       <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
         {tab === 'profile'  && <ProfileTab />}
         {tab === 'memory'   && <MemoryTab />}
+        {tab === 'google'   && <GoogleAccountsTab />}
         {tab === 'apps'     && <AppsTab appRows={APP_ROWS} />}
         {tab === 'language' && <LanguageTab />}
       </div>
@@ -596,6 +598,305 @@ function ProcedureSection({
         >
           {t('settings.memory.addProcedure')}
         </button>
+      )}
+    </div>
+  )
+}
+
+// ── Google Accounts Tab ──────────────────────────────────────────────────────
+
+type GoogleAccount = {
+  email: string
+  path: string
+  source: 'primary' | 'legacy'
+  scopes: string[]
+  hasRefreshToken: boolean
+  missingScopes: string[]
+  expiry: string | null
+}
+
+type GoogleSetupInfo = {
+  clientSecretPath: string
+  clientSecretExists: boolean
+  primaryTokensDir: string
+  fallbackTokensDir: string
+}
+
+function scopeShortName(s: string): string {
+  // https://www.googleapis.com/auth/gmail.readonly → gmail.readonly
+  return s.replace(/^https?:\/\/[^/]+\/auth\//, '')
+}
+
+function GoogleAccountsTab() {
+  const { t } = useTranslation()
+  const [setup, setSetup] = useState<GoogleSetupInfo | null>(null)
+  const [accounts, setAccounts] = useState<GoogleAccount[]>([])
+  const [loading, setLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [s, list] = await Promise.all([
+        window.electronAPI.googleAccountsCheckSetup(),
+        window.electronAPI.googleAccountsList(),
+      ])
+      setSetup(s)
+      setAccounts(list)
+    } catch (e) {
+      setError(String((e as Error).message ?? e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void reload()
+  }, [reload])
+
+  const handleAdd = useCallback(async (loginHint?: string) => {
+    setError(null)
+    setAdding(true)
+    try {
+      await window.electronAPI.googleAccountsAdd(loginHint)
+      await reload()
+    } catch (e) {
+      const msg = String((e as Error).message ?? e)
+      // ユーザがウィンドウを閉じた場合はエラー表示しない
+      if (!/cancelled|settings window closed/i.test(msg)) setError(msg)
+    } finally {
+      setAdding(false)
+    }
+  }, [reload])
+
+  const handleCancelAdd = useCallback(async () => {
+    try { await window.electronAPI.googleAccountsAbort() } catch { /* noop */ }
+  }, [])
+
+  const handleRemove = useCallback(async (email: string) => {
+    if (!confirm(t('settings.google.removeConfirm', { email }))) return
+    setError(null)
+    try {
+      await window.electronAPI.googleAccountsRemove(email)
+      await reload()
+    } catch (e) {
+      setError(String((e as Error).message ?? e))
+    }
+  }, [reload, t])
+
+  const setupMissing = setup && !setup.clientSecretExists
+  const canAdd = !!setup?.clientSecretExists && !adding
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+        {t('settings.google.description')}
+      </div>
+
+      {setupMissing && (
+        <div style={{
+          padding: '12px 14px',
+          background: 'rgba(251,191,36,0.08)',
+          border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 8,
+          fontSize: 12,
+          color: '#fde68a',
+          lineHeight: 1.6,
+        }}>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{t('settings.google.noClientSecret')}</div>
+          <code style={{
+            display: 'inline-block',
+            marginTop: 6,
+            padding: '3px 7px',
+            background: 'rgba(0,0,0,0.3)',
+            borderRadius: 4,
+            fontSize: 11,
+            color: '#fff',
+          }}>{setup.clientSecretPath}</code>
+          <div style={{ marginTop: 8 }}>
+            <button
+              onClick={() => window.electronAPI.openUrl(t('settings.google.clientSecretGuide'))}
+              style={{
+                background: 'none',
+                border: '1px solid rgba(251,191,36,0.4)',
+                borderRadius: 5,
+                color: '#fde68a',
+                padding: '4px 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
+            >
+              Google Cloud Console を開く ↗
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          padding: '10px 12px',
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.3)',
+          borderRadius: 7,
+          fontSize: 12,
+          color: '#fca5a5',
+          whiteSpace: 'pre-wrap',
+        }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {loading && accounts.length === 0 && (
+          <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>...</div>
+        )}
+        {!loading && accounts.length === 0 && (
+          <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>
+            {t('settings.google.empty')}
+          </div>
+        )}
+        {accounts.map((acc) => (
+          <AccountRow
+            key={acc.email}
+            account={acc}
+            onRemove={() => handleRemove(acc.email)}
+            onReauth={() => handleAdd(acc.email)}
+            disabled={adding}
+          />
+        ))}
+      </div>
+
+      {!adding && (
+        <button
+          onClick={() => handleAdd()}
+          disabled={!canAdd}
+          style={{
+            ...saveButtonStyle(false),
+            opacity: canAdd ? 1 : 0.4,
+            cursor: canAdd ? 'pointer' : 'not-allowed',
+          }}
+        >
+          + {t('settings.google.addAccount')}
+        </button>
+      )}
+
+      {adding && (
+        <div style={{
+          padding: '12px 14px',
+          background: 'rgba(99,102,241,0.1)',
+          border: '1px solid rgba(99,102,241,0.4)',
+          borderRadius: 8,
+          fontSize: 12,
+          color: '#c7d2fe',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}>
+          <span>{t('settings.google.adding')}</span>
+          <button
+            onClick={handleCancelAdd}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 5,
+              color: '#e2e8f0',
+              padding: '4px 10px',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            {t('settings.google.cancel')}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AccountRow({
+  account,
+  onRemove,
+  onReauth,
+  disabled,
+}: {
+  account: GoogleAccount
+  onRemove: () => void
+  onReauth: () => void
+  disabled: boolean
+}) {
+  const { t } = useTranslation()
+  const hasMissing = account.missingScopes.length > 0
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      background: 'rgba(255,255,255,0.04)',
+      borderRadius: 8,
+      border: '1px solid rgba(255,255,255,0.08)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {account.email}
+          </span>
+          {account.source === 'legacy' && (
+            <span style={{ fontSize: 10, color: '#94a3b8', padding: '1px 5px', background: 'rgba(255,255,255,0.06)', borderRadius: 3 }}>
+              {t('settings.google.legacyBadge')}
+            </span>
+          )}
+          {!account.hasRefreshToken && (
+            <span style={{ fontSize: 10, color: '#fca5a5', padding: '1px 5px', background: 'rgba(239,68,68,0.1)', borderRadius: 3 }}>
+              {t('settings.google.noRefreshToken')}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          {hasMissing && (
+            <button
+              onClick={onReauth}
+              disabled={disabled}
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                background: 'rgba(99,102,241,0.2)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: 5,
+                color: '#a5b4fc',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.5 : 1,
+              }}
+            >
+              {t('settings.google.reauth')}
+            </button>
+          )}
+          <SmallBtn onClick={onRemove} color="rgba(239,68,68,0.25)">
+            {t('settings.google.remove')}
+          </SmallBtn>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {account.scopes.map((s) => (
+          <span key={s} style={{
+            fontSize: 10,
+            padding: '2px 6px',
+            background: 'rgba(99,102,241,0.12)',
+            color: '#c7d2fe',
+            borderRadius: 3,
+            fontFamily: 'monospace',
+          }}>
+            {scopeShortName(s)}
+          </span>
+        ))}
+      </div>
+      {hasMissing && (
+        <div style={{ fontSize: 10, color: '#fca5a5' }}>
+          {t('settings.google.missingScopes', { scopes: account.missingScopes.map(scopeShortName).join(', ') })}
+        </div>
       )}
     </div>
   )

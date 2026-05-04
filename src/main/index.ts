@@ -124,7 +124,11 @@ function openSettingsWindow() {
     },
   })
   forwardRendererConsole(settingsWin, 'settings')
-  settingsWin.on('closed', () => { settingsWin = null })
+  settingsWin.on('closed', () => {
+    settingsWin = null
+    // 進行中の OAuth フローを中断 (loopback サーバを閉じる)
+    import('./google/oauthFlow').then(({ abortInFlight }) => abortInFlight('settings window closed')).catch(() => {/* noop */})
+  })
   if (isDev) {
     settingsWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#settings')
   } else {
@@ -290,6 +294,34 @@ function registerSettingsIpc() {
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send('language-change', code)
     }
+  })
+
+  // ── Google アカウント連携 ───────────────────────────────────────────────
+  ipcMain.handle('google-accounts:check-setup', async () => {
+    const { checkSetup } = await import('./google/oauthFlow')
+    return checkSetup()
+  })
+
+  ipcMain.handle('google-accounts:list', async () => {
+    const { listAccountsForUi } = await import('./google/oauthFlow')
+    return listAccountsForUi()
+  })
+
+  ipcMain.handle('google-accounts:add', async (_event, args?: { loginHint?: string }) => {
+    const { addGoogleAccount } = await import('./google/oauthFlow')
+    return await addGoogleAccount({ loginHint: args?.loginHint })
+  })
+
+  ipcMain.handle('google-accounts:remove', async (_event, email: string) => {
+    const { removeGoogleAccount } = await import('./google/oauthFlow')
+    await removeGoogleAccount(String(email))
+    return { ok: true }
+  })
+
+  ipcMain.handle('google-accounts:abort', async () => {
+    const { abortInFlight } = await import('./google/oauthFlow')
+    abortInFlight('user cancelled')
+    return { ok: true }
   })
 }
 

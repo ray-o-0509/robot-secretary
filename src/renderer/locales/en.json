@@ -63,7 +63,25 @@
       "memory": "Memory",
       "apps": "Default Apps",
       "api": "API Keys",
-      "language": "Language"
+      "language": "Language",
+      "google": "Google Accounts"
+    },
+    "google": {
+      "description": "Connect Google accounts to use Gmail / Calendar / Drive. You can add or remove multiple accounts.",
+      "addAccount": "Add account",
+      "adding": "Complete the sign-in in your browser…",
+      "cancel": "Cancel",
+      "remove": "Disconnect",
+      "reauth": "Update permissions",
+      "empty": "No accounts connected",
+      "removeConfirm": "Disconnect {{email}}?\nThe Google-side authorization will also be revoked.",
+      "missingScopes": "Missing scopes: {{scopes}}",
+      "legacyBadge": "(legacy)",
+      "noRefreshToken": "no refresh_token",
+      "expiry": "Expires",
+      "scopesLabel": "Scopes",
+      "noClientSecret": "client_secret.json not found.\nCreate a \"Desktop app\" OAuth client in the Google Cloud Console and save the downloaded JSON to:",
+      "clientSecretGuide": "https://console.cloud.google.com/apis/credentials"
     },
     "language": {
       "description": "Switch the UI and Vega's conversation language."

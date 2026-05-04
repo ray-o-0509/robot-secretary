@@ -104,6 +104,26 @@ declare global {
       ) => Promise<MemorySnapshot>
       settingsGetLanguage: () => Promise<string>
 
+      // Google アカウント連携
+      googleAccountsCheckSetup: () => Promise<{
+        clientSecretPath: string
+        clientSecretExists: boolean
+        primaryTokensDir: string
+        fallbackTokensDir: string
+      }>
+      googleAccountsList: () => Promise<{
+        email: string
+        path: string
+        source: 'primary' | 'legacy'
+        scopes: string[]
+        hasRefreshToken: boolean
+        missingScopes: string[]
+        expiry: string | null
+      }[]>
+      googleAccountsAdd: (loginHint?: string) => Promise<{ email: string }>
+      googleAccountsRemove: (email: string) => Promise<{ ok: boolean }>
+      googleAccountsAbort: () => Promise<{ ok: boolean }>
+
       // Interactive PTY
       ptyOnData: (cb: (data: string) => void) => () => void
       ptyWrite: (data: string) => void

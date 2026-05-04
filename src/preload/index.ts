@@ -80,6 +80,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ) => ipcRenderer.invoke('settings:delete-memory-item', kind, text),
   settingsGetLanguage: (): Promise<string> => ipcRenderer.invoke('settings:get-language'),
 
+  // Google アカウント連携
+  googleAccountsCheckSetup: () => ipcRenderer.invoke('google-accounts:check-setup'),
+  googleAccountsList: () => ipcRenderer.invoke('google-accounts:list'),
+  googleAccountsAdd: (loginHint?: string) =>
+    ipcRenderer.invoke('google-accounts:add', loginHint ? { loginHint } : undefined),
+  googleAccountsRemove: (email: string) => ipcRenderer.invoke('google-accounts:remove', email),
+  googleAccountsAbort: () => ipcRenderer.invoke('google-accounts:abort'),
+
   // Interactive PTY (xterm.js front-end ↔ node-pty back-end)
   ptyOnData: (cb: (data: string) => void) => on<[string]>('pty:data', cb),
   ptyWrite: (data: string) => ipcRenderer.send('pty:write', data),
