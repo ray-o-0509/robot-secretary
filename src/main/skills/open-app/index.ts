@@ -29,7 +29,7 @@ export async function openApp(appName: string): Promise<{ ok: boolean; error?: s
         return
       }
       if (!wasRunning) {
-        await new Promise((r) => setTimeout(r, 1000))
+        await new Promise((r) => setTimeout(r, 3000))
       }
       resolve({ ok: true })
     })
