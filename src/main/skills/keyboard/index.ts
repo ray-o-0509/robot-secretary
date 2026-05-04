@@ -32,39 +32,27 @@ export async function typeText(text: string): Promise<Result> {
     return { ok: false, error: 'text is required' }
   }
 
-  const isAscii = /^[\x00-\x7F]*$/.test(text)
+  // Always paste via clipboard so IME (kana mode etc.) doesn't intercept keystrokes.
+  // Split on '\n' so newlines become real Return keypresses (submits in chat apps).
+  // Saves & restores plain-text clipboard; rich content on clipboard will be lost.
+  const lines = text.split('\n')
+  const stmts: string[] = ['set savedClip to ""', 'try', '\tset savedClip to (the clipboard as text)', 'end try']
 
-  if (isAscii) {
-    // Split on newlines so '\n' becomes a real Return keypress.
-    const lines = text.split('\n')
-    const stmts: string[] = []
-    lines.forEach((line, i) => {
-      if (line.length > 0) {
-        stmts.push(`keystroke "${escapeForAppleScript(line)}"`)
-      }
-      if (i < lines.length - 1) {
-        stmts.push(`key code ${RETURN_KEY_CODE}`)
-      }
-    })
-    if (stmts.length === 0) return { ok: true }
-    const body = stmts.map((s) => `\t${s}`).join('\n')
-    return runOsascript(`tell application "System Events"\n${body}\nend tell\n`)
-  }
+  lines.forEach((line, i) => {
+    if (line.length > 0) {
+      stmts.push(`set the clipboard to "${escapeForAppleScript(line)}"`)
+      stmts.push('delay 0.05')
+      stmts.push('tell application "System Events" to keystroke "v" using command down')
+      stmts.push('delay 0.15')
+    }
+    if (i < lines.length - 1) {
+      stmts.push(`tell application "System Events" to key code ${RETURN_KEY_CODE}`)
+      stmts.push('delay 0.05')
+    }
+  })
 
-  // Non-ASCII: paste via clipboard. Saves & restores plain-text clipboard.
-  // Rich content (images / styled text) on the clipboard will be lost.
-  const escaped = escapeForAppleScript(text)
-  const script = `set savedClip to ""
-try
-\tset savedClip to (the clipboard as text)
-end try
-set the clipboard to "${escaped}"
-delay 0.05
-tell application "System Events" to keystroke "v" using command down
-delay 0.15
-set the clipboard to savedClip
-`
-  return runOsascript(script)
+  stmts.push('set the clipboard to savedClip')
+  return runOsascript(stmts.join('\n') + '\n')
 }
 
 const SPECIAL_KEY_CODES: Record<string, number> = {
