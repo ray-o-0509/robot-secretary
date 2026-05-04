@@ -3,7 +3,6 @@ import i18next from 'i18next'
 import { LIMITS, MODELS } from '../../config/models'
 import { secretaryTools } from '../../config/tools'
 import { getSystemPrompt, resolveLocation } from '../prompt/systemPrompt'
-import { getGeminiApiKey } from '../lib/persistedSettings'
 import { useAudioPlayback } from './useAudioPlayback'
 import { useMicCapture } from './useMicCapture'
 import type { RobotState, RobotProcessor } from '../App'
@@ -307,7 +306,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const sessionEpoch = sessionEpochRef.current + 1
     sessionEpochRef.current = sessionEpoch
 
-    const apiKey = getGeminiApiKey() || import.meta.env.VITE_GEMINI_API_KEY?.trim()
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim()
     if (!apiKey) {
       console.warn('[Gemini] API Key is not set. Enter it via right-click → Settings.')
       intentionalCloseRef.current = true

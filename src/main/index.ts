@@ -213,6 +213,28 @@ function registerSettingsIpc() {
       updatedAt: empty.updatedAt,
     }
   })
+
+  const langFilePath = path.join(app.getPath('userData'), 'language.json')
+
+  ipcMain.handle('settings:get-language', () => {
+    try {
+      const data = fs.readFileSync(langFilePath, 'utf-8')
+      return (JSON.parse(data) as { code: string }).code
+    } catch {
+      return 'ja-JP'
+    }
+  })
+
+  ipcMain.on('set-language', (_event, code: string) => {
+    try {
+      fs.writeFileSync(langFilePath, JSON.stringify({ code }), 'utf-8')
+    } catch (e) {
+      console.error('Failed to save language:', e)
+    }
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('language-change', code)
+    }
+  })
 }
 
 function sanitizeMemoryInput(

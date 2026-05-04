@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import i18n, { toLng } from './i18n'
-import { getLanguageCode, setLanguageCode as persistLanguageCode } from './lib/persistedSettings'
 import { RobotScene } from './components/RobotScene'
 import { StatusBanner } from './components/StatusBanner'
-import { SettingsPanel } from './components/SettingsPanel'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { ConfirmationCard, type ConfirmationRequest } from './components/ConfirmationCard'
 import { DisplayApp } from './display/DisplayApp'
@@ -89,6 +87,7 @@ declare global {
       settingsGetMemory: () => Promise<MemorySnapshot>
       settingsSaveMemory: (memory: MemorySnapshot) => Promise<MemorySnapshot>
       settingsResetMemory: () => Promise<MemorySnapshot>
+      settingsGetLanguage: () => Promise<string>
 
       // Interactive PTY
       ptyOnData: (cb: (data: string) => void) => () => void
@@ -113,7 +112,6 @@ const isSettingsWindow = hash === '#settings'
 export default function App() {
   useEffect(() => {
     const off = window.electronAPI?.onLanguageChange((lang) => {
-      persistLanguageCode(lang)
       i18n.changeLanguage(toLng(lang))
     })
     return () => off?.()
@@ -132,11 +130,17 @@ export default function App() {
 function RobotWindowApp() {
   const [robotState, setRobotState] = useState<RobotState>('idle')
   const velocityRef = useRef({ vx: 0, vy: 0, speed: 0 })
-  const [showSettings, setShowSettings] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [interactive, setInteractive] = useState(false)
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null)
-  const [languageCode, setLanguageCode] = useState<string>(() => getLanguageCode(DEFAULT_LANGUAGE))
+  const [languageCode, setLanguageCode] = useState<string>(DEFAULT_LANGUAGE)
+
+  useEffect(() => {
+    window.electronAPI?.settingsGetLanguage().then((lang) => {
+      setLanguageCode(lang)
+      i18n.changeLanguage(toLng(lang))
+    })
+  }, [])
 
   const { connect, isConnected, messages, connectionError, retry } = useGeminiLive({
     onStateChange: (state, processor) => {
@@ -154,9 +158,7 @@ function RobotWindowApp() {
 
   useEffect(() => {
     const offMute = window.electronAPI?.onMuteChanged((muted) => setIsMuted(muted))
-    const offSettings = window.electronAPI?.onOpenSettings(() => setShowSettings(true))
     const offLang = window.electronAPI?.onLanguageChange((lang) => {
-      persistLanguageCode(lang)
       setLanguageCode(lang)
     })
     const offConfirm = window.electronAPI?.onConfirmationRequest((req) => {
@@ -165,7 +167,6 @@ function RobotWindowApp() {
     })
     return () => {
       offMute?.()
-      offSettings?.()
       offLang?.()
       offConfirm?.()
     }
@@ -222,18 +223,13 @@ function RobotWindowApp() {
     height: '100%',
     position: 'relative',
   }
-  if (interactive && !showSettings) {
+  if (interactive) {
     ;(wrapperStyle as Record<string, unknown>).WebkitAppRegion = 'drag'
   }
 
   return (
     <div style={wrapperStyle} onMouseLeave={handleLeave}>
       <RobotScene state={robotState} isConnected={isConnected} velocityRef={velocityRef} />
-      {showSettings && (
-        <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <SettingsPanel onClose={() => setShowSettings(false)} />
-        </div>
-      )}
       {pendingConfirmation && (
         <ConfirmationCard request={pendingConfirmation} onRespond={handleConfirmationRespond} />
       )}

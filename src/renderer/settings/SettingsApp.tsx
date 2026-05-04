@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n, { toLng } from '../i18n'
-import { getGeminiApiKey, setGeminiApiKey, getLanguageCode, setLanguageCode } from '../lib/persistedSettings'
 import type { MemorySnapshot, Procedure } from '../App'
 
-type Tab = 'profile' | 'memory' | 'apps' | 'api' | 'language'
+type Tab = 'profile' | 'memory' | 'apps' | 'language'
 
 type ProfileItems = Record<string, string>
 
@@ -47,7 +46,6 @@ export function SettingsApp() {
             { id: 'profile',  label: t('settings.tabs.profile') },
             { id: 'memory',   label: t('settings.tabs.memory') },
             { id: 'apps',     label: t('settings.tabs.apps') },
-            { id: 'api',      label: t('settings.tabs.api') },
             { id: 'language', label: t('settings.tabs.language') },
           ] as { id: Tab; label: string }[]).map(({ id, label }) => (
             <button
@@ -77,7 +75,6 @@ export function SettingsApp() {
         {tab === 'profile'  && <ProfileTab />}
         {tab === 'memory'   && <MemoryTab />}
         {tab === 'apps'     && <AppsTab appRows={APP_ROWS} />}
-        {tab === 'api'      && <ApiTab />}
         {tab === 'language' && <LanguageTab />}
       </div>
     </div>
@@ -628,46 +625,6 @@ function AppsTab({ appRows }: { appRows: { key: keyof DefaultApps; label: string
   )
 }
 
-// ── API Keys Tab ─────────────────────────────────────────────────────────────
-
-function ApiTab() {
-  const { t } = useTranslation()
-  const [geminiKey, setGeminiKey] = useState(getGeminiApiKey())
-  const [saved, setSaved] = useState(false)
-
-  const save = () => {
-    setGeminiApiKey(geminiKey)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label style={{ fontSize: 11, color: '#94a3b8' }}>Gemini API Key</label>
-        <input
-          type="password"
-          value={geminiKey}
-          onChange={(e) => setGeminiKey(e.target.value)}
-          placeholder="AIza…"
-          style={inputStyle}
-        />
-        <p style={{ fontSize: 10, color: '#475569', margin: '2px 0 0' }}>
-          {t('settings.api.restartRequired')}
-        </p>
-      </div>
-
-      <button onClick={save} style={saveButtonStyle(saved)}>
-        {saved ? t('common.saved') : t('common.save')}
-      </button>
-
-      <p style={{ fontSize: 10, color: '#334155', margin: 0 }}>
-        {t('settings.api.googleAuthNote')}
-      </p>
-    </div>
-  )
-}
-
 // ── Language Tab ─────────────────────────────────────────────────────────────
 
 const LANGUAGE_OPTIONS = [
@@ -679,10 +636,13 @@ const LANGUAGE_OPTIONS = [
 
 function LanguageTab() {
   const { t } = useTranslation()
-  const [current, setCurrent] = useState(() => getLanguageCode())
+  const [current, setCurrent] = useState('ja-JP')
+
+  useEffect(() => {
+    window.electronAPI?.settingsGetLanguage().then((lang) => setCurrent(lang))
+  }, [])
 
   const select = (code: string) => {
-    setLanguageCode(code)
     setCurrent(code)
     i18n.changeLanguage(toLng(code))
     window.electronAPI?.setLanguage(code)

@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsGetMemory: () => ipcRenderer.invoke('settings:get-memory'),
   settingsSaveMemory: (memory: unknown) => ipcRenderer.invoke('settings:save-memory', memory),
   settingsResetMemory: () => ipcRenderer.invoke('settings:reset-memory'),
+  settingsGetLanguage: (): Promise<string> => ipcRenderer.invoke('settings:get-language'),
 
   // Interactive PTY (xterm.js front-end ↔ node-pty back-end)
   ptyOnData: (cb: (data: string) => void) => on<[string]>('pty:data', cb),
