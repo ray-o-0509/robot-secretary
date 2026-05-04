@@ -17,7 +17,7 @@ type DriveMoveInput = { fileId: string; newParentId: string; account?: string }
 type DriveCopyInput = { fileId: string; newName?: string; parentId?: string; account?: string }
 type DriveTrashInput = { fileId: string; account?: string }
 type DriveShareInput = { fileId: string; email: string; role: 'reader' | 'commenter' | 'writer'; account?: string }
-type TaskCreateInput = { title: string; due?: string; priority?: 'low' | 'medium' | 'high'; projectId?: string }
+type TaskCreateInput = { title: string; due?: string; priority?: 'low' | 'medium' | 'high'; projectId?: string; subtasks?: string[] }
 type TaskRef = { taskId: string; projectId: string }
 type TaskUpdateInput = TaskRef & { title?: string; due?: string | null; priority?: 'low' | 'medium' | 'high' | 'none' }
 
@@ -125,20 +125,43 @@ function driveShareItems(args: Record<string, unknown>): DriveShareInput[] {
   return [{ fileId: reqString(args, 'fileId'), email, role, account: optString(args, 'account') }]
 }
 
+function normalizeSubtasks(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const titles = raw
+    .map((item) => {
+      if (typeof item === 'string') return item.trim()
+      if (item && typeof item === 'object' && typeof (item as { title?: unknown }).title === 'string') {
+        return ((item as { title: string }).title).trim()
+      }
+      return ''
+    })
+    .filter((s) => s.length > 0)
+  return titles.length ? titles : undefined
+}
+
 function taskCreates(args: Record<string, unknown>): TaskCreateInput[] {
   if (Array.isArray(args.tasks)) {
     return args.tasks.map((raw) => {
-      const task = raw as Partial<TaskCreateInput>
+      const task = raw as Partial<TaskCreateInput> & { subtasks?: unknown }
       if (typeof task.title !== 'string') throw new Error('Each task requires title')
-      return task as TaskCreateInput
+      const out: TaskCreateInput = { title: task.title }
+      if (typeof task.due === 'string') out.due = task.due
+      if (task.priority === 'low' || task.priority === 'medium' || task.priority === 'high') out.priority = task.priority
+      if (typeof task.projectId === 'string') out.projectId = task.projectId
+      const subs = normalizeSubtasks(task.subtasks)
+      if (subs) out.subtasks = subs
+      return out
     })
   }
-  return [{
-    title: reqString(args, 'title'),
-    due: optString(args, 'due'),
-    priority: args.priority as 'low' | 'medium' | 'high' | undefined,
-    projectId: optString(args, 'projectId'),
-  }]
+  const out: TaskCreateInput = { title: reqString(args, 'title') }
+  const due = optString(args, 'due')
+  if (due) out.due = due
+  if (args.priority === 'low' || args.priority === 'medium' || args.priority === 'high') out.priority = args.priority
+  const projectId = optString(args, 'projectId')
+  if (projectId) out.projectId = projectId
+  const subs = normalizeSubtasks(args.subtasks)
+  if (subs) out.subtasks = subs
+  return [out]
 }
 
 function taskRefs(args: Record<string, unknown>): TaskRef[] {
@@ -257,7 +280,8 @@ export const toolSchemas: Anthropic.Tool[] = [
         due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional)' },
         projectId: { type: 'string', description: 'Project ID (optional, defaults to inbox)' },
-        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId' },
+        subtasks: { type: 'array', items: { type: 'string' }, description: 'Optional subtask (checklist) titles to attach to the task' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId, subtasks' },
       },
     },
   },

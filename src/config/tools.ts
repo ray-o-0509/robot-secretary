@@ -38,7 +38,7 @@ export const secretaryTools: ToolDeclaration[] = [
   },
   {
     name: 'create_task',
-    description: 'Create one or more tasks in TickTick. If projectId is omitted, the task goes to inbox. Use tasks for batch creation.',
+    description: 'Create one or more tasks in TickTick. If projectId is omitted, the task goes to inbox. Use tasks for batch creation. Pass subtasks (string array of checklist titles) when the user wants a task broken down into steps.',
     parameters: {
       type: 'object',
       properties: {
@@ -46,7 +46,8 @@ export const secretaryTools: ToolDeclaration[] = [
         due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional; use "high" for urgent/important)' },
         projectId: { type: 'string', description: 'Project ID (optional; omit to use inbox)' },
-        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId' },
+        subtasks: { type: 'array', items: { type: 'string' }, description: 'Optional checklist subtask titles (e.g. ["買い物", "掃除"])' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId, subtasks' },
       },
     },
   },

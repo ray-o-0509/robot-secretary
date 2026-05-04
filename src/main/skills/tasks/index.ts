@@ -89,11 +89,18 @@ export async function createTask(opts: {
   due?: string
   priority?: 'low' | 'medium' | 'high'
   projectId?: string
+  subtasks?: string[]
 }) {
   const body: Record<string, unknown> = { title: opts.title }
   if (opts.projectId) body.projectId = opts.projectId
   if (opts.priority) body.priority = PRIORITY_TO_INT[opts.priority]
   if (opts.due) body.dueDate = opts.due
+  if (opts.subtasks?.length) {
+    body.items = opts.subtasks
+      .map((s) => (typeof s === 'string' ? s.trim() : ''))
+      .filter((s) => s.length > 0)
+      .map((title, idx) => ({ title, status: 0, sortOrder: idx }))
+  }
 
   const r = await fetch(`${BASE}/task`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
   if (!r.ok) throw new Error(`createTask failed: ${r.status} ${await r.text()}`)
