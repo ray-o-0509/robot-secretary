@@ -1,4 +1,4 @@
-import type { Memory } from './store'
+import type { Memory, MemoryItem, SessionSummary } from './store'
 
 import { MODELS } from '../../config/models'
 
@@ -31,19 +31,33 @@ ongoing_topics: Interests or concerns spanning days to weeks
     - One-time checks or operations
     - Work already completed
 
+【importance score for each item】
+Each item in facts, preferences, ongoing_topics must have an importance score (1-3):
+  3 = high: core identity info, always-apply preferences, long-running critical topics
+  2 = medium: useful context, moderate preferences, ongoing topics
+  1 = low: nice-to-know, weakly recurring, may fade soon
+
+【session_summary】
+A 2-4 sentence Japanese summary of this session's content.
+  ✓ Include: what was discussed, what actions were taken, what is unresolved or should be remembered next time
+  ✓ Use natural Japanese that Vega can read to quickly regain context
+  If nothing meaningful happened (e.g. empty session), output an empty string.
+
 【Handling existing memory】
 Remove any existing entry that does not meet the above criteria — think "rebuild", not "merge".
 Apply the same criteria to information from new conversations.
+Re-evaluate importance scores for retained items based on recency and recurrence.
 
 【Output】
 Strict JSON only. No preamble, no code fences, no comments.
 {
-  "facts": ["..."],
-  "preferences": ["..."],
-  "ongoing_topics": ["..."]
+  "facts": [{"text": "...", "importance": 3}],
+  "preferences": [{"text": "...", "importance": 2}],
+  "ongoing_topics": [{"text": "...", "importance": 2}],
+  "session_summary": "..."
 }
 
-Maximum 10 items per list. Write concisely in Japanese (one item per line, ~40 characters).
+Maximum 20 items per list. Write text concisely in Japanese (~40 characters per item).
 When in doubt, leave it out. Empty lists are fine.`
 
 type GenAIClient = {
@@ -62,9 +76,9 @@ function buildUserPayload(
 ): string {
   const existingJson = JSON.stringify(
     {
-      facts: existing.facts,
-      preferences: existing.preferences,
-      ongoing_topics: existing.ongoing_topics,
+      facts: existing.facts.map((f) => ({ text: f.text, importance: f.importance })),
+      preferences: existing.preferences.map((f) => ({ text: f.text, importance: f.importance })),
+      ongoing_topics: existing.ongoing_topics.map((f) => ({ text: f.text, importance: f.importance })),
     },
     null,
     2,
@@ -95,18 +109,28 @@ function tryParseMemory(text: string): Partial<Memory> | null {
   }
 }
 
-function clamp(arr: unknown, max = 10): string[] {
+const SESSION_SUMMARIES_MAX = 10
+const ITEMS_MAX = 20
+
+function clampItems(arr: unknown, today: string, max = ITEMS_MAX): MemoryItem[] {
   if (!Array.isArray(arr)) return []
-  return arr.filter((x): x is string => typeof x === 'string').slice(0, max)
+  return arr
+    .filter((x): x is { text: string; importance: unknown } => typeof x === 'object' && x !== null && typeof (x as { text?: unknown }).text === 'string')
+    .map((x) => ({
+      text: x.text as string,
+      importance: ([1, 2, 3].includes(x.importance as number) ? x.importance : 2) as 1 | 2 | 3,
+      lastSeen: today,
+    }))
+    .slice(0, max)
 }
 
 export async function summarize(
   existing: Memory,
   transcripts: { role: 'user' | 'assistant'; text: string; ts: string }[],
   apiKey: string,
+  sessionId: string,
 ): Promise<Memory> {
   if (transcripts.length === 0) {
-    // Sessions with no conversation (e.g. immediate crash) — return existing memory as-is
     return existing
   }
 
@@ -130,11 +154,23 @@ export async function summarize(
     throw new Error(`Failed to parse summarizer JSON response: ${text.slice(0, 200)}`)
   }
 
+  const today = new Date().toISOString().slice(0, 10)
+
+  const newSummary: SessionSummary | null =
+    typeof parsed.session_summary === 'string' && parsed.session_summary.trim()
+      ? { sessionId, date: today, summary: parsed.session_summary.trim() }
+      : null
+
+  const updatedSummaries = newSummary
+    ? [newSummary, ...existing.session_summaries].slice(0, SESSION_SUMMARIES_MAX)
+    : existing.session_summaries
+
   return {
-    facts: clamp(parsed.facts),
-    preferences: clamp(parsed.preferences),
-    ongoing_topics: clamp(parsed.ongoing_topics),
+    facts: clampItems(parsed.facts, today),
+    preferences: clampItems(parsed.preferences, today),
+    ongoing_topics: clampItems(parsed.ongoing_topics, today),
     procedures: existing.procedures,
+    session_summaries: updatedSummaries,
     updatedAt: new Date().toISOString(),
   }
 }

@@ -22,11 +22,24 @@ export type Procedure = {
   updatedAt: string
 }
 
+export type MemoryItem = {
+  text: string
+  importance: 1 | 2 | 3
+  lastSeen: string
+}
+
+export type SessionSummary = {
+  sessionId: string
+  date: string
+  summary: string
+}
+
 export type Memory = {
-  facts: string[]
-  preferences: string[]
-  ongoing_topics: string[]
+  facts: MemoryItem[]
+  preferences: MemoryItem[]
+  ongoing_topics: MemoryItem[]
   procedures: Procedure[]
+  session_summaries: SessionSummary[]
   updatedAt: string | null
 }
 
@@ -35,6 +48,7 @@ const EMPTY_MEMORY: Memory = {
   preferences: [],
   ongoing_topics: [],
   procedures: [],
+  session_summaries: [],
   updatedAt: null,
 }
 
@@ -135,10 +149,11 @@ export async function loadMemory(): Promise<Memory> {
     const raw = await fs.readFile(dirs().memoryFile, 'utf8')
     const parsed = JSON.parse(raw)
     return {
-      facts: parsed.facts ?? [],
-      preferences: parsed.preferences ?? [],
-      ongoing_topics: parsed.ongoing_topics ?? [],
+      facts: Array.isArray(parsed.facts) ? parsed.facts : [],
+      preferences: Array.isArray(parsed.preferences) ? parsed.preferences : [],
+      ongoing_topics: Array.isArray(parsed.ongoing_topics) ? parsed.ongoing_topics : [],
       procedures: Array.isArray(parsed.procedures) ? parsed.procedures : [],
+      session_summaries: Array.isArray(parsed.session_summaries) ? parsed.session_summaries : [],
       updatedAt: parsed.updatedAt ?? null,
     }
   } catch (err) {

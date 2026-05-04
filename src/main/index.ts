@@ -169,34 +169,72 @@ function registerSettingsIpc() {
 
   ipcMain.handle('settings:get-memory', async () => {
     const { loadMemory } = await import('./memory/store')
-    return await loadMemory()
+    const m = await loadMemory()
+    // Return string[] for the settings UI (importance/lastSeen managed by AI curator only)
+    return {
+      facts: m.facts.map((x) => x.text),
+      preferences: m.preferences.map((x) => x.text),
+      ongoing_topics: m.ongoing_topics.map((x) => x.text),
+      procedures: m.procedures,
+      updatedAt: m.updatedAt,
+    }
   })
 
   ipcMain.handle('settings:save-memory', async (_event, raw: unknown) => {
-    const { saveMemory } = await import('./memory/store')
-    const sanitized = sanitizeMemoryInput(raw)
+    const { saveMemory, loadMemory } = await import('./memory/store')
+    const existing = await loadMemory()
+    const sanitized = sanitizeMemoryInput(raw, existing)
     await saveMemory(sanitized)
-    return sanitized
+    return {
+      facts: sanitized.facts.map((x) => x.text),
+      preferences: sanitized.preferences.map((x) => x.text),
+      ongoing_topics: sanitized.ongoing_topics.map((x) => x.text),
+      procedures: sanitized.procedures,
+      updatedAt: sanitized.updatedAt,
+    }
   })
 
   ipcMain.handle('settings:reset-memory', async () => {
     const { saveMemory } = await import('./memory/store')
-    const empty = {
+    const empty: import('./memory/store').Memory = {
       facts: [],
       preferences: [],
       ongoing_topics: [],
       procedures: [],
+      session_summaries: [],
       updatedAt: new Date().toISOString(),
     }
     await saveMemory(empty)
-    return empty
+    return {
+      facts: [],
+      preferences: [],
+      ongoing_topics: [],
+      procedures: [],
+      updatedAt: empty.updatedAt,
+    }
   })
 }
 
-function sanitizeMemoryInput(raw: unknown): import('./memory/store').Memory {
+function sanitizeMemoryInput(
+  raw: unknown,
+  existing: import('./memory/store').Memory,
+): import('./memory/store').Memory {
+  type MemoryItem = import('./memory/store').MemoryItem
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
-  const strArray = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : []
+  const today = new Date().toISOString().slice(0, 10)
+
+  // UI sends string[]; convert to MemoryItem[], preserving importance/lastSeen for unchanged items
+  const toItems = (v: unknown, existingItems: MemoryItem[]): MemoryItem[] => {
+    if (!Array.isArray(v)) return []
+    return v
+      .map((x) => String(x ?? '').trim())
+      .filter(Boolean)
+      .map((text) => {
+        const prev = existingItems.find((e) => e.text === text)
+        return prev ?? { text, importance: 2 as const, lastSeen: today }
+      })
+  }
+
   const procs = Array.isArray(r.procedures)
     ? (r.procedures as unknown[]).flatMap((p) => {
         if (!p || typeof p !== 'object') return []
@@ -213,11 +251,13 @@ function sanitizeMemoryInput(raw: unknown): import('./memory/store').Memory {
         }]
       })
     : []
+
   return {
-    facts: strArray(r.facts),
-    preferences: strArray(r.preferences),
-    ongoing_topics: strArray(r.ongoing_topics),
+    facts: toItems(r.facts, existing.facts),
+    preferences: toItems(r.preferences, existing.preferences),
+    ongoing_topics: toItems(r.ongoing_topics, existing.ongoing_topics),
     procedures: procs,
+    session_summaries: existing.session_summaries,
     updatedAt: new Date().toISOString(),
   }
 }

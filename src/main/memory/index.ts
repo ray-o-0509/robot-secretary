@@ -25,8 +25,33 @@ function newSessionId(): string {
   return crypto.randomUUID()
 }
 
+const IMPORTANCE_THRESHOLDS: Record<1 | 2 | 3, number | null> = {
+  3: null,  // always inject
+  2: 90,    // inject if seen within 90 days
+  1: 30,    // inject if seen within 30 days
+}
+const IMPORTANCE_CAPS: Record<1 | 2 | 3, number> = { 3: 10, 2: 10, 1: 5 }
+
+function selectItems(items: import('./store').MemoryItem[], today: Date): string[] {
+  const counts: Record<1 | 2 | 3, number> = { 3: 0, 2: 0, 1: 0 }
+  const result: string[] = []
+  for (const item of items) {
+    const imp = item.importance
+    const threshold = IMPORTANCE_THRESHOLDS[imp]
+    if (threshold !== null) {
+      const daysSince = (today.getTime() - new Date(item.lastSeen).getTime()) / 86_400_000
+      if (daysSince > threshold) continue
+    }
+    if (counts[imp] >= IMPORTANCE_CAPS[imp]) continue
+    counts[imp]++
+    result.push(item.text)
+  }
+  return result
+}
+
 async function buildInjection(memory: Memory): Promise<string> {
   const sections: string[] = []
+  const today = new Date()
 
   // Explicitly registered personal info (profile.json)
   const profile = await loadProfile()
@@ -38,17 +63,28 @@ async function buildInjection(memory: Memory): Promise<string> {
     )
   }
 
-  // Memory auto-extracted from conversations
-  if (memory.facts.length) sections.push('## Learned from conversation\n- ' + memory.facts.join('\n- '))
-  if (memory.preferences.length)
-    sections.push('## Preferences and communication style\n- ' + memory.preferences.join('\n- '))
-  if (memory.ongoing_topics.length)
-    sections.push('## Ongoing topics\n- ' + memory.ongoing_topics.join('\n- '))
+  // Memory auto-extracted from conversations (importance-filtered)
+  const facts = selectItems(memory.facts, today)
+  const prefs = selectItems(memory.preferences, today)
+  const topics = selectItems(memory.ongoing_topics, today)
+
+  if (facts.length) sections.push('## Learned from conversation\n- ' + facts.join('\n- '))
+  if (prefs.length) sections.push('## Preferences and communication style\n- ' + prefs.join('\n- '))
+  if (topics.length) sections.push('## Ongoing topics\n- ' + topics.join('\n- '))
 
   if (memory.procedures.length) {
     sections.push(
       '## Learned procedures (you can execute these using existing tools)\n' +
         memory.procedures.map((p) => `- **${p.name}**: ${p.description}`).join('\n'),
+    )
+  }
+
+  // Recent session summaries (last 5, skip empty)
+  const recentSummaries = memory.session_summaries.filter((s) => s.summary).slice(0, 5)
+  if (recentSummaries.length) {
+    sections.push(
+      '## Recent sessions\n' +
+        recentSummaries.map((s) => `- ${s.date}: ${s.summary}`).join('\n'),
     )
   }
 
@@ -69,7 +105,7 @@ async function summarizePending(apiKey: string | undefined): Promise<void> {
       try {
         const transcripts = await readSessionTranscripts(session)
         const existing = await loadMemory()
-        const updated = await summarize(existing, transcripts, apiKey)
+        const updated = await summarize(existing, transcripts, apiKey, session.id)
         await saveMemory(updated)
         await markSummarized(session.id)
         console.log('[memory] Summarization complete:', session.id, `(${transcripts.length} entries)`)
