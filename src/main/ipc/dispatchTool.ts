@@ -104,13 +104,18 @@ const DISPATCHER_PURE_TOOLS = new Set([
   'get_tasks',
   'create_task',
   'complete_task',
+  'complete_subtask',
   'update_task',
   'get_gmail_inbox',
+  'get_email_detail',
+  'reply_gmail',
   'trash_gmail',
   'archive_gmail',
+  'get_calendar_events',
   'create_calendar_event',
   'web_search',
   'get_weather',
+  'get_dashboard_entry',
   'list_drive_recent',
   'list_drive_folder',
   'read_drive_file',
@@ -237,6 +242,21 @@ export async function dispatchTool(
   if (toolName === 'open_app') {
     const { openApp } = await import('../skills/open-app/index')
     return await openApp(args.app_name as string)
+  }
+
+  if (toolName === 'type_text') {
+    const { typeText } = await import('../skills/keyboard/index')
+    return await typeText(String(args.text ?? ''))
+  }
+
+  if (toolName === 'press_keys') {
+    const { pressKeys } = await import('../skills/keyboard/index')
+    return await pressKeys(String(args.combo ?? ''))
+  }
+
+  if (toolName === 'wait') {
+    const { wait } = await import('../skills/keyboard/index')
+    return await wait(typeof args.seconds === 'number' ? args.seconds : Number(args.seconds))
   }
 
   if (toolName === 'update_profile') {

@@ -381,6 +381,48 @@ export const secretaryTools: ToolDeclaration[] = [
     },
   },
   {
+    name: 'type_text',
+    description:
+      'Type literal text into the currently focused application as if the user typed it. Non-ASCII text (Japanese etc.) is pasted via the clipboard. Useful after open_app + press_keys to drive an app, e.g. typing a URL into a browser address bar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The text to type. Newlines become Return key presses.' },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'press_keys',
+    description:
+      'Press a keyboard shortcut or special key on the currently focused application. Examples: "cmd+t" (new tab), "cmd+shift+n" (new private window), "cmd+l" (focus address bar), "enter", "escape", "tab", "up". Modifiers: cmd/shift/alt/option/ctrl. Special keys: enter/return, tab, space, delete, escape, up/down/left/right, home, end, pageup, pagedown.',
+    parameters: {
+      type: 'object',
+      properties: {
+        combo: {
+          type: 'string',
+          description: 'Key combo like "cmd+t" or single key like "enter".',
+        },
+      },
+      required: ['combo'],
+    },
+  },
+  {
+    name: 'wait',
+    description:
+      'Pause for a short time before the next tool call. Use between open_app and press_keys, or after press_keys when an app needs a moment to react (autocomplete, page load). Capped at 5 seconds.',
+    parameters: {
+      type: 'object',
+      properties: {
+        seconds: {
+          type: 'number',
+          description: 'Seconds to wait (fractional allowed, e.g. 0.5). Max 5.',
+        },
+      },
+      required: ['seconds'],
+    },
+  },
+  {
     name: 'show_panel',
     description:
       'Display email, calendar, tasks, AI news, tools, movies, timers, or recent Drive files in a dedicated panel. Only call when the user explicitly asks to show or display something. For checks like "any new mail?" use delegate_task instead. The response data field contains raw data — summarize it verbally as usual and note that it is also shown on screen.',
