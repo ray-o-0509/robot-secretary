@@ -1,6 +1,6 @@
 import { net } from 'electron'
 
-const PROD_BACKEND_URL = 'https://robot-secretary.vercel.app'
+const PROD_BACKEND_URL = 'https://backend-three-steel-43.vercel.app'
 
 function getBackendUrl(): string {
   return process.env.ROBOT_SECRETARY_BACKEND_URL ?? PROD_BACKEND_URL
