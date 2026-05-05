@@ -10,9 +10,11 @@ export function LoginApp() {
     setLoading(true)
     setError(null)
     try {
-      await window.electronAPI?.authLogin()
+      if (!window.electronAPI) throw new Error('アプリの初期化に失敗しました。再起動してください。')
+      await window.electronAPI.authLogin()
     } catch (e) {
       setError((e as Error).message ?? 'ログインに失敗しました')
+    } finally {
       setLoading(false)
     }
   }
