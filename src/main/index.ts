@@ -3,13 +3,14 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as dotenv from 'dotenv'
+import { execFileSync } from 'node:child_process'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
 import { getSecretaryDb } from './auth/secretaryDb'
-import { getStoredSessionToken, loginWithGoogle, resolveUserFromToken, type AppUser } from './auth/userAuth'
+import { getStoredSessionToken, resolveUserFromToken, type AppUser } from './auth/userAuth'
 import { populateProcessEnv } from './auth/apiKeyStore'
 import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
 import { registerAuthIpc } from './ipc/registerAuthIpc'
@@ -231,9 +232,11 @@ function registerSettingsIpc() {
   ipcMain.handle('settings:get-app-icon', async (_event, appPath: unknown) => {
     if (typeof appPath !== 'string' || !appPath) return null
     try {
-      const img = await app.getFileIcon(appPath, { size: 'small' })
+      const bundleIcon = getBundleIconDataUrl(appPath)
+      if (bundleIcon) return bundleIcon
+      const img = await app.getFileIcon(appPath, { size: 'normal' })
       if (img.isEmpty()) return null
-      return img.toDataURL()
+      return img.resize({ width: 64, height: 64 }).toDataURL()
     } catch {
       return null
     }
@@ -459,6 +462,39 @@ function registerSettingsIpc() {
   })
 }
 
+function getBundleIconDataUrl(appPath: string): string | null {
+  if (!appPath.endsWith('.app')) return null
+  const resourcesDir = path.join(appPath, 'Contents', 'Resources')
+  const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist')
+  if (!fs.existsSync(resourcesDir) || !fs.existsSync(infoPlistPath)) return null
+
+  let iconName: string | null = null
+  try {
+    iconName = execFileSync('plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', infoPlistPath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    iconName = null
+  }
+
+  const candidates = iconName
+    ? [
+        iconName,
+        iconName.endsWith('.icns') ? iconName : `${iconName}.icns`,
+        iconName.endsWith('.png') ? iconName : `${iconName}.png`,
+      ]
+    : ['AppIcon.icns', 'AppIcon.png']
+
+  for (const candidate of candidates) {
+    const iconPath = path.join(resourcesDir, candidate)
+    if (!fs.existsSync(iconPath)) continue
+    const image = nativeImage.createFromPath(iconPath)
+    if (!image.isEmpty()) return image.resize({ width: 64, height: 64 }).toDataURL()
+  }
+  return null
+}
+
 function sanitizeMemoryInput(
   raw: unknown,
   existing: import('./memory/store').Memory,
@@ -516,7 +552,7 @@ function createLoginWindow() {
     resizable: false,
     frame: false,
     transparent: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     center: true,
     backgroundColor: '#0a0a14',
     webPreferences: {
@@ -614,6 +650,10 @@ function registerSetupIpc() {
   })
 
   ipcMain.handle('setup:launch', async () => {
+    if (!currentUser) {
+      createLoginWindow()
+      throw new Error('ログインが必要です')
+    }
     if (setupWin && !setupWin.isDestroyed()) {
       setupWin.close()
       setupWin = null
@@ -633,6 +673,11 @@ function forwardRendererConsole(window: BrowserWindow, label: string) {
 }
 
 function createWindow() {
+  if (!currentUser) {
+    console.warn('[auth] Blocked robot window creation before login')
+    createLoginWindow()
+    return
+  }
   const { width: _w, height } = screen.getPrimaryDisplay().workAreaSize
   // 起動時は左下（チャットウィンドウの下付近）に配置
   currentX = 24 + 360 + 24  // チャットウィンドウ右端 + 余白
@@ -1351,6 +1396,84 @@ app.whenReady().then(async () => {
 
   // ── Turso Auth ────────────────────────────────────────────────────────────
   const db = getSecretaryDb()
+  let authenticatedAppStarted = false
+
+  const startAuthenticatedApp = async (user: AppUser) => {
+    if (authenticatedAppStarted) return
+    authenticatedAppStarted = true
+
+    // Populate process.env with all API keys from DB (so all tool modules continue working)
+    await populateProcessEnv(user.id, db)
+    console.log('[auth] process.env populated with DB keys')
+
+    // Initialize DB-backed stores
+    initStore(user.id, db)
+    initSettingsStore(user.id, db)
+    await initGoogleAuth(user.id, db)
+    const settings = await loadSettings()
+    robotSize = clampRobotSize(settings.robotSize)
+
+    // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { label: `About ${app.name}`, role: 'about' },
+          { type: 'separator' },
+          {
+            label: 'Preferences...',
+            accelerator: 'CmdOrCtrl+,',
+            click: () => openSettingsWindow(),
+          },
+          { type: 'separator' },
+          { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
+        ],
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+    ]))
+
+    // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
+    const micStatus = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('microphone')
+      : 'granted'
+    const needsSetup = micStatus !== 'granted'
+
+    if (needsSetup) {
+      createSetupWindow()
+    } else {
+      await initMemory(() => process.env.GEMINI_API_KEY)
+      createWindow()
+      // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
+      // instead of cold-starting cc and racing the 1.5s sleep.
+      import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
+    }
+  }
+
+  // Register auth IPC before showing the login window, so OAuth starts only from the button.
+  registerAuthIpc({
+    db,
+    getUser: () => currentUser,
+    onLoginSuccess: async (user) => {
+      currentUser = user
+      console.log('[auth] Logged in as:', currentUser.email)
+      if (loginWin && !loginWin.isDestroyed()) {
+        loginWin.close()
+        loginWin = null
+      }
+      await startAuthenticatedApp(user)
+    },
+  })
 
   // Check for an existing session in Keychain
   let token = await getStoredSessionToken()
@@ -1359,71 +1482,14 @@ app.whenReady().then(async () => {
     if (!currentUser) token = null  // stale
   }
 
-  // No valid session → show login window and await Google OAuth
+  // No valid session → show login window. OAuth begins only after the user clicks the button.
   if (!currentUser) {
     createLoginWindow()
-    try {
-      currentUser = await loginWithGoogle(db)
-      console.log('[auth] Logged in as:', currentUser.email)
-    } finally {
-      if (loginWin && !loginWin.isDestroyed()) { loginWin.close(); loginWin = null }
-    }
-  } else {
-    console.log('[auth] Session restored:', currentUser.email)
+    return
   }
 
-  // Populate process.env with all API keys from DB (so all tool modules continue working)
-  await populateProcessEnv(currentUser.id, db)
-  console.log('[auth] process.env populated with DB keys')
-
-  // Initialize DB-backed stores
-  initStore(currentUser.id, db)
-  initSettingsStore(currentUser.id, db)
-  await initGoogleAuth(currentUser.id, db)
-  const settings = await loadSettings()
-  robotSize = clampRobotSize(settings.robotSize)
-
-  // Register auth IPC
-  registerAuthIpc({
-    db,
-    getUser: () => currentUser,
-    onLoginSuccess: (user) => { currentUser = user },
-  })
-
-
-  // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {
-      label: app.name,
-      submenu: [
-        { label: `About ${app.name}`, role: 'about' },
-        { type: 'separator' },
-        {
-          label: 'Preferences...',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => openSettingsWindow(),
-        },
-        { type: 'separator' },
-        { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
-      ],
-    },
-  ]))
-
-  // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
-  const micStatus = process.platform === 'darwin'
-    ? systemPreferences.getMediaAccessStatus('microphone')
-    : 'granted'
-  const needsSetup = micStatus !== 'granted'
-
-  if (needsSetup) {
-    createSetupWindow()
-  } else {
-    await initMemory(() => process.env.GEMINI_API_KEY)
-    createWindow()
-    // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
-    // instead of cold-starting cc and racing the 1.5s sleep.
-    import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
-  }
+  console.log('[auth] Session restored:', currentUser.email)
+  await startAuthenticatedApp(currentUser)
 })
 
 app.on('before-quit', async (e) => {
@@ -1446,5 +1512,10 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  if (BrowserWindow.getAllWindows().length > 0) return
+  if (!currentUser) {
+    createLoginWindow()
+    return
+  }
+  createWindow()
 })
