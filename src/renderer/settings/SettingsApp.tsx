@@ -22,6 +22,9 @@ import {
   RiCalendar2Line,
   RiHardDriveLine,
   RiFingerprintLine,
+  RiKeyLine,
+  RiEyeLine,
+  RiEyeOffLine,
 } from 'react-icons/ri'
 import i18n, { toLng } from '../i18n'
 import type { MemorySnapshot, Procedure } from '../App'
@@ -919,24 +922,34 @@ function AccountRow({
 
 // ── Skills Tab ───────────────────────────────────────────────────────────────
 
+type SkillSecret = { key: string; label: string; hint?: string }
+
 type SkillInfo = {
   id: string
   label: string
   description: string
   tools: string[]
   enabled: boolean
+  secrets: SkillSecret[]
 }
 
 function SkillsTab() {
   const { t } = useTranslation()
   const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const list = await window.electronAPI.settingsListSkills()
+      const [list, keys] = await Promise.all([
+        window.electronAPI.settingsListSkills(),
+        window.electronAPI.authListApiKeys?.() ?? [],
+      ])
       setSkills(list)
+      const status: Record<string, boolean> = {}
+      for (const k of keys) status[k.name] = k.isSet
+      setApiKeyStatus(status)
     } finally {
       setLoading(false)
     }
@@ -953,6 +966,10 @@ function SkillsTab() {
     }
   }
 
+  const onSecretSaved = (keyName: string, isSet: boolean) => {
+    setApiKeyStatus((prev) => ({ ...prev, [keyName]: isSet }))
+  }
+
   if (loading && skills.length === 0) {
     return <div style={{ fontSize: 12, color: '#64748b' }}>...</div>
   }
@@ -963,13 +980,26 @@ function SkillsTab() {
         {t('settings.skills.description')}
       </p>
       {skills.map((s) => (
-        <SkillRow key={s.id} skill={s} onToggle={(next) => toggle(s.id, next)} />
+        <SkillRow
+          key={s.id}
+          skill={s}
+          apiKeyStatus={apiKeyStatus}
+          onToggle={(next) => toggle(s.id, next)}
+          onSecretSaved={onSecretSaved}
+        />
       ))}
     </div>
   )
 }
 
-function SkillRow({ skill, onToggle }: { skill: SkillInfo; onToggle: (next: boolean) => void }) {
+function SkillRow({
+  skill, apiKeyStatus, onToggle, onSecretSaved,
+}: {
+  skill: SkillInfo
+  apiKeyStatus: Record<string, boolean>
+  onToggle: (next: boolean) => void
+  onSecretSaved: (keyName: string, isSet: boolean) => void
+}) {
   return (
     <div style={{
       display: 'flex',
@@ -1009,6 +1039,145 @@ function SkillRow({ skill, onToggle }: { skill: SkillInfo; onToggle: (next: bool
           </span>
         ))}
       </div>
+      {skill.secrets && skill.secrets.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          marginTop: 4,
+          paddingTop: 10,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+        }}>
+          {skill.secrets.map((s) => (
+            <SecretRow
+              key={s.key}
+              keyName={s.key}
+              label={s.label}
+              hint={s.hint}
+              isSet={apiKeyStatus[s.key] ?? false}
+              onSaved={onSecretSaved}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SecretRow({
+  keyName, label, hint, isSet, onSaved,
+}: {
+  keyName: string
+  label: string
+  hint?: string
+  isSet: boolean
+  onSaved: (keyName: string, isSet: boolean) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [show, setShow] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!value.trim()) return
+    setSaving(true)
+    try {
+      await window.electronAPI.authSetApiKey?.(keyName, value.trim())
+      onSaved(keyName, true)
+      setEditing(false)
+      setValue('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async () => {
+    await window.electronAPI.authDeleteApiKey?.(keyName)
+    onSaved(keyName, false)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <RiKeyLine size={12} style={{ color: '#64748b', flexShrink: 0 }} />
+        <span style={{ fontSize: 11, color: '#94a3b8', flex: 1 }}>{label}</span>
+        {isSet ? (
+          <span style={{
+            fontSize: 9, padding: '2px 6px',
+            background: 'rgba(34,197,94,0.12)', color: '#4ade80',
+            borderRadius: 3, fontWeight: 600,
+          }}>設定済み</span>
+        ) : (
+          <span style={{
+            fontSize: 9, padding: '2px 6px',
+            background: 'rgba(251,191,36,0.1)', color: '#fbbf24',
+            borderRadius: 3,
+          }}>未設定</span>
+        )}
+        {isSet && !editing && (
+          <button
+            onClick={remove}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 2 }}
+          >
+            <RiDeleteBinLine size={13} />
+          </button>
+        )}
+        <button
+          onClick={() => { setEditing((v) => !v); setValue(''); setShow(false) }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', padding: 2 }}
+        >
+          {editing ? <RiCloseLine size={13} /> : <RiPencilLine size={13} />}
+        </button>
+      </div>
+      {hint && !editing && (
+        <span style={{ fontSize: 10, color: '#475569', marginLeft: 20 }}>{hint}</span>
+      )}
+      {editing && (
+        <div style={{ display: 'flex', gap: 6, marginLeft: 20 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              type={show ? 'text' : 'password'}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void save() }}
+              placeholder={isSet ? '新しい値を入力...' : '値を入力...'}
+              autoFocus
+              style={{
+                width: '100%',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: 6,
+                color: '#e2e8f0',
+                fontSize: 11,
+                padding: '5px 28px 5px 8px',
+                fontFamily: 'monospace',
+                outline: 'none',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShow((v) => !v)}
+              style={{
+                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 0,
+              }}
+            >
+              {show ? <RiEyeOffLine size={12} /> : <RiEyeLine size={12} />}
+            </button>
+          </div>
+          <button
+            onClick={() => void save()}
+            disabled={saving || !value.trim()}
+            style={{
+              background: 'rgba(99,102,241,0.8)', border: 'none', borderRadius: 6,
+              color: '#fff', fontSize: 11, padding: '5px 10px', cursor: 'pointer',
+              opacity: saving || !value.trim() ? 0.5 : 1,
+            }}
+          >
+            <RiCheckLine size={13} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
