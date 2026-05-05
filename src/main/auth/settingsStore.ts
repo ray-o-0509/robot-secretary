@@ -1,12 +1,7 @@
 import type { Client } from '@libsql/client'
 import { defaultSkillsEnabled, type SkillsEnabled } from '../../config/skills'
 
-export type DefaultApps = {
-  email?: string
-  browser?: string
-  terminal?: string
-  editor?: string
-}
+export type DefaultApps = { email?: string; browser?: string; terminal?: string; editor?: string }
 
 export type UserSettings = {
   language: string
@@ -22,31 +17,25 @@ const DEFAULT_SETTINGS: UserSettings = {
   skillToggles: defaultSkillsEnabled(),
 }
 
-let _userId: string | null = null
 let _db: Client | null = null
 let _cached: UserSettings | null = null
 
-export function initSettingsStore(userId: string, db: Client): void {
-  _userId = userId
+export function initSettingsStore(_userId: string, db: Client): void {
   _db = db
   _cached = null
 }
 
 export async function loadSettings(): Promise<UserSettings> {
   if (_cached) return { ..._cached }
-  if (!_userId || !_db) throw new Error('settingsStore not initialized')
+  if (!_db) throw new Error('settingsStore not initialized')
 
-  const result = await _db.execute({
-    sql: 'SELECT language, robot_size, default_apps, skill_toggles FROM settings WHERE user_id = ?',
-    args: [_userId],
-  })
+  const result = await _db.execute('SELECT language, robot_size, default_apps, skill_toggles FROM settings WHERE id = 1')
 
   if (result.rows.length === 0) {
     await _db.execute({
-      sql: `INSERT INTO settings (user_id, language, robot_size, default_apps, skill_toggles, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO settings (id, language, robot_size, default_apps, skill_toggles, updated_at)
+            VALUES (1, ?, ?, ?, ?, ?)`,
       args: [
-        _userId,
         DEFAULT_SETTINGS.language,
         DEFAULT_SETTINGS.robotSize,
         JSON.stringify(DEFAULT_SETTINGS.defaultApps),
@@ -69,7 +58,7 @@ export async function loadSettings(): Promise<UserSettings> {
 }
 
 export async function saveSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
-  if (!_userId || !_db) throw new Error('settingsStore not initialized')
+  if (!_db) throw new Error('settingsStore not initialized')
   const current = await loadSettings()
   const updated: UserSettings = {
     language: partial.language ?? current.language,
@@ -78,20 +67,17 @@ export async function saveSettings(partial: Partial<UserSettings>): Promise<User
     skillToggles: partial.skillToggles ?? current.skillToggles,
   }
   await _db.execute({
-    sql: `INSERT INTO settings (user_id, language, robot_size, default_apps, skill_toggles, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(user_id) DO UPDATE SET
+    sql: `INSERT INTO settings (id, language, robot_size, default_apps, skill_toggles, updated_at)
+          VALUES (1, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
             language=excluded.language,
             robot_size=excluded.robot_size,
             default_apps=excluded.default_apps,
             skill_toggles=excluded.skill_toggles,
             updated_at=excluded.updated_at`,
     args: [
-      _userId,
-      updated.language,
-      updated.robotSize,
-      JSON.stringify(updated.defaultApps),
-      JSON.stringify(updated.skillToggles),
+      updated.language, updated.robotSize,
+      JSON.stringify(updated.defaultApps), JSON.stringify(updated.skillToggles),
       new Date().toISOString(),
     ],
   })

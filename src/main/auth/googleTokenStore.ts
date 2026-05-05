@@ -14,8 +14,8 @@ export type GoogleTokenData = {
 
 export async function loadGoogleToken(userId: string, email: string, db: Client): Promise<GoogleTokenData | null> {
   const result = await db.execute({
-    sql: 'SELECT ciphertext FROM google_tokens WHERE user_id = ? AND email = ?',
-    args: [userId, email],
+    sql: 'SELECT ciphertext FROM google_tokens WHERE email = ?',
+    args: [email],
   })
   if (result.rows.length === 0) return null
   const key = await getDerivedKey(userId)
@@ -28,24 +28,18 @@ export async function saveGoogleToken(userId: string, email: string, tokenData: 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   await db.execute({
-    sql: `INSERT INTO google_tokens (id, user_id, email, ciphertext, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(user_id, email) DO UPDATE SET ciphertext=excluded.ciphertext, updated_at=excluded.updated_at`,
-    args: [id, userId, email, ciphertext, now],
+    sql: `INSERT INTO google_tokens (id, email, ciphertext, updated_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(email) DO UPDATE SET ciphertext=excluded.ciphertext, updated_at=excluded.updated_at`,
+    args: [id, email, ciphertext, now],
   })
 }
 
-export async function listGoogleTokenEmails(userId: string, db: Client): Promise<string[]> {
-  const result = await db.execute({
-    sql: 'SELECT email FROM google_tokens WHERE user_id = ?',
-    args: [userId],
-  })
+export async function listGoogleTokenEmails(db: Client): Promise<string[]> {
+  const result = await db.execute('SELECT email FROM google_tokens')
   return result.rows.map((r) => r.email as string)
 }
 
-export async function deleteGoogleToken(userId: string, email: string, db: Client): Promise<void> {
-  await db.execute({
-    sql: 'DELETE FROM google_tokens WHERE user_id = ? AND email = ?',
-    args: [userId, email],
-  })
+export async function deleteGoogleToken(email: string, db: Client): Promise<void> {
+  await db.execute({ sql: 'DELETE FROM google_tokens WHERE email = ?', args: [email] })
 }

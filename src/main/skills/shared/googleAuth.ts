@@ -8,26 +8,20 @@ export const FALLBACK_TOKENS_DIR = path.join(process.env.HOME ?? '', '.config/gm
 
 export type AccountEntry = { email: string; path: string; source: 'primary' | 'legacy' }
 
-// ── DB context + token cache ──────────────────────────────────────────────────
-
 let _userId: string | null = null
 let _db: Client | null = null
-
-// In-memory cache: email → token data
 const _tokenCache = new Map<string, GoogleTokenData>()
 
 export async function initGoogleAuth(userId: string, db: Client): Promise<void> {
   _userId = userId
   _db = db
-  // Pre-warm cache: load all tokens from DB
-  const emails = await listGoogleTokenEmails(userId, db)
+  _tokenCache.clear()
+  const emails = await listGoogleTokenEmails(db)
   await Promise.all(emails.map(async (email) => {
     const data = await loadGoogleToken(userId, email, db)
     if (data) _tokenCache.set(email, data)
   }))
 }
-
-// ── DB-backed token write/delete ──────────────────────────────────────────────
 
 export async function saveGoogleTokenForUser(email: string, tokenData: GoogleTokenData): Promise<void> {
   if (!_userId || !_db) throw new Error('googleAuth: not initialized')
@@ -37,22 +31,14 @@ export async function saveGoogleTokenForUser(email: string, tokenData: GoogleTok
 
 export async function deleteGoogleTokenForUser(email: string): Promise<void> {
   if (!_userId || !_db) throw new Error('googleAuth: not initialized')
-  await deleteGoogleToken(_userId, email, _db)
+  await deleteGoogleToken(email, _db)
   _tokenCache.delete(email)
 }
 
 export async function listGoogleTokenEmailsForUser(): Promise<string[]> {
-  if (!_userId || !_db) return []
-  return listGoogleTokenEmails(_userId, _db)
+  if (!_db) return []
+  return listGoogleTokenEmails(_db)
 }
-
-export function listGoogleTokenEntriesForUser(): { email: string; tokenData: GoogleTokenData }[] {
-  return Array.from(_tokenCache.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([email, tokenData]) => ({ email, tokenData }))
-}
-
-// ── Public API (sync — reads from cache) ─────────────────────────────────────
 
 export function listAccounts(): string[] {
   const accounts = Array.from(_tokenCache.keys()).sort()
@@ -60,23 +46,16 @@ export function listAccounts(): string[] {
   return accounts
 }
 
-// Settings UI: returns DB-backed accounts.
 export function listAccountsAll(): AccountEntry[] {
-  return Array.from(_tokenCache.keys()).sort().map((email) => ({
-    email,
-    path: '',
-    source: 'primary' as const,
-  }))
+  return Array.from(_tokenCache.keys()).sort().map((email) => ({ email, path: '', source: 'primary' as const }))
 }
 
 export function getGoogleAuth(email?: string) {
   const accounts = listAccounts()
   const account = email ?? process.env.GMAIL_ACCOUNT ?? accounts[0]
-
-  // Try DB cache first
   const cached = _tokenCache.get(account)
   if (cached) return buildOAuthClient(cached)
-  throw new Error(`Google token not found in DB for ${account}`)
+  throw new Error(`Google token not found for ${account}`)
 }
 
 function buildOAuthClient(data: GoogleTokenData) {
