@@ -75,21 +75,6 @@ export function listAccountsForUi(): AccountListItem[] {
 }
 
 export async function listAccountsForUiAsync(): Promise<AccountListItem[]> {
-  const emails = await listGoogleTokenEmailsForUser()
-  if (emails.length > 0) {
-    return emails.sort().map((email) => {
-      const scopes = REQUIRED_SCOPES
-      return {
-        email,
-        path: '',
-        source: 'primary' as const,
-        scopes,
-        hasRefreshToken: !!tokenData.refresh_token,
-        missingScopes: REQUIRED_SCOPES.filter((s) => !scopes.includes(s)),
-        expiry: tokenData.expiry ?? null,
-      }
-    })
-  }
   return listAccountsForUi()
 }
 
