@@ -5,10 +5,16 @@ import * as os from 'os'
 import * as dotenv from 'dotenv'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
-import { getSecretSync } from './skills/secrets/index'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
+import { getSecretaryDb } from './auth/secretaryDb'
+import { getStoredSessionToken, loginWithGoogle, resolveUserFromToken, type AppUser } from './auth/userAuth'
+import { populateProcessEnv } from './auth/apiKeyStore'
+import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
+import { registerAuthIpc } from './ipc/registerAuthIpc'
+import { initStore } from './memory/store'
+import { initGoogleAuth } from './skills/shared/googleAuth'
 
 const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
 const originalConsole = {
@@ -67,6 +73,8 @@ const isDev = !app.isPackaged
 
 const iconPath = path.join(__dirname, '../../assets/icon.png')
 
+let loginWin: BrowserWindow | null = null
+let currentUser: AppUser | null = null
 let setupWin: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
 let win: BrowserWindow | null = null
@@ -104,26 +112,7 @@ function clampRobotSize(n: number): number {
   return Math.max(ROBOT_SIZE_MIN, Math.min(ROBOT_SIZE_MAX, Math.round(n)))
 }
 
-function loadRobotSize(): number {
-  try {
-    const data = fs.readFileSync(appearanceFilePath, 'utf-8')
-    const parsed = JSON.parse(data) as { robotSize?: number }
-    return clampRobotSize(parsed.robotSize ?? ROBOT_SIZE_DEFAULT)
-  } catch {
-    return ROBOT_SIZE_DEFAULT
-  }
-}
-
-function saveRobotSize(size: number) {
-  try {
-    fs.mkdirSync(path.dirname(appearanceFilePath), { recursive: true })
-    fs.writeFileSync(appearanceFilePath, JSON.stringify({ robotSize: size }), 'utf-8')
-  } catch (e) {
-    console.error('Failed to save appearance:', e)
-  }
-}
-
-let robotSize = loadRobotSize()
+let robotSize = ROBOT_SIZE_DEFAULT
 
 function sendRobotVelocity(vx: number, vy: number, speed: number) {
   if (!win || win.isDestroyed()) return
@@ -352,7 +341,14 @@ function registerSettingsIpc() {
     }
   })
 
-  const langFilePath = path.join(app.getPath('userData'), 'language.json')
+  ipcMain.handle('settings:get-language', async () => {
+    try {
+      const s = await loadSettings()
+      return s.language
+    } catch {
+      return 'ja-JP'
+    }
+  })
 
   ipcMain.handle('settings:get-secrets', async () => {
     const { getSecretsView } = await import('./skills/secrets/index')
@@ -405,15 +401,6 @@ function registerSettingsIpc() {
     return await setSkillEnabled(id, enabled)
   })
 
-  ipcMain.handle('settings:get-language', () => {
-    try {
-      const data = fs.readFileSync(langFilePath, 'utf-8')
-      return (JSON.parse(data) as { code: string }).code
-    } catch {
-      return 'ja-JP'
-    }
-  })
-
   ipcMain.handle('appearance:get-robot-size', () => ({
     size: robotSize,
     min: ROBOT_SIZE_MIN,
@@ -421,10 +408,10 @@ function registerSettingsIpc() {
     default: ROBOT_SIZE_DEFAULT,
   }))
 
-  ipcMain.handle('appearance:set-robot-size', (_event, raw: unknown) => {
+  ipcMain.handle('appearance:set-robot-size', async (_event, raw: unknown) => {
     const next = clampRobotSize(typeof raw === 'number' ? raw : Number(raw))
     robotSize = next
-    saveRobotSize(next)
+    await saveSettings({ robotSize: next }).catch((e) => console.error('Failed to save robotSize:', e))
     if (win && !win.isDestroyed()) {
       const [x, y] = win.getPosition()
       win.setBounds({ x, y, width: next, height: next })
@@ -437,11 +424,7 @@ function registerSettingsIpc() {
   })
 
   ipcMain.on('set-language', (_event, code: string) => {
-    try {
-      fs.writeFileSync(langFilePath, JSON.stringify({ code }), 'utf-8')
-    } catch (e) {
-      console.error('Failed to save language:', e)
-    }
+    saveSettings({ language: String(code) }).catch((e) => console.error('Failed to save language:', e))
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send('language-change', code)
     }
@@ -523,6 +506,34 @@ function sanitizeMemoryInput(
   }
 }
 
+// ========== Login Window ==========
+
+function createLoginWindow() {
+  if (loginWin && !loginWin.isDestroyed()) { loginWin.focus(); return }
+  loginWin = new BrowserWindow({
+    width: 420,
+    height: 320,
+    resizable: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    transparent: false,
+    alwaysOnTop: true,
+    center: true,
+    backgroundColor: '#0a0a14',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  forwardRendererConsole(loginWin, 'login')
+  if (isDev) {
+    loginWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#login')
+  } else {
+    loginWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'login' })
+  }
+}
+
 // ========== Setup Window ==========
 
 function createSetupWindow() {
@@ -586,8 +597,8 @@ function registerSetupIpc() {
     return {
       micPermission,
       accessibilityPermission,
-      geminiApiKey: !!getSecretSync('GEMINI_API_KEY'),
-      ticktickToken: !!getSecretSync('TICKTICK_ACCESS_TOKEN'),
+      geminiApiKey: !!process.env.GEMINI_API_KEY,
+      ticktickToken: !!process.env.TICKTICK_ACCESS_TOKEN,
       gmailAccounts: getGmailAccounts(),
     }
   })
@@ -608,7 +619,7 @@ function registerSetupIpc() {
       setupWin.close()
       setupWin = null
     }
-    await initMemory(() => getSecretSync('GEMINI_API_KEY'))
+    await initMemory(() => process.env.GEMINI_API_KEY)
     createWindow()
   })
 }
@@ -1339,13 +1350,46 @@ app.whenReady().then(async () => {
   registerSetupIpc()
   registerSettingsIpc()
 
-  // Pre-populate skill-toggle and secrets caches so synchronous reads inside
-  // tool handlers reflect saved settings on the very first call.
-  void (async () => {
-    const { loadSkillsEnabled } = await import('./skills/skill-toggle/index')
-    const { loadSecrets } = await import('./skills/secrets/index')
-    await Promise.all([loadSkillsEnabled(), loadSecrets()])
-  })()
+  // ── Turso Auth ────────────────────────────────────────────────────────────
+  const db = getSecretaryDb()
+
+  // Check for an existing session in Keychain
+  let token = await getStoredSessionToken()
+  if (token) {
+    currentUser = await resolveUserFromToken(token, db)
+    if (!currentUser) token = null  // stale
+  }
+
+  // No valid session → show login window and await Google OAuth
+  if (!currentUser) {
+    createLoginWindow()
+    try {
+      currentUser = await loginWithGoogle(db)
+      console.log('[auth] Logged in as:', currentUser.email)
+    } finally {
+      if (loginWin && !loginWin.isDestroyed()) { loginWin.close(); loginWin = null }
+    }
+  } else {
+    console.log('[auth] Session restored:', currentUser.email)
+  }
+
+  // Populate process.env with all API keys from DB (so all tool modules continue working)
+  await populateProcessEnv(currentUser.id, db)
+  console.log('[auth] process.env populated with DB keys')
+
+  // Initialize DB-backed stores
+  initStore(currentUser.id, db)
+  initSettingsStore(currentUser.id, db)
+  await initGoogleAuth(currentUser.id, db)
+  const settings = await loadSettings()
+  robotSize = clampRobotSize(settings.robotSize)
+
+  // Register auth IPC
+  registerAuthIpc({
+    db,
+    getUser: () => currentUser,
+    onLoginSuccess: (user) => { currentUser = user },
+  })
 
 
   // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
@@ -1370,13 +1414,12 @@ app.whenReady().then(async () => {
   const micStatus = process.platform === 'darwin'
     ? systemPreferences.getMediaAccessStatus('microphone')
     : 'granted'
-  const hasGeminiKey = !!getSecretSync('GEMINI_API_KEY')
-  const needsSetup = micStatus !== 'granted' || !hasGeminiKey
+  const needsSetup = micStatus !== 'granted'
 
   if (needsSetup) {
     createSetupWindow()
   } else {
-    await initMemory(() => getSecretSync('GEMINI_API_KEY'))
+    await initMemory(() => process.env.GEMINI_API_KEY)
     createWindow()
     // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
     // instead of cold-starting cc and racing the 1.5s sleep.

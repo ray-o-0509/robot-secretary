@@ -11,6 +11,7 @@ import { WeatherApp } from './weather/WeatherApp'
 import { SetupApp } from './setup/SetupApp'
 import { SettingsApp } from './settings/SettingsApp'
 import { OverlayApp } from './overlay/OverlayApp'
+import { LoginApp } from './login/LoginApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -70,6 +71,14 @@ declare global {
       setupGetStatus: () => Promise<unknown>
       setupOpenSettings: (type: string) => void
       setupLaunch: () => Promise<void>
+
+      // Auth
+      authGetStatus: () => Promise<{ isLoggedIn: boolean; email?: string; displayName?: string | null; avatarUrl?: string | null }>
+      authLogin: () => Promise<{ email: string; displayName?: string | null; avatarUrl?: string | null }>
+      authLogout: () => Promise<void>
+      authListApiKeys: () => Promise<Array<{ name: string; isSet: boolean }>>
+      authSetApiKey: (name: string, value: string) => Promise<void>
+      authDeleteApiKey: (name: string) => Promise<void>
 
       // Notification watch
       startNotificationWatch: () => Promise<void>
@@ -152,6 +161,7 @@ const isWeatherWindow = hash === '#weather'
 const isSetupWindow = hash === '#setup'
 const isSettingsWindow = hash === '#settings'
 const isRegionOverlayWindow = hash === '#region-overlay'
+const isLoginWindow = hash === '#login'
 
 export default function App() {
   useEffect(() => {
@@ -161,6 +171,7 @@ export default function App() {
     return () => off?.()
   }, [])
 
+  if (isLoginWindow) return <LoginApp />
   if (isSetupWindow) return <SetupApp />
   if (isSettingsWindow) return <SettingsApp />
   if (isRegionOverlayWindow) return <OverlayApp />

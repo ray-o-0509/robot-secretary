@@ -11,7 +11,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import * as crypto from 'node:crypto'
-import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, type AccountEntry } from '../skills/shared/googleAuth'
+import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, saveGoogleTokenForUser, deleteGoogleTokenForUser, listGoogleTokenEmailsForUser, type AccountEntry } from '../skills/shared/googleAuth'
 
 export const REQUIRED_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
@@ -59,24 +59,44 @@ export type AccountListItem = AccountEntry & {
 export function listAccountsForUi(): AccountListItem[] {
   return listAccountsAll().map((entry) => {
     try {
-      const data = JSON.parse(fs.readFileSync(entry.path, 'utf-8')) as {
-        scopes?: string[]
-        refresh_token?: string
-        expiry?: string | null
+      // For file-based entries (fallback path), read from file
+      if (entry.path) {
+        const data = JSON.parse(fs.readFileSync(entry.path, 'utf-8')) as {
+          scopes?: string[]
+          refresh_token?: string
+          expiry?: string | null
+        }
+        const scopes = Array.isArray(data.scopes) ? data.scopes : []
+        return {
+          ...entry,
+          scopes,
+          hasRefreshToken: !!data.refresh_token,
+          missingScopes: REQUIRED_SCOPES.filter((s) => !scopes.includes(s)),
+          expiry: data.expiry ?? null,
+        }
       }
-      const scopes = Array.isArray(data.scopes) ? data.scopes : []
-      const missingScopes = REQUIRED_SCOPES.filter((s) => !scopes.includes(s))
-      return {
-        ...entry,
-        scopes,
-        hasRefreshToken: !!data.refresh_token,
-        missingScopes,
-        expiry: data.expiry ?? null,
-      }
+      // DB-backed entry: show as configured (scopes unknown without decryption)
+      return { ...entry, scopes: REQUIRED_SCOPES, hasRefreshToken: true, missingScopes: [], expiry: null }
     } catch {
       return { ...entry, scopes: [], hasRefreshToken: false, missingScopes: REQUIRED_SCOPES, expiry: null }
     }
   })
+}
+
+export async function listAccountsForUiAsync(): Promise<AccountListItem[]> {
+  const emails = await listGoogleTokenEmailsForUser()
+  if (emails.length > 0) {
+    return emails.sort().map((email) => ({
+      email,
+      path: '',
+      source: 'primary' as const,
+      scopes: REQUIRED_SCOPES,
+      hasRefreshToken: true,
+      missingScopes: [],
+      expiry: null,
+    }))
+  }
+  return listAccountsForUi()
 }
 
 // 同時に複数の OAuth フローが走らないようにするためのロック
@@ -213,9 +233,15 @@ export async function addGoogleAccount(opts: { loginHint?: string; scopes?: stri
               scopes: requestedScopes,
               expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
             }
-            const tokenPath = path.join(PRIMARY_TOKENS_DIR, `${email}.json`)
             checkAborted()  // 書き込み直前の最終チェック
-            await writeTokenAtomic(tokenPath, JSON.stringify(out, null, 2))
+            // Save to DB (primary) with file fallback for migration
+            try {
+              await saveGoogleTokenForUser(email, out)
+            } catch {
+              // DB not initialized yet (migration mode) — fall back to file
+              const tokenPath = path.join(PRIMARY_TOKENS_DIR, `${email}.json`)
+              await writeTokenAtomic(tokenPath, JSON.stringify(out, null, 2))
+            }
 
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
             res.end(`<!doctype html><meta charset="utf-8"><title>Robot Secretary</title>
@@ -244,30 +270,16 @@ export async function addGoogleAccount(opts: { loginHint?: string; scopes?: stri
 }
 
 export async function removeGoogleAccount(email: string): Promise<void> {
-  const entries = listAccountsAll().filter((e) => e.email === email)
-  if (entries.length === 0) return
-
-  // refresh_token を Google 側で revoke (best-effort)
-  for (const entry of entries) {
-    try {
-      const data = JSON.parse(fs.readFileSync(entry.path, 'utf-8')) as { refresh_token?: string }
-      if (data.refresh_token) {
-        const params = new URLSearchParams({ token: data.refresh_token })
-        const r = await fetch(`https://oauth2.googleapis.com/revoke?${params.toString()}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        })
-        if (!r.ok) console.warn(`[google-accounts] revoke failed for ${email}: HTTP ${r.status}`)
-      }
-    } catch (e) {
-      console.warn(`[google-accounts] revoke error for ${email}:`, e)
-    }
+  // Delete from DB
+  try {
+    await deleteGoogleTokenForUser(email)
+  } catch (e) {
+    console.warn(`[google-accounts] DB delete error for ${email}:`, e)
   }
 
-  // primary も legacy も削除
+  // Also remove file-based tokens if they exist (migration cleanup)
+  const entries = listAccountsAll().filter((e) => e.email === email && e.path)
   for (const entry of entries) {
-    try { fs.unlinkSync(entry.path) } catch (e) {
-      console.warn(`[google-accounts] unlink error for ${entry.path}:`, e)
-    }
+    try { fs.unlinkSync(entry.path) } catch { /* noop */ }
   }
 }
