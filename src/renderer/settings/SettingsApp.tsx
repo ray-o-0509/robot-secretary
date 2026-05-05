@@ -974,9 +974,38 @@ function SkillsTab() {
     return <div style={{ fontSize: 12, color: '#64748b' }}>...</div>
   }
 
+  const CORE_KEYS: SkillSecret[] = [
+    { key: 'GEMINI_API_KEY',    label: 'Gemini API Key',    hint: 'Gemini Live 音声会話とメモリ要約で使用' },
+    { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', hint: 'Claude エージェント (delegate_task) で使用' },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 6px', lineHeight: 1.6 }}>
+      {/* ── コアAPIキー ── */}
+      <div style={{
+        padding: '12px 14px',
+        background: 'rgba(99,102,241,0.06)',
+        border: '1px solid rgba(99,102,241,0.2)',
+        borderRadius: 9,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#a5b4fc', marginBottom: 10 }}>
+          コア API キー
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {CORE_KEYS.map((s) => (
+            <SecretRow
+              key={s.key}
+              keyName={s.key}
+              label={s.label}
+              hint={s.hint}
+              isSet={apiKeyStatus[s.key] ?? false}
+              onSaved={onSecretSaved}
+            />
+          ))}
+        </div>
+      </div>
+
+      <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 2px', lineHeight: 1.6 }}>
         {t('settings.skills.description')}
       </p>
       {skills.map((s) => (
