@@ -339,8 +339,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const sessionEpoch = sessionEpochRef.current + 1
     sessionEpochRef.current = sessionEpoch
 
-    const stored = (await window.electronAPI.settingsGetSecretValue?.('GEMINI_API_KEY'))?.trim()
-    const apiKey = stored || import.meta.env.VITE_GEMINI_API_KEY?.trim()
+    // IPC 経由で DB から取得。ビルド時埋め込みの VITE_GEMINI_API_KEY は使わない
+    const apiKey = (await window.electronAPI.settingsGetSecretValue?.('GEMINI_API_KEY'))?.trim()
     if (!apiKey) {
       console.warn('[Gemini] API Key is not set. Enter it via right-click → Settings.')
       intentionalCloseRef.current = true

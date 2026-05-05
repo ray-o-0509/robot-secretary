@@ -4,7 +4,6 @@ import { encrypt, decrypt, getDerivedKey } from './crypto'
 
 export const KNOWN_API_KEYS = [
   'GEMINI_API_KEY',
-  'VITE_GEMINI_API_KEY',
   'ANTHROPIC_API_KEY',
   'TICKTICK_ACCESS_TOKEN',
   'TURSO_DATABASE_URL',
@@ -65,10 +64,10 @@ export async function listApiKeyNames(userId: string, db: Client): Promise<{ nam
 
 export async function populateProcessEnv(userId: string, db: Client): Promise<void> {
   const keys = await loadApiKeys(userId, db)
+  for (const name of KNOWN_API_KEYS) {
+    delete process.env[name]
+  }
   for (const [name, value] of Object.entries(keys)) {
     process.env[name] = value
-    if (name === 'GEMINI_API_KEY') {
-      process.env['VITE_GEMINI_API_KEY'] = value
-    }
   }
 }
