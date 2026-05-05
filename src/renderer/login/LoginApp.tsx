@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
+
+type DraggableStyle = CSSProperties & { WebkitAppRegion?: 'drag' | 'no-drag' }
 
 export function LoginApp() {
   const [loading, setLoading] = useState(false)
@@ -27,10 +29,10 @@ export function LoginApp() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif',
       gap: 24,
       userSelect: 'none',
-      WebkitAppRegion: 'drag' as never,
-    }}>
+      WebkitAppRegion: 'drag',
+    } satisfies DraggableStyle}>
       <img
-        src="/assets/icon.png"
+        src="assets/icon.png"
         alt="Robot Secretary"
         style={{ width: 72, height: 72, borderRadius: 16 }}
       />
@@ -51,7 +53,7 @@ export function LoginApp() {
         onClick={handleLogin}
         disabled={loading}
         style={{
-          WebkitAppRegion: 'no-drag' as never,
+          WebkitAppRegion: 'no-drag',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -64,7 +66,7 @@ export function LoginApp() {
           fontWeight: 500,
           cursor: loading ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s',
-        }}
+        } satisfies DraggableStyle}
       >
         {loading ? 'ブラウザで認証中...' : 'Googleでサインイン'}
       </button>

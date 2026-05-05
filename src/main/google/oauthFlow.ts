@@ -2,7 +2,7 @@
 // scripts/auth-google.mjs と同等のロジックを main プロセス用に移植。
 // - ループバックサーバ (127.0.0.1:0) で code を受け取る
 // - shell.openExternal(authUrl) でユーザのデフォルトブラウザを開く
-// - トークンは ~/.config/robot-secretary/google-tokens/<email>.json に atomic に書き出す
+// - トークンは Turso DB に暗号化して保存する
 
 import { shell } from 'electron'
 import { google } from 'googleapis'
@@ -58,28 +58,7 @@ export type AccountListItem = AccountEntry & {
 
 export function listAccountsForUi(): AccountListItem[] {
   return listAccountsAll().map((entry) => {
-    try {
-      // For file-based entries (fallback path), read from file
-      if (entry.path) {
-        const data = JSON.parse(fs.readFileSync(entry.path, 'utf-8')) as {
-          scopes?: string[]
-          refresh_token?: string
-          expiry?: string | null
-        }
-        const scopes = Array.isArray(data.scopes) ? data.scopes : []
-        return {
-          ...entry,
-          scopes,
-          hasRefreshToken: !!data.refresh_token,
-          missingScopes: REQUIRED_SCOPES.filter((s) => !scopes.includes(s)),
-          expiry: data.expiry ?? null,
-        }
-      }
-      // DB-backed entry: show as configured (scopes unknown without decryption)
-      return { ...entry, scopes: REQUIRED_SCOPES, hasRefreshToken: true, missingScopes: [], expiry: null }
-    } catch {
-      return { ...entry, scopes: [], hasRefreshToken: false, missingScopes: REQUIRED_SCOPES, expiry: null }
-    }
+    return { ...entry, scopes: REQUIRED_SCOPES, hasRefreshToken: true, missingScopes: [], expiry: null }
   })
 }
 
@@ -117,17 +96,6 @@ function timingSafeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b)
   if (ab.length !== bb.length) return false
   return crypto.timingSafeEqual(ab, bb)
-}
-
-async function writeTokenAtomic(targetPath: string, contents: string) {
-  const dir = path.dirname(targetPath)
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
-  // ベストエフォート: 既存ディレクトリの mode を厳格化
-  try { fs.chmodSync(dir, 0o700) } catch { /* noop (e.g. shared dir) */ }
-  const tmp = `${targetPath}.tmp.${crypto.randomBytes(6).toString('hex')}`
-  fs.writeFileSync(tmp, contents, { mode: 0o600 })
-  try { fs.chmodSync(tmp, 0o600) } catch { /* noop */ }
-  fs.renameSync(tmp, targetPath)
 }
 
 export async function addGoogleAccount(opts: { loginHint?: string; scopes?: string[] } = {}): Promise<{ email: string }> {
@@ -234,14 +202,7 @@ export async function addGoogleAccount(opts: { loginHint?: string; scopes?: stri
               expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
             }
             checkAborted()  // 書き込み直前の最終チェック
-            // Save to DB (primary) with file fallback for migration
-            try {
-              await saveGoogleTokenForUser(email, out)
-            } catch {
-              // DB not initialized yet (migration mode) — fall back to file
-              const tokenPath = path.join(PRIMARY_TOKENS_DIR, `${email}.json`)
-              await writeTokenAtomic(tokenPath, JSON.stringify(out, null, 2))
-            }
+            await saveGoogleTokenForUser(email, out)
 
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
             res.end(`<!doctype html><meta charset="utf-8"><title>Robot Secretary</title>
@@ -270,16 +231,5 @@ export async function addGoogleAccount(opts: { loginHint?: string; scopes?: stri
 }
 
 export async function removeGoogleAccount(email: string): Promise<void> {
-  // Delete from DB
-  try {
-    await deleteGoogleTokenForUser(email)
-  } catch (e) {
-    console.warn(`[google-accounts] DB delete error for ${email}:`, e)
-  }
-
-  // Also remove file-based tokens if they exist (migration cleanup)
-  const entries = listAccountsAll().filter((e) => e.email === email && e.path)
-  for (const entry of entries) {
-    try { fs.unlinkSync(entry.path) } catch { /* noop */ }
-  }
+  await deleteGoogleTokenForUser(email)
 }

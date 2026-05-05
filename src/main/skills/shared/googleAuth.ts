@@ -1,5 +1,4 @@
 import { google } from 'googleapis'
-import * as fs from 'fs'
 import * as path from 'path'
 import type { Client } from '@libsql/client'
 import { loadGoogleToken, saveGoogleToken, listGoogleTokenEmails, deleteGoogleToken, type GoogleTokenData } from '../../auth/googleTokenStore'
@@ -50,40 +49,18 @@ export async function listGoogleTokenEmailsForUser(): Promise<string[]> {
 // ── Public API (sync — reads from cache) ─────────────────────────────────────
 
 export function listAccounts(): string[] {
-  if (_tokenCache.size > 0) {
-    return Array.from(_tokenCache.keys()).sort()
-  }
-  // Fallback to file system if cache is empty (pre-migration or no DB)
-  const tokensDir = fs.existsSync(PRIMARY_TOKENS_DIR) ? PRIMARY_TOKENS_DIR
-    : fs.existsSync(FALLBACK_TOKENS_DIR) ? FALLBACK_TOKENS_DIR : null
-  if (!tokensDir) throw new Error(`Google token directory not found: ${PRIMARY_TOKENS_DIR}`)
-  const files = fs.readdirSync(tokensDir).filter((f) => f.endsWith('.json')).sort()
-  if (files.length === 0) throw new Error(`No token files found in ${tokensDir}`)
-  return files.map((f) => f.replace(/\.json$/, ''))
+  const accounts = Array.from(_tokenCache.keys()).sort()
+  if (accounts.length === 0) throw new Error('Google tokens not found in DB')
+  return accounts
 }
 
-// Settings UI: returns all known accounts (from cache + file fallback)
+// Settings UI: returns DB-backed accounts.
 export function listAccountsAll(): AccountEntry[] {
-  if (_tokenCache.size > 0) {
-    return Array.from(_tokenCache.keys()).sort().map((email) => ({
-      email,
-      path: '',
-      source: 'primary' as const,
-    }))
-  }
-  // Fallback to file system
-  const map = new Map<string, AccountEntry>()
-  const collect = (dir: string, source: 'primary' | 'legacy') => {
-    if (!fs.existsSync(dir)) return
-    for (const f of fs.readdirSync(dir)) {
-      if (!f.endsWith('.json')) continue
-      const email = f.replace(/\.json$/, '')
-      if (!map.has(email)) map.set(email, { email, path: path.join(dir, f), source })
-    }
-  }
-  collect(PRIMARY_TOKENS_DIR, 'primary')
-  collect(FALLBACK_TOKENS_DIR, 'legacy')
-  return Array.from(map.values()).sort((a, b) => a.email.localeCompare(b.email))
+  return Array.from(_tokenCache.keys()).sort().map((email) => ({
+    email,
+    path: '',
+    source: 'primary' as const,
+  }))
 }
 
 export function getGoogleAuth(email?: string) {
@@ -93,13 +70,7 @@ export function getGoogleAuth(email?: string) {
   // Try DB cache first
   const cached = _tokenCache.get(account)
   if (cached) return buildOAuthClient(cached)
-
-  // Fallback to file system
-  const tokensDir = fs.existsSync(PRIMARY_TOKENS_DIR) ? PRIMARY_TOKENS_DIR : FALLBACK_TOKENS_DIR
-  const tokenPath = path.join(tokensDir, `${account}.json`)
-  if (!fs.existsSync(tokenPath)) throw new Error(`Token not found for ${account}`)
-  const data = JSON.parse(fs.readFileSync(tokenPath, 'utf-8')) as GoogleTokenData
-  return buildOAuthClient(data)
+  throw new Error(`Google token not found in DB for ${account}`)
 }
 
 function buildOAuthClient(data: GoogleTokenData) {

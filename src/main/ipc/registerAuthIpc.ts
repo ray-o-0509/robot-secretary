@@ -3,12 +3,11 @@ import type { Client } from '@libsql/client'
 import type { AppUser } from '../auth/userAuth'
 import { loginWithGoogle, clearSessionToken } from '../auth/userAuth'
 import { saveApiKey, deleteApiKey, listApiKeyNames } from '../auth/apiKeyStore'
-import { populateProcessEnv } from '../auth/apiKeyStore'
 
 type Deps = {
   db: Client
   getUser: () => AppUser | null
-  onLoginSuccess: (user: AppUser) => void
+  onLoginSuccess: (user: AppUser) => void | Promise<void>
 }
 
 export function registerAuthIpc(deps: Deps): void {
@@ -27,8 +26,7 @@ export function registerAuthIpc(deps: Deps): void {
 
   ipcMain.handle('auth:login', async () => {
     const user = await loginWithGoogle(db)
-    await populateProcessEnv(user.id, db)
-    onLoginSuccess(user)
+    await onLoginSuccess(user)
     return { email: user.email, displayName: user.displayName, avatarUrl: user.avatarUrl }
   })
 

@@ -11,7 +11,7 @@ import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
 import { getSecretaryDb } from './auth/secretaryDb'
 import { getStoredSessionToken, resolveUserFromToken, type AppUser } from './auth/userAuth'
-import { populateProcessEnv } from './auth/apiKeyStore'
+import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
 import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
 import { registerAuthIpc } from './ipc/registerAuthIpc'
 import { initStore } from './memory/store'
@@ -106,7 +106,6 @@ let shuttingDown = false
 const ROBOT_SIZE_MIN = 180
 const ROBOT_SIZE_MAX = 600
 const ROBOT_SIZE_DEFAULT = 300
-const appearanceFilePath = path.join(app.getPath('userData'), 'appearance.json')
 
 function clampRobotSize(n: number): number {
   if (!Number.isFinite(n)) return ROBOT_SIZE_DEFAULT
@@ -354,27 +353,41 @@ function registerSettingsIpc() {
   })
 
   ipcMain.handle('settings:get-secrets', async () => {
-    const { getSecretsView } = await import('./skills/secrets/index')
-    return await getSecretsView()
+    const user = currentUser
+    if (!user) throw new Error('Not authenticated')
+    return getApiKeysView(user.id)
   })
 
   ipcMain.handle('settings:set-secret', async (_event, key: unknown, value: unknown) => {
     if (typeof key !== 'string' || typeof value !== 'string') {
       throw new Error('settings:set-secret requires (key: string, value: string)')
     }
-    const { saveSecret, SECRET_KEYS, getSecretsView } = await import('./skills/secrets/index')
-    if (!(SECRET_KEYS as readonly string[]).includes(key)) {
+    const user = currentUser
+    if (!user) throw new Error('Not authenticated')
+    if (!(KNOWN_API_KEYS as readonly string[]).includes(key) || key.startsWith('VITE_')) {
       throw new Error(`Unknown secret key: ${key}`)
     }
-    await saveSecret(key as typeof SECRET_KEYS[number], value)
-    return await getSecretsView()
+    const db = getSecretaryDb()
+    const trimmed = value.trim()
+    if (trimmed) {
+      await saveApiKey(user.id, key, trimmed, db)
+      process.env[key] = trimmed
+      if (key === 'GEMINI_API_KEY') process.env['VITE_GEMINI_API_KEY'] = trimmed
+    } else {
+      await deleteApiKey(user.id, key, db)
+      delete process.env[key]
+      if (key === 'GEMINI_API_KEY') delete process.env['VITE_GEMINI_API_KEY']
+    }
+    return getApiKeysView(user.id)
   })
 
   ipcMain.handle('settings:get-secret-value', async (_event, key: unknown) => {
     if (typeof key !== 'string') return undefined
-    const { getSecretValue, SECRET_KEYS } = await import('./skills/secrets/index')
-    if (!(SECRET_KEYS as readonly string[]).includes(key)) return undefined
-    return await getSecretValue(key as typeof SECRET_KEYS[number])
+    const user = currentUser
+    if (!user) return undefined
+    if (!(KNOWN_API_KEYS as readonly string[]).includes(key)) return undefined
+    const keys = await loadApiKeys(user.id, getSecretaryDb())
+    return keys[key] ?? process.env[key]
   })
 
   ipcMain.handle('settings:list-skills', async () => {
@@ -460,6 +473,21 @@ function registerSettingsIpc() {
     abortInFlight('user cancelled')
     return { ok: true }
   })
+}
+
+async function getApiKeysView(userId: string): Promise<Record<string, { set: boolean; preview: string }>> {
+  const [names, values] = await Promise.all([
+    listApiKeyNames(userId, getSecretaryDb()),
+    loadApiKeys(userId, getSecretaryDb()),
+  ])
+  const out: Record<string, { set: boolean; preview: string }> = {}
+  for (const { name, isSet } of names) {
+    const value = values[name]
+    out[name] = isSet && value
+      ? { set: true, preview: value.length <= 8 ? '••••' : `${value.slice(0, 4)}…${value.slice(-4)}` }
+      : { set: isSet, preview: '' }
+  }
+  return out
 }
 
 function getBundleIconDataUrl(appPath: string): string | null {
@@ -606,18 +634,9 @@ function createSetupWindow() {
   }
 }
 
-function getGmailAccounts(): string[] {
-  try {
-    const primaryDir = path.join(os.homedir(), '.config', 'robot-secretary', 'google-tokens')
-    const fallbackDir = path.join(os.homedir(), '.config', 'gmail-triage', 'tokens')
-    const tokensDir = fs.existsSync(primaryDir) ? primaryDir : fallbackDir
-    if (!fs.existsSync(tokensDir)) return []
-    return fs.readdirSync(tokensDir)
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.replace(/\.json$/, ''))
-  } catch {
-    return []
-  }
+async function getGmailAccounts(): Promise<string[]> {
+  const { listGoogleTokenEmailsForUser } = await import('./skills/shared/googleAuth')
+  return listGoogleTokenEmailsForUser()
 }
 
 function registerSetupIpc() {
@@ -634,7 +653,7 @@ function registerSetupIpc() {
       accessibilityPermission,
       geminiApiKey: !!process.env.GEMINI_API_KEY,
       ticktickToken: !!process.env.TICKTICK_ACCESS_TOKEN,
-      gmailAccounts: getGmailAccounts(),
+      gmailAccounts: await getGmailAccounts(),
     }
   })
 
