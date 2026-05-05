@@ -512,10 +512,9 @@ function createLoginWindow() {
   if (loginWin && !loginWin.isDestroyed()) { loginWin.focus(); return }
   loginWin = new BrowserWindow({
     width: 420,
-    height: 320,
+    height: 360,
     resizable: false,
     frame: false,
-    titleBarStyle: 'hidden',
     transparent: false,
     alwaysOnTop: true,
     center: true,

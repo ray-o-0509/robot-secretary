@@ -76,8 +76,9 @@ async function exchangeCodeForTokens(
 async function fetchUserInfo(accessToken: string): Promise<{
   sub: string; email: string; name?: string; picture?: string
 }> {
+  // v3 (OpenID Connect) endpoint returns `sub` — v2 returns `id`, avoid confusion
   const res = await session.defaultSession.fetch(
-    'https://www.googleapis.com/oauth2/v2/userinfo',
+    'https://www.googleapis.com/oauth2/v3/userinfo',
     { headers: { Authorization: `Bearer ${accessToken}` } },
   )
   if (!res.ok) throw new Error(`userinfo fetch failed: ${res.status}`)
