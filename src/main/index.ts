@@ -1466,7 +1466,9 @@ app.whenReady().then(async () => {
     const micStatus = process.platform === 'darwin'
       ? systemPreferences.getMediaAccessStatus('microphone')
       : 'granted'
-    const needsSetup = micStatus !== 'granted'
+    // populateProcessEnv() 済みなので process.env を確認すれば DB の状態が分かる
+    const hasGeminiKey = !!process.env.GEMINI_API_KEY
+    const needsSetup = micStatus !== 'granted' || !hasGeminiKey
 
     if (needsSetup) {
       createSetupWindow()
