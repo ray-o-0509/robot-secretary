@@ -67,7 +67,11 @@ export async function populateProcessEnv(userId: string, db: Client): Promise<vo
   for (const name of KNOWN_API_KEYS) {
     delete process.env[name]
   }
+  delete process.env['VITE_GEMINI_API_KEY']
   for (const [name, value] of Object.entries(keys)) {
     process.env[name] = value
+    if (name === 'GEMINI_API_KEY') {
+      process.env['VITE_GEMINI_API_KEY'] = value
+    }
   }
 }

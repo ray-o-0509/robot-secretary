@@ -56,5 +56,6 @@ export function registerAuthIpc(deps: Deps): void {
     if (!user) throw new Error('Not authenticated')
     await deleteApiKey(user.id, name, db)
     delete process.env[name]
+    if (name === 'GEMINI_API_KEY') delete process.env['VITE_GEMINI_API_KEY']
   })
 }

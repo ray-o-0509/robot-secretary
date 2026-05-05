@@ -46,6 +46,12 @@ export async function listGoogleTokenEmailsForUser(): Promise<string[]> {
   return listGoogleTokenEmails(_userId, _db)
 }
 
+export function listGoogleTokenEntriesForUser(): { email: string; tokenData: GoogleTokenData }[] {
+  return Array.from(_tokenCache.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([email, tokenData]) => ({ email, tokenData }))
+}
+
 // ── Public API (sync — reads from cache) ─────────────────────────────────────
 
 export function listAccounts(): string[] {

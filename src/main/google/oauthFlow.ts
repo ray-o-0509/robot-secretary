@@ -4,14 +4,14 @@
 // - shell.openExternal(authUrl) でユーザのデフォルトブラウザを開く
 // - トークンは Turso DB に暗号化して保存する
 
-import { shell } from 'electron'
+import { session, shell } from 'electron'
 import { google } from 'googleapis'
 import * as http from 'node:http'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import * as crypto from 'node:crypto'
-import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, saveGoogleTokenForUser, deleteGoogleTokenForUser, listGoogleTokenEmailsForUser, type AccountEntry } from '../skills/shared/googleAuth'
+import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, listGoogleTokenEntriesForUser, saveGoogleTokenForUser, deleteGoogleTokenForUser, type AccountEntry } from '../skills/shared/googleAuth'
 
 export const REQUIRED_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
@@ -27,6 +27,14 @@ export const CLIENT_SECRET_PATH = path.join(os.homedir(), '.config/gmail-triage/
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000
 
 type ClientSecret = { client_id: string; client_secret: string; token_uri?: string }
+
+type OAuthTokenResponse = {
+  access_token: string
+  refresh_token?: string
+  expires_in?: number
+  token_type?: string
+  scope?: string
+}
 
 function readClientSecret(): ClientSecret {
   const raw = JSON.parse(fs.readFileSync(CLIENT_SECRET_PATH, 'utf-8')) as {
@@ -57,23 +65,37 @@ export type AccountListItem = AccountEntry & {
 }
 
 export function listAccountsForUi(): AccountListItem[] {
+  const tokenDataByEmail = new Map(
+    listGoogleTokenEntriesForUser().map(({ email, tokenData }) => [email, tokenData]),
+  )
   return listAccountsAll().map((entry) => {
-    return { ...entry, scopes: REQUIRED_SCOPES, hasRefreshToken: true, missingScopes: [], expiry: null }
+    const tokenData = tokenDataByEmail.get(entry.email)
+    const scopes = Array.isArray(tokenData?.scopes) ? tokenData.scopes : []
+    return {
+      ...entry,
+      scopes,
+      hasRefreshToken: !!tokenData?.refresh_token,
+      missingScopes: REQUIRED_SCOPES.filter((s) => !scopes.includes(s)),
+      expiry: tokenData?.expiry ?? null,
+    }
   })
 }
 
 export async function listAccountsForUiAsync(): Promise<AccountListItem[]> {
-  const emails = await listGoogleTokenEmailsForUser()
-  if (emails.length > 0) {
-    return emails.sort().map((email) => ({
-      email,
-      path: '',
-      source: 'primary' as const,
-      scopes: REQUIRED_SCOPES,
-      hasRefreshToken: true,
-      missingScopes: [],
-      expiry: null,
-    }))
+  const entries = listGoogleTokenEntriesForUser()
+  if (entries.length > 0) {
+    return entries.map(({ email, tokenData }) => {
+      const scopes = Array.isArray(tokenData.scopes) ? tokenData.scopes : []
+      return {
+        email,
+        path: '',
+        source: 'primary' as const,
+        scopes,
+        hasRefreshToken: !!tokenData.refresh_token,
+        missingScopes: REQUIRED_SCOPES.filter((s) => !scopes.includes(s)),
+        expiry: tokenData.expiry ?? null,
+      }
+    })
   }
   return listAccountsForUi()
 }
@@ -96,6 +118,42 @@ function timingSafeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b)
   if (ab.length !== bb.length) return false
   return crypto.timingSafeEqual(ab, bb)
+}
+
+async function exchangeCodeForTokens(
+  clientId: string,
+  clientSecret: string,
+  redirectUri: string,
+  code: string,
+): Promise<OAuthTokenResponse> {
+  const body = new URLSearchParams({
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code',
+  })
+  const res = await session.defaultSession.fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Token exchange failed: ${res.status} ${text}`)
+  }
+  return res.json() as Promise<OAuthTokenResponse>
+}
+
+async function fetchUserEmail(accessToken: string): Promise<string> {
+  const res = await session.defaultSession.fetch(
+    'https://www.googleapis.com/oauth2/v3/userinfo',
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) throw new Error(`userinfo fetch failed: ${res.status}`)
+  const info = await res.json() as { email?: string }
+  if (!info.email) throw new Error('Could not resolve email from userinfo')
+  return info.email
 }
 
 export async function addGoogleAccount(opts: { loginHint?: string; scopes?: string[] } = {}): Promise<{ email: string }> {
@@ -178,28 +236,26 @@ export async function addGoogleAccount(opts: { loginHint?: string; scopes?: stri
             if (!code) throw new Error(u.searchParams.get('error') ?? 'no code')
 
             checkAborted()
-            const { tokens } = await oAuth2.getToken(code)
+            const tokens = await exchangeCodeForTokens(secret.client_id, secret.client_secret, redirectUri, code)
             checkAborted()
             if (!tokens.refresh_token) {
               throw new Error(
                 'refresh_token が返却されませんでした。Google アカウントの「サードパーティアクセス」から該当アプリを一度削除してから再試行してください。',
               )
             }
+            if (!tokens.access_token) throw new Error('access_token が取得できませんでした')
 
-            oAuth2.setCredentials(tokens)
-            const userinfo = await google.oauth2({ version: 'v2', auth: oAuth2 }).userinfo.get()
+            const email = await fetchUserEmail(tokens.access_token)
             checkAborted()
-            const email = userinfo.data.email
-            if (!email) throw new Error('Could not resolve email from userinfo')
 
             const out = {
-              token: tokens.access_token ?? null,
+              token: tokens.access_token,
               refresh_token: tokens.refresh_token,
               token_uri: secret.token_uri ?? 'https://oauth2.googleapis.com/token',
               client_id: secret.client_id,
               client_secret: secret.client_secret,
               scopes: requestedScopes,
-              expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+              expiry: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
             }
             checkAborted()  // 書き込み直前の最終チェック
             await saveGoogleTokenForUser(email, out)

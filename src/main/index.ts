@@ -387,7 +387,7 @@ function registerSettingsIpc() {
     if (!user) return undefined
     if (!(KNOWN_API_KEYS as readonly string[]).includes(key)) return undefined
     const keys = await loadApiKeys(user.id, getSecretaryDb())
-    return keys[key] ?? process.env[key]
+    return keys[key]
   })
 
   ipcMain.handle('settings:list-skills', async () => {
@@ -453,8 +453,8 @@ function registerSettingsIpc() {
   })
 
   ipcMain.handle('google-accounts:list', async () => {
-    const { listAccountsForUi } = await import('./google/oauthFlow')
-    return listAccountsForUi()
+    const { listAccountsForUiAsync } = await import('./google/oauthFlow')
+    return listAccountsForUiAsync()
   })
 
   ipcMain.handle('google-accounts:add', async (_event, args?: { loginHint?: string; scopes?: string[] }) => {
