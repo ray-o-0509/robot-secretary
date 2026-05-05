@@ -11,7 +11,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import * as crypto from 'node:crypto'
-import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, listGoogleTokenEmailsForUser, saveGoogleTokenForUser, deleteGoogleTokenForUser, type AccountEntry } from '../skills/shared/googleAuth'
+import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, saveGoogleTokenForUser, deleteGoogleTokenForUser, type AccountEntry } from '../skills/shared/googleAuth'
 
 export const REQUIRED_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
