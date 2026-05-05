@@ -32,8 +32,13 @@ export function registerAuthIpc(deps: Deps): void {
 
   ipcMain.handle('auth:logout', async () => {
     await clearSessionToken()
-    // Quit so user must restart and re-login
     const { app } = await import('electron')
+    app.quit()
+  })
+
+  ipcMain.handle('auth:relaunch', async () => {
+    const { app } = await import('electron')
+    app.relaunch()
     app.quit()
   })
 

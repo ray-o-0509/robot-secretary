@@ -938,6 +938,7 @@ function SkillsTab() {
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
+  const [needsRestart, setNeedsRestart] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -968,6 +969,7 @@ function SkillsTab() {
 
   const onSecretSaved = (keyName: string, isSet: boolean) => {
     setApiKeyStatus((prev) => ({ ...prev, [keyName]: isSet }))
+    if (isSet) setNeedsRestart(true)
   }
 
   if (loading && skills.length === 0) {
@@ -981,6 +983,42 @@ function SkillsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* ── 再起動バナー ── */}
+      {needsRestart && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '10px 14px',
+          background: 'rgba(251,191,36,0.1)',
+          border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>⚡</span>
+            <span style={{ fontSize: 12, color: '#fde68a' }}>
+              APIキーを反映するには再起動が必要です
+            </span>
+          </div>
+          <button
+            onClick={() => window.electronAPI.authRelaunch?.()}
+            style={{
+              background: 'rgba(251,191,36,0.2)',
+              border: '1px solid rgba(251,191,36,0.4)',
+              borderRadius: 6,
+              color: '#fbbf24',
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '4px 12px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            今すぐ再起動
+          </button>
+        </div>
+      )}
       {/* ── コアAPIキー ── */}
       <div style={{
         padding: '12px 14px',

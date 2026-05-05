@@ -107,6 +107,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   authLogin: (): Promise<{ email: string; displayName?: string | null; avatarUrl?: string | null }> =>
     ipcRenderer.invoke('auth:login'),
   authLogout: (): Promise<void> => ipcRenderer.invoke('auth:logout'),
+  authRelaunch: (): Promise<void> => ipcRenderer.invoke('auth:relaunch'),
   authListApiKeys: (): Promise<Array<{ name: string; isSet: boolean }>> =>
     ipcRenderer.invoke('auth:list-api-keys'),
   authSetApiKey: (name: string, value: string): Promise<void> =>

@@ -76,6 +76,7 @@ declare global {
       authGetStatus: () => Promise<{ isLoggedIn: boolean; email?: string; displayName?: string | null; avatarUrl?: string | null }>
       authLogin: () => Promise<{ email: string; displayName?: string | null; avatarUrl?: string | null }>
       authLogout: () => Promise<void>
+      authRelaunch: () => Promise<void>
       authListApiKeys: () => Promise<Array<{ name: string; isSet: boolean }>>
       authSetApiKey: (name: string, value: string) => Promise<void>
       authDeleteApiKey: (name: string) => Promise<void>
