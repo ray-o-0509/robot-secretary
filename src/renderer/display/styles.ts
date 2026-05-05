@@ -29,6 +29,14 @@ export const CYBER_STYLES = `
   0%   { background-position: -100% 0; }
   100% { background-position: 200% 0; }
 }
+@keyframes cyber-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes cyber-skeleton-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 0.6; }
+}
 @keyframes cyber-pulse-dot {
   0%, 100% { opacity: 1;   box-shadow: 0 0 6px #00ff88, 0 0 14px rgba(0,255,136,0.5); }
   50%       { opacity: 0.5; box-shadow: 0 0 3px #00ff88, 0 0 6px rgba(0,255,136,0.3); }

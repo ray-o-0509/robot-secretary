@@ -3,6 +3,7 @@ import { LuStar } from 'react-icons/lu'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
+import { LoadingState } from '../../display/components/LoadingState'
 import type { DashboardPayload, Movie, MoviesData, PanelPayload } from '../../display/types'
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
 
 export function MoviesView({ payload }: Props) {
   const { t } = useTranslation()
+
+  if (payload.loading && !payload.data) return <LoadingState count={3} />
 
   if (payload.error) {
     return <ErrorState message={payload.error} hint={t('movies.dbHint')} />

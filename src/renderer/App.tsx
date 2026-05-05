@@ -194,9 +194,61 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }).catch(() => setStatus('ng'))
   }, [])
 
-  if (status === 'loading') return null
+  if (status === 'loading') return <AppStartingScreen />
   if (status === 'ng') return null
   return <>{children}</>
+}
+
+function AppStartingScreen() {
+  return (
+    <>
+      <style>{`
+        @keyframes app-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes app-fade-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+      `}</style>
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 14,
+          background: 'rgba(6, 8, 18, 0.92)',
+          animation: 'app-fade-in 0.2s ease-out',
+        }}
+      >
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            border: '2.5px solid rgba(0, 240, 255, 0.2)',
+            borderTopColor: '#00f0ff',
+            animation: 'app-spin 0.9s linear infinite',
+            boxShadow: '0 0 12px rgba(0, 240, 255, 0.4)',
+          }}
+        />
+        <span
+          style={{
+            fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+            fontSize: 9,
+            letterSpacing: 3,
+            color: 'rgba(0, 240, 255, 0.5)',
+          }}
+        >
+          INITIALIZING
+        </span>
+      </div>
+    </>
+  )
 }
 
 export default function App() {

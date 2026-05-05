@@ -165,6 +165,7 @@ export function SettingsApp() {
 function ProfileTab() {
   const { t } = useTranslation()
   const [items, setItems] = useState<ProfileItems>({})
+  const [loaded, setLoaded] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [addingNew, setAddingNew] = useState(false)
@@ -175,6 +176,7 @@ function ProfileTab() {
   const load = useCallback(async () => {
     const result = await window.electronAPI.settingsGetProfile()
     setItems(result as ProfileItems)
+    setLoaded(true)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -215,6 +217,8 @@ function ProfileTab() {
   }
 
   const entries = Object.entries(items)
+
+  if (!loaded) return <SettingsSkeleton rows={3} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -305,10 +309,12 @@ type MemoryListKind = 'facts' | 'preferences' | 'ongoing_topics'
 function MemoryTab() {
   const { t } = useTranslation()
   const [memory, setMemory] = useState<MemorySnapshot>(EMPTY_MEMORY)
+  const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
     const m = await window.electronAPI.settingsGetMemory()
     setMemory(m)
+    setLoaded(true)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -335,6 +341,8 @@ function MemoryTab() {
     const wiped = await window.electronAPI.settingsResetMemory()
     setMemory(wiped)
   }
+
+  if (!loaded) return <SettingsSkeleton rows={4} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -706,7 +714,7 @@ function PermissionsTab() {
   }
 
   if (loading || !status) {
-    return <div style={{ fontSize: 12, color: '#64748b' }}>...</div>
+    return <SettingsSkeleton rows={3} />
   }
 
   const items: PermItem[] = [
@@ -1007,7 +1015,7 @@ function GoogleAccountsTab() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {loading && accounts.length === 0 && <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>...</div>}
+        {loading && accounts.length === 0 && <SettingsSkeleton rows={2} />}
         {!loading && accounts.length === 0 && <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>{t('settings.google.empty')}</div>}
         {accounts.map((acc) => (
           <AccountRow
@@ -1147,7 +1155,7 @@ function SkillsTab() {
   }
 
   if (loading && skills.length === 0) {
-    return <div style={{ fontSize: 12, color: '#64748b' }}>...</div>
+    return <SettingsSkeleton rows={4} />
   }
 
   const CORE_KEYS: SkillSecret[] = [
@@ -1866,7 +1874,7 @@ function AppearanceTab() {
     setSize(res.size)
   }, [min, max])
 
-  if (!loaded) return null
+  if (!loaded) return <SettingsSkeleton rows={2} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1995,6 +2003,80 @@ function IconBtn({
     >
       {children}
     </button>
+  )
+}
+
+// ── Skeleton helpers ────────────────────────────────────────────────────────
+
+const SETTINGS_SHIMMER_STYLES = `
+@keyframes settings-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes settings-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.7; }
+}
+`
+
+function SkeletonBar({ width = '60%', height = 12, delay = 0 }: { width?: string | number; height?: number; delay?: number }) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        borderRadius: 5,
+        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.05) 100%)',
+        backgroundSize: '200% 100%',
+        animation: `settings-shimmer 1.8s ease-in-out infinite, settings-pulse 2s ease-in-out infinite`,
+        animationDelay: `${delay}s, ${delay + 0.3}s`,
+      }}
+    />
+  )
+}
+
+function SkeletonRow({ delay = 0, wide = false }: { delay?: number; wide?: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 12px',
+        background: 'rgba(255,255,255,0.03)',
+        borderRadius: 8,
+        border: '1px solid rgba(255,255,255,0.05)',
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: 'rgba(255,255,255,0.06)',
+          flexShrink: 0,
+          animation: `settings-pulse 2s ease-in-out ${delay}s infinite`,
+        }}
+      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <SkeletonBar width={wide ? '55%' : '40%'} height={11} delay={delay} />
+        <SkeletonBar width={wide ? '80%' : '65%'} height={9} delay={delay + 0.15} />
+      </div>
+      <SkeletonBar width={52} height={22} delay={delay + 0.1} />
+    </div>
+  )
+}
+
+function SettingsSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <>
+      <style>{SETTINGS_SHIMMER_STYLES}</style>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {Array.from({ length: rows }).map((_, i) => (
+          <SkeletonRow key={i} delay={i * 0.1} wide={i % 2 === 0} />
+        ))}
+      </div>
+    </>
   )
 }
 
