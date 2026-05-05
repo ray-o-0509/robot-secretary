@@ -29,7 +29,11 @@ export function LoginApp() {
       userSelect: 'none',
       WebkitAppRegion: 'drag' as never,
     }}>
-      <div style={{ fontSize: 48 }}>🤖</div>
+      <img
+        src="/assets/icon.png"
+        alt="Robot Secretary"
+        style={{ width: 72, height: 72, borderRadius: 16 }}
+      />
       <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#a5b4fc' }}>
         Robot Secretary
       </h1>
@@ -62,17 +66,7 @@ export function LoginApp() {
           transition: 'background 0.2s',
         }}
       >
-        {loading ? (
-          <>
-            <span style={{ fontSize: 16 }}>⏳</span>
-            ブラウザで認証中...
-          </>
-        ) : (
-          <>
-            <span style={{ fontSize: 16 }}>G</span>
-            Googleでサインイン
-          </>
-        )}
+        {loading ? 'ブラウザで認証中...' : 'Googleでサインイン'}
       </button>
     </div>
   )

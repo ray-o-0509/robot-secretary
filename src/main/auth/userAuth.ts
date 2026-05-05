@@ -1,4 +1,4 @@
-import { shell } from 'electron'
+import { shell, session } from 'electron'
 import { google } from 'googleapis'
 import * as http from 'node:http'
 import * as crypto from 'node:crypto'
@@ -46,7 +46,47 @@ function timingSafeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ab, bb)
 }
 
-async function fetchGoogleProfile(): Promise<{ googleId: string; email: string; displayName: string | null; avatarUrl: string | null }> {
+// Electron の session.defaultSession.fetch を使ってトークン交換を行う。
+// gaxios/googleapis は main プロセスで ETIMEDOUT になるため使用しない。
+async function exchangeCodeForTokens(
+  clientId: string,
+  clientSecret: string,
+  redirectUri: string,
+  code: string,
+): Promise<{ access_token: string; refresh_token?: string; id_token?: string }> {
+  const body = new URLSearchParams({
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code',
+  })
+  const res = await session.defaultSession.fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Token exchange failed: ${res.status} ${text}`)
+  }
+  return res.json() as Promise<{ access_token: string; refresh_token?: string; id_token?: string }>
+}
+
+async function fetchUserInfo(accessToken: string): Promise<{
+  sub: string; email: string; name?: string; picture?: string
+}> {
+  const res = await session.defaultSession.fetch(
+    'https://www.googleapis.com/oauth2/v2/userinfo',
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) throw new Error(`userinfo fetch failed: ${res.status}`)
+  return res.json() as Promise<{ sub: string; email: string; name?: string; picture?: string }>
+}
+
+async function fetchGoogleProfile(): Promise<{
+  googleId: string; email: string; displayName: string | null; avatarUrl: string | null
+}> {
   const secret = readClientSecret()
 
   return new Promise((resolve, reject) => {
@@ -75,6 +115,8 @@ async function fetchGoogleProfile(): Promise<{ googleId: string; email: string; 
         const addr = server.address()
         if (!addr || typeof addr === 'string') throw new Error('Failed to bind loopback server')
         const redirectUri = `http://127.0.0.1:${addr.port}`
+
+        // googleapis は authUrl 生成だけに使う（ネットワーク通信なし）
         const oAuth2 = new google.auth.OAuth2(secret.client_id, secret.client_secret, redirectUri)
         const authUrl = oAuth2.generateAuthUrl({
           access_type: 'offline',
@@ -93,17 +135,20 @@ async function fetchGoogleProfile(): Promise<{ googleId: string; email: string; 
             const code = u.searchParams.get('code')
             if (!code) throw new Error(u.searchParams.get('error') ?? 'no code')
 
-            const { tokens } = await oAuth2.getToken(code)
-            oAuth2.setCredentials(tokens)
-            const info = await google.oauth2({ version: 'v2', auth: oAuth2 }).userinfo.get()
-            const { id: googleId, email, name, picture } = info.data
+            // Electron の Chromium ネットワークスタックでトークン交換
+            const tokens = await exchangeCodeForTokens(
+              secret.client_id, secret.client_secret, redirectUri, code,
+            )
+            if (!tokens.access_token) throw new Error('access_token が取得できませんでした')
 
+            const info = await fetchUserInfo(tokens.access_token)
+            const { sub: googleId, email, name, picture } = info
             if (!googleId || !email) throw new Error('Google プロフィールの取得に失敗しました')
 
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
             res.end(`<!doctype html><meta charset="utf-8"><title>Robot Secretary</title>
 <body style="background:#0a0a14;color:#e2e8f0;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-<div style="text-align:center"><h1 style="color:#a5b4fc">ログイン完了</h1><p>このタブは閉じて構いません。</p></div>
+<div style="text-align:center"><h2 style="color:#a5b4fc">ログイン完了</h2><p>このタブは閉じて構いません。</p></div>
 </body>`)
             clearTimeout(timeout)
             settle(() => resolve({
@@ -128,14 +173,14 @@ async function fetchGoogleProfile(): Promise<{ googleId: string; email: string; 
   })
 }
 
-async function upsertUser(db: Client, profile: { googleId: string; email: string; displayName: string | null; avatarUrl: string | null }): Promise<AppUser> {
+async function upsertUser(db: Client, profile: {
+  googleId: string; email: string; displayName: string | null; avatarUrl: string | null
+}): Promise<AppUser> {
   const now = new Date().toISOString()
-
   const existing = await db.execute({
     sql: 'SELECT id FROM users WHERE google_id = ?',
     args: [profile.googleId],
   })
-
   if (existing.rows.length > 0) {
     const id = existing.rows[0].id as string
     await db.execute({
@@ -144,7 +189,6 @@ async function upsertUser(db: Client, profile: { googleId: string; email: string
     })
     return { id, ...profile }
   }
-
   const id = crypto.randomUUID()
   await db.execute({
     sql: 'INSERT INTO users (id, google_id, email, display_name, avatar_url, created_at, last_seen_at) VALUES (?,?,?,?,?,?,?)',
@@ -179,7 +223,6 @@ export async function resolveUserFromToken(token: string, db: Client): Promise<A
     args: [token],
   })
   if (result.rows.length === 0) return null
-
   const row = result.rows[0]
   await db.execute({
     sql: 'UPDATE users SET last_seen_at=? WHERE id=?',
