@@ -155,6 +155,12 @@
       "notDetermined": "ダイアログが表示されたら「OK」を押してください",
       "granted": "許可済み"
     },
+    "screen": {
+      "label": "画面収録権限",
+      "denied": "システム設定 > プライバシーとセキュリティ > 画面収録で許可してください",
+      "notDetermined": "設定を開いて Robot Secretary を許可してください",
+      "granted": "許可済み"
+    },
     "geminiKey": {
       "set": "設定済み (.env.local)",
       "unset": ".env.local に GEMINI_API_KEY を設定してください"

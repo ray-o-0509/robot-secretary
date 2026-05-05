@@ -1,0 +1,220 @@
+{
+  "common": {
+    "save": "保存",
+    "saving": "保存中...",
+    "cancel": "取消",
+    "edit": "编辑",
+    "delete": "删除",
+    "add": "添加",
+    "saved": "已保存 ✓",
+    "noData": "暂无数据"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}}分钟前",
+    "hoursAgo": "{{count}}小时前",
+    "daysAgo": "{{count}}天前"
+  },
+  "gmail": {
+    "noSubject": "（无主题）",
+    "noBody": "（无正文）",
+    "tokenExpiredHint": "Token 可能已过期。请运行 `scripts/auth-google.mjs <email>` 重新授权",
+    "authExpiredHint": "若认证已过期，请运行 `scripts/auth-google.mjs`",
+    "clickForDetail": "点击在新窗口中查看详情",
+    "noResults": "没有匹配「{{query}}」的邮件",
+    "standby": "点击邮件查看详情",
+    "emptyResponse": "响应为空"
+  },
+  "calendar": {
+    "allDay": "全天",
+    "noEventsToday": "今天没有日程",
+    "noEventsTomorrow": "明天没有日程",
+    "noEvents": "没有日程",
+    "daysShort": ["日", "一", "二", "三", "四", "五", "六"]
+  },
+  "tasks": {
+    "authExpiredHint": "TickTick 认证可能已过期",
+    "noTasks": "没有任务",
+    "markDone": "标为完成",
+    "overdue": "已逾期 ",
+    "today": "今天 "
+  },
+  "news": {
+    "dbHint": "请在 .env.local 中确认 TURSO_DATABASE_URL",
+    "fetchFailed": "获取失败",
+    "noNews": "暂无新闻"
+  },
+  "movies": {
+    "dbHint": "请在 .env.local 中确认 TURSO_DATABASE_URL",
+    "fetchFailed": "获取失败",
+    "noMovies": "暂无电影信息",
+    "nowPlaying": "本月上映 ({{count}})",
+    "upcoming": "下月关注 ({{count}})"
+  },
+  "tools": {
+    "dbHint": "请在 .env.local 中确认 TURSO_DATABASE_URL",
+    "fetchFailed": "获取失败",
+    "noTools": "暂无工具"
+  },
+  "settings": {
+    "title": "设置",
+    "tabs": {
+      "profile": "个人资料",
+      "memory": "记忆",
+      "apps": "默认应用",
+      "api": "API 密钥",
+      "language": "语言",
+      "google": "Google 账号",
+      "appearance": "外观",
+      "skills": "技能"
+    },
+    "skills": {
+      "description": "启用或禁用各个技能。禁用的技能对应的工具将对 AI 不可见。"
+    },
+    "appearance": {
+      "description": "调整悬浮机器人及窗口的大小。",
+      "robotSize": "机器人大小",
+      "reset": "重置"
+    },
+    "google": {
+      "description": "连接 Google 账号以使用 Gmail / 日历 / 云端硬盘。可添加或移除多个账号。",
+      "addAccount": "添加账号",
+      "adding": "请在浏览器中完成登录…",
+      "cancel": "取消",
+      "remove": "断开连接",
+      "reauth": "更新权限",
+      "empty": "未连接任何账号",
+      "removeConfirm": "断开 {{email}} 的连接？\nGoogle 侧的授权也将一并撤销。",
+      "missingScopes": "缺少权限: {{scopes}}",
+      "legacyBadge": "(旧版)",
+      "noRefreshToken": "无 refresh_token",
+      "expiry": "有效期",
+      "scopesLabel": "权限范围",
+      "noClientSecret": "未找到 client_secret.json。\n请在 Google Cloud Console 创建「桌面应用」类型的 OAuth 客户端，并将下载的 JSON 保存到以下路径：",
+      "clientSecretGuide": "https://console.cloud.google.com/apis/credentials"
+    },
+    "language": {
+      "description": "切换 UI 及 Vega 的对话语言。"
+    },
+    "profile": {
+      "description": "Vega 在对话中参考的个人信息。说「我的名字是 ○○」会自动更新。",
+      "empty": "尚未注册",
+      "keyPlaceholder": "字段名（例：姓名）",
+      "valuePlaceholder": "内容",
+      "addItem": "+ 添加字段"
+    },
+    "apps": {
+      "description": "设置说「打开邮件」「打开浏览器」时按类别打开的应用。指定具体名称（如「Google Chrome」）时直接打开。",
+      "email": "邮件",
+      "browser": "浏览器",
+      "terminal": "终端",
+      "editor": "编辑器"
+    },
+    "api": {
+      "restartRequired": "更改后需要重启应用",
+      "googleAuthNote": "Google 认证（Gmail / 日历）在 .env.local 中配置"
+    },
+    "memory": {
+      "description": "Vega 从对话中学习和记忆的内容。可编辑操作流程、事实、偏好和进行中的话题。个人资料（个人信息）在单独的标签页中。",
+      "empty": "暂无记录",
+      "procedures": "已学习的操作流程",
+      "proceduresDescription": "当你说出已知指令时 Vega 会重现的操作步骤。由 Vega 学习时自动添加，也可手动编辑。",
+      "addProcedure": "+ 添加流程",
+      "procedureNamePlaceholder": "名称（例：打开大学课程页面）",
+      "procedureDescPlaceholder": "具体步骤——包含 URL、命令、应用名，以便未来的 Vega 重现",
+      "learnedAt": "学习日期: {{date}}",
+      "facts": "事实",
+      "factsDescription": "从对话中总结的事实。",
+      "factPlaceholder": "添加事实",
+      "preferences": "偏好与风格",
+      "preferencesDescription": "Vega 用于调整沟通风格的偏好设置。",
+      "preferencePlaceholder": "添加偏好",
+      "topics": "进行中的话题",
+      "topicsDescription": "当前关注的话题或事项。",
+      "topicPlaceholder": "添加话题",
+      "resetAll": "全部清除",
+      "resetConfirm": "将清除所有流程、事实、偏好和话题。（个人资料不受影响）确定继续吗？",
+      "lastUpdated": "最后更新: {{date}}"
+    }
+  },
+  "setup": {
+    "header": "启动前检查",
+    "subtitle": "请确认所需权限和 API 密钥",
+    "checking": "检查中...",
+    "required": "必需",
+    "optional": "可选",
+    "launch": "启动",
+    "launching": "启动中...",
+    "checkRequired": "请完成必需项目",
+    "missingBoth": "需要麦克风权限和 Gemini API 密钥",
+    "missingMic": "需要麦克风权限",
+    "missingKey": "需要 Gemini API 密钥",
+    "mic": {
+      "label": "麦克风权限",
+      "denied": "请在系统设置中允许",
+      "notDetermined": "出现对话框时请点击「允许」",
+      "granted": "已授权"
+    },
+    "screen": {
+      "label": "屏幕录制权限",
+      "denied": "请在系统设置 > 隐私与安全性 > 屏幕录制中允许",
+      "notDetermined": "请打开设置并允许 Robot Secretary",
+      "granted": "已授权"
+    },
+    "geminiKey": {
+      "set": "已配置 (.env.local)",
+      "unset": "请在 .env.local 中设置 GEMINI_API_KEY"
+    },
+    "accessibility": {
+      "label": "辅助功能（PTT 快捷键）",
+      "granted": "已授权",
+      "denied": "无法使用 Option 键进行语音输入"
+    },
+    "gmail": {
+      "noTokens": "~/.config/gmail-triage/tokens/ 中没有 token"
+    },
+    "ticktick": {
+      "set": "已配置",
+      "unset": "请在 .env.local 中设置 TICKTICK_ACCESS_TOKEN"
+    },
+    "openSettings": "打开设置"
+  },
+  "settingsPanel": {
+    "title": "设置",
+    "googleNote": "Google 认证（Gmail/日历）在 .env 文件中配置"
+  },
+  "confirmation": {
+    "title": "⚠ 确认操作 —",
+    "execute": "执行",
+    "cancel": "取消"
+  },
+  "weather": {
+    "humidity": "湿度",
+    "wind": "风速",
+    "gust": "阵风",
+    "pressure": "气压",
+    "dewPoint": "露点",
+    "cloudCover": "云量"
+  },
+  "display": {
+    "fetchedAt": "获取于 {{time}}"
+  },
+  "terminal": {
+    "noOutput": "无输出",
+    "emptyOutput": "（无输出）"
+  },
+  "connection": {
+    "maxRetries": "重连失败，请检查网络连接。",
+    "noApiKey": "未设置 Gemini API 密钥。请右键点击 → 设置 进行输入。",
+    "authError": "认证错误 ({{code}})。API 密钥无效或已过期，请检查设置。",
+    "micDenied": "麦克风访问被拒绝。请在系统设置中允许 Robot Secretary 使用麦克风，然后重启应用。",
+    "network": "请检查网络连接。",
+    "connectError": "连接失败。({{msg}})"
+  },
+  "regionOverlay": {
+    "dragHint": "拖动以选择区域",
+    "escRetry": "ESC 重试",
+    "releaseHint": "松开 Option 键以发送",
+    "captured": "区域已发送"
+  }
+}

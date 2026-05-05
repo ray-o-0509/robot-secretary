@@ -9,13 +9,20 @@ import { initMemory, shutdownMemory } from './memory'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
-import { getSecretaryDb } from './auth/secretaryDb'
-import { getStoredSessionToken, resolveUserFromToken, type AppUser } from './auth/userAuth'
+import { getStoredSessionToken, resolveUserFromToken, loginWithGoogle, createUserDbClient, type AppUser } from './auth/userAuth'
+import { getBootstrapDb } from './auth/userRegistry'
 import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
 import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
 import { registerAuthIpc } from './ipc/registerAuthIpc'
 import { initStore } from './memory/store'
 import { initGoogleAuth } from './skills/shared/googleAuth'
+
+// Per-user DB client (set after login/session restore)
+let _userDb: import('@libsql/client').Client | null = null
+function getUserDb(): import('@libsql/client').Client {
+  if (!_userDb) throw new Error('User DB not initialized')
+  return _userDb
+}
 
 const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
 const originalConsole = {
@@ -367,7 +374,7 @@ function registerSettingsIpc() {
     if (!(KNOWN_API_KEYS as readonly string[]).includes(key) || key.startsWith('VITE_')) {
       throw new Error(`Unknown secret key: ${key}`)
     }
-    const db = getSecretaryDb()
+    const db = getUserDb()
     const trimmed = value.trim()
     if (trimmed) {
       await saveApiKey(user.id, key, trimmed, db)
@@ -386,7 +393,7 @@ function registerSettingsIpc() {
     const user = currentUser
     if (!user) return undefined
     if (!(KNOWN_API_KEYS as readonly string[]).includes(key)) return undefined
-    const keys = await loadApiKeys(user.id, getSecretaryDb())
+    const keys = await loadApiKeys(user.id, getUserDb())
     return keys[key]
   })
 
@@ -477,8 +484,8 @@ function registerSettingsIpc() {
 
 async function getApiKeysView(userId: string): Promise<Record<string, { set: boolean; preview: string }>> {
   const [names, values] = await Promise.all([
-    listApiKeyNames(userId, getSecretaryDb()),
-    loadApiKeys(userId, getSecretaryDb()),
+    listApiKeyNames(userId, getUserDb()),
+    loadApiKeys(userId, getUserDb()),
   ])
   const out: Record<string, { set: boolean; preview: string }> = {}
   for (const { name, isSet } of names) {
@@ -644,12 +651,16 @@ function registerSetupIpc() {
     const micPermission = process.platform === 'darwin'
       ? systemPreferences.getMediaAccessStatus('microphone')
       : 'granted'
+    const screenPermission = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('screen')
+      : 'granted'
     const accessibilityPermission = process.platform === 'darwin'
       ? systemPreferences.isTrustedAccessibilityClient(false)
       : true
 
     return {
       micPermission,
+      screenPermission,
       accessibilityPermission,
       geminiApiKey: !!process.env.GEMINI_API_KEY,
       ticktickToken: !!process.env.TICKTICK_ACCESS_TOKEN,
@@ -660,6 +671,8 @@ function registerSetupIpc() {
   ipcMain.on('setup:open-settings', (_event, type: string) => {
     if (type === 'microphone') {
       shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+    } else if (type === 'screen') {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture')
     } else if (type === 'accessibility') {
       if (process.platform === 'darwin') {
         systemPreferences.isTrustedAccessibilityClient(true)
@@ -1414,12 +1427,16 @@ app.whenReady().then(async () => {
   registerSettingsIpc()
 
   // ── Turso Auth ────────────────────────────────────────────────────────────
-  const db = getSecretaryDb()
+  void getBootstrapDb()  // eagerly connect to bootstrap DB
   let authenticatedAppStarted = false
 
   const startAuthenticatedApp = async (user: AppUser) => {
     if (authenticatedAppStarted) return
     authenticatedAppStarted = true
+
+    // Connect to this user's dedicated DB
+    _userDb = createUserDbClient(user)
+    const db = _userDb
 
     // Populate process.env with all API keys from DB (so all tool modules continue working)
     await populateProcessEnv(user.id, db)
@@ -1466,9 +1483,15 @@ app.whenReady().then(async () => {
     const micStatus = process.platform === 'darwin'
       ? systemPreferences.getMediaAccessStatus('microphone')
       : 'granted'
+    const screenStatus = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('screen')
+      : 'granted'
+    const accessibilityGranted = process.platform === 'darwin'
+      ? systemPreferences.isTrustedAccessibilityClient(false)
+      : true
     // populateProcessEnv() 済みなので process.env を確認すれば DB の状態が分かる
     const hasGeminiKey = !!process.env.GEMINI_API_KEY
-    const needsSetup = micStatus !== 'granted' || !hasGeminiKey
+    const needsSetup = micStatus !== 'granted' || screenStatus !== 'granted' || !accessibilityGranted || !hasGeminiKey
 
     if (needsSetup) {
       createSetupWindow()
@@ -1483,10 +1506,11 @@ app.whenReady().then(async () => {
 
   // Register auth IPC before showing the login window, so OAuth starts only from the button.
   registerAuthIpc({
-    db,
+    getDb: () => getUserDb(),
     getUser: () => currentUser,
     onLoginSuccess: async (user) => {
       currentUser = user
+      _userDb = createUserDbClient(user)
       console.log('[auth] Logged in as:', currentUser.email)
       if (loginWin && !loginWin.isDestroyed()) {
         loginWin.close()
@@ -1499,7 +1523,7 @@ app.whenReady().then(async () => {
   // Check for an existing session in Keychain
   let token = await getStoredSessionToken()
   if (token) {
-    currentUser = await resolveUserFromToken(token, db)
+    currentUser = await resolveUserFromToken(token)
     if (!currentUser) token = null  // stale
   }
 

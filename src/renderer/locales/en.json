@@ -155,6 +155,12 @@
       "notDetermined": "Click OK when the dialog appears",
       "granted": "Granted"
     },
+    "screen": {
+      "label": "Screen Recording",
+      "denied": "Allow in System Settings > Privacy & Security > Screen Recording",
+      "notDetermined": "Open Settings and allow Robot Secretary",
+      "granted": "Granted"
+    },
     "geminiKey": {
       "set": "Configured (.env.local)",
       "unset": "Set GEMINI_API_KEY in .env.local"

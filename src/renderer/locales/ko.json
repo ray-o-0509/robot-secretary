@@ -1,0 +1,220 @@
+{
+  "common": {
+    "save": "저장",
+    "saving": "저장 중...",
+    "cancel": "취소",
+    "edit": "편집",
+    "delete": "삭제",
+    "add": "추가",
+    "saved": "저장됨 ✓",
+    "noData": "데이터 없음"
+  },
+  "time": {
+    "justNow": "방금",
+    "minutesAgo": "{{count}}분 전",
+    "hoursAgo": "{{count}}시간 전",
+    "daysAgo": "{{count}}일 전"
+  },
+  "gmail": {
+    "noSubject": "（제목 없음）",
+    "noBody": "（본문 없음）",
+    "tokenExpiredHint": "토큰이 만료되었을 수 있습니다. `scripts/auth-google.mjs <email>` 으로 재인증하세요",
+    "authExpiredHint": "인증이 만료된 경우 `scripts/auth-google.mjs` 를 실행하세요",
+    "clickForDetail": "클릭하면 새 창에서 상세 내용을 볼 수 있습니다",
+    "noResults": "「{{query}}」와 일치하는 메일이 없습니다",
+    "standby": "메일을 클릭하면 상세 내용이 표시됩니다",
+    "emptyResponse": "응답이 비어 있습니다"
+  },
+  "calendar": {
+    "allDay": "하루 종일",
+    "noEventsToday": "오늘 일정 없음",
+    "noEventsTomorrow": "내일 일정 없음",
+    "noEvents": "일정 없음",
+    "daysShort": ["일", "월", "화", "수", "목", "금", "토"]
+  },
+  "tasks": {
+    "authExpiredHint": "TickTick 인증이 만료되었을 수 있습니다",
+    "noTasks": "할 일 없음",
+    "markDone": "완료로 표시",
+    "overdue": "기한 초과 ",
+    "today": "오늘 "
+  },
+  "news": {
+    "dbHint": ".env.local 에서 TURSO_DATABASE_URL 을 확인하세요",
+    "fetchFailed": "불러오기 실패",
+    "noNews": "뉴스 없음"
+  },
+  "movies": {
+    "dbHint": ".env.local 에서 TURSO_DATABASE_URL 을 확인하세요",
+    "fetchFailed": "불러오기 실패",
+    "noMovies": "영화 정보 없음",
+    "nowPlaying": "이번 달 개봉 ({{count}})",
+    "upcoming": "다음 달 주목 ({{count}})"
+  },
+  "tools": {
+    "dbHint": ".env.local 에서 TURSO_DATABASE_URL 을 확인하세요",
+    "fetchFailed": "불러오기 실패",
+    "noTools": "도구 없음"
+  },
+  "settings": {
+    "title": "설정",
+    "tabs": {
+      "profile": "프로필",
+      "memory": "메모리",
+      "apps": "기본 앱",
+      "api": "API 키",
+      "language": "언어",
+      "google": "Google 계정",
+      "appearance": "외관",
+      "skills": "스킬"
+    },
+    "skills": {
+      "description": "각 스킬을 활성화하거나 비활성화합니다. 비활성화된 스킬의 도구는 AI에서 숨겨집니다."
+    },
+    "appearance": {
+      "description": "플로팅 로봇과 창의 크기를 조정합니다.",
+      "robotSize": "로봇 크기",
+      "reset": "초기화"
+    },
+    "google": {
+      "description": "Gmail / 캘린더 / 드라이브를 사용하기 위해 Google 계정을 연결합니다. 여러 계정을 추가하거나 제거할 수 있습니다.",
+      "addAccount": "계정 추가",
+      "adding": "브라우저에서 로그인을 완료해 주세요…",
+      "cancel": "취소",
+      "remove": "연결 해제",
+      "reauth": "권한 업데이트",
+      "empty": "연결된 계정이 없습니다",
+      "removeConfirm": "{{email}} 연결을 해제하시겠습니까？\nGoogle 측 권한도 함께 취소됩니다.",
+      "missingScopes": "누락된 권한: {{scopes}}",
+      "legacyBadge": "(구버전)",
+      "noRefreshToken": "refresh_token 없음",
+      "expiry": "만료일",
+      "scopesLabel": "권한 범위",
+      "noClientSecret": "client_secret.json 을 찾을 수 없습니다.\nGoogle Cloud Console 에서 「데스크톱 앱」 유형의 OAuth 클라이언트를 생성하고 다운로드한 JSON 을 아래 경로에 저장하세요:",
+      "clientSecretGuide": "https://console.cloud.google.com/apis/credentials"
+    },
+    "language": {
+      "description": "UI 및 Vega 의 대화 언어를 전환합니다."
+    },
+    "profile": {
+      "description": "Vega 가 대화 중 참고하는 개인 정보입니다. 「내 이름은 ○○야」라고 말하면 자동으로 업데이트됩니다.",
+      "empty": "아직 등록된 항목이 없습니다",
+      "keyPlaceholder": "항목명 (예: 이름)",
+      "valuePlaceholder": "내용",
+      "addItem": "+ 항목 추가"
+    },
+    "apps": {
+      "description": "「메일 열어줘」「브라우저 열어줘」처럼 카테고리로 말했을 때 열릴 앱을 설정합니다. 고유한 이름 (예: 「Google Chrome」) 으로 지정한 경우 바로 열립니다.",
+      "email": "메일",
+      "browser": "브라우저",
+      "terminal": "터미널",
+      "editor": "에디터"
+    },
+    "api": {
+      "restartRequired": "변경 후 앱을 재시작해야 합니다",
+      "googleAuthNote": "Google 인증 (Gmail / 캘린더) 은 .env.local 에서 설정합니다"
+    },
+    "memory": {
+      "description": "Vega 가 대화에서 학습하고 기억한 내용입니다. 절차, 사실, 선호, 진행 중인 주제를 편집할 수 있습니다. 프로필 (개인 정보) 은 별도 탭에 있습니다.",
+      "empty": "아직 등록된 내용이 없습니다",
+      "procedures": "학습된 절차",
+      "proceduresDescription": "익숙한 지시를 받았을 때 Vega 가 재현하는 작업 단계입니다. Vega 학습 시 자동으로 추가되며 직접 편집할 수도 있습니다.",
+      "addProcedure": "+ 절차 추가",
+      "procedureNamePlaceholder": "이름 (예: 대학 강의 페이지 열기)",
+      "procedureDescPlaceholder": "구체적인 단계 — URL, 명령어, 앱 이름을 포함하면 미래의 Vega 가 재현할 수 있습니다",
+      "learnedAt": "학습일: {{date}}",
+      "facts": "사실",
+      "factsDescription": "대화에서 요약된 사실입니다.",
+      "factPlaceholder": "사실 추가",
+      "preferences": "선호 및 스타일",
+      "preferencesDescription": "Vega 가 소통 방식을 조정하기 위한 선호 설정입니다.",
+      "preferencePlaceholder": "선호 추가",
+      "topics": "진행 중인 주제",
+      "topicsDescription": "현재 관심을 두고 있는 주제 또는 사안입니다.",
+      "topicPlaceholder": "주제 추가",
+      "resetAll": "전체 삭제",
+      "resetConfirm": "모든 절차, 사실, 선호, 주제가 삭제됩니다. (프로필은 유지됩니다) 계속하시겠습니까？",
+      "lastUpdated": "마지막 업데이트: {{date}}"
+    }
+  },
+  "setup": {
+    "header": "시작 전 확인",
+    "subtitle": "필요한 권한과 API 키를 확인해 주세요",
+    "checking": "확인 중...",
+    "required": "필수",
+    "optional": "선택",
+    "launch": "시작",
+    "launching": "시작 중...",
+    "checkRequired": "필수 항목을 완료해 주세요",
+    "missingBoth": "마이크 권한과 Gemini API 키가 필요합니다",
+    "missingMic": "마이크 권한이 필요합니다",
+    "missingKey": "Gemini API 키가 필요합니다",
+    "mic": {
+      "label": "마이크 권한",
+      "denied": "시스템 설정에서 허용해 주세요",
+      "notDetermined": "대화상자가 나타나면 「허용」을 클릭해 주세요",
+      "granted": "허용됨"
+    },
+    "screen": {
+      "label": "화면 녹화 권한",
+      "denied": "시스템 설정 > 개인 정보 보호 및 보안 > 화면 녹화에서 허용해 주세요",
+      "notDetermined": "설정을 열고 Robot Secretary 를 허용해 주세요",
+      "granted": "허용됨"
+    },
+    "geminiKey": {
+      "set": "설정됨 (.env.local)",
+      "unset": ".env.local 에 GEMINI_API_KEY 를 설정해 주세요"
+    },
+    "accessibility": {
+      "label": "손쉬운 사용 (PTT 단축키)",
+      "granted": "허용됨",
+      "denied": "Option 키로 음성 입력을 사용할 수 없습니다"
+    },
+    "gmail": {
+      "noTokens": "~/.config/gmail-triage/tokens/ 에 토큰이 없습니다"
+    },
+    "ticktick": {
+      "set": "설정됨",
+      "unset": ".env.local 에 TICKTICK_ACCESS_TOKEN 을 설정해 주세요"
+    },
+    "openSettings": "설정 열기"
+  },
+  "settingsPanel": {
+    "title": "설정",
+    "googleNote": "Google 인증 (Gmail/캘린더) 은 .env 파일에서 설정합니다"
+  },
+  "confirmation": {
+    "title": "⚠ 실행 확인 —",
+    "execute": "실행",
+    "cancel": "취소"
+  },
+  "weather": {
+    "humidity": "습도",
+    "wind": "바람",
+    "gust": "돌풍",
+    "pressure": "기압",
+    "dewPoint": "이슬점",
+    "cloudCover": "운량"
+  },
+  "display": {
+    "fetchedAt": "{{time}} 에 가져옴"
+  },
+  "terminal": {
+    "noOutput": "출력 없음",
+    "emptyOutput": "（출력 없음）"
+  },
+  "connection": {
+    "maxRetries": "재연결에 실패했습니다. 연결 상태를 확인해 주세요.",
+    "noApiKey": "Gemini API 키가 설정되지 않았습니다. 오른쪽 클릭 → 설정에서 입력해 주세요.",
+    "authError": "인증 오류 ({{code}}). API 키가 유효하지 않거나 만료되었습니다. 설정을 확인해 주세요.",
+    "micDenied": "마이크 접근이 거부되었습니다. 시스템 설정에서 Robot Secretary 의 마이크 사용을 허용한 후 앱을 재시작해 주세요.",
+    "network": "인터넷 연결을 확인해 주세요.",
+    "connectError": "연결에 실패했습니다. ({{msg}})"
+  },
+  "regionOverlay": {
+    "dragHint": "드래그하여 영역 선택",
+    "escRetry": "ESC 로 다시 시도",
+    "releaseHint": "Option 을 놓으면 전송됩니다",
+    "captured": "영역을 전송했습니다"
+  }
+}

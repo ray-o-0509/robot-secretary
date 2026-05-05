@@ -6,6 +6,7 @@ type PermissionStatus = 'granted' | 'denied' | 'not-determined' | 'restricted' |
 
 interface SetupStatus {
   micPermission: PermissionStatus
+  screenPermission: PermissionStatus
   accessibilityPermission: boolean
   geminiApiKey: boolean
   ticktickToken: boolean
@@ -83,7 +84,7 @@ export function SetupApp() {
   }, [refresh])
 
   const canLaunch = status
-    ? (status.micPermission === 'granted' && status.geminiApiKey)
+    ? (status.micPermission === 'granted' && status.screenPermission === 'granted' && status.accessibilityPermission && status.geminiApiKey)
     : false
 
   const handleLaunch = async () => {
@@ -105,6 +106,13 @@ export function SetupApp() {
     : status.micPermission === 'not-determined'
     ? t('setup.mic.notDetermined')
     : t('setup.mic.granted')
+
+  const screenOk = status.screenPermission === 'granted'
+  const screenDetail = status.screenPermission === 'denied'
+    ? t('setup.screen.denied')
+    : status.screenPermission === 'not-determined'
+    ? t('setup.screen.notDetermined')
+    : t('setup.screen.granted')
 
   // ノードラッグ領域（ボタン・入力など操作が必要な要素）
   const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
@@ -139,6 +147,22 @@ export function SetupApp() {
               : undefined}
           />
           <CheckRow
+            label={t('setup.screen.label')}
+            ok={screenOk}
+            required={true}
+            detail={screenDetail}
+            actionLabel={t('setup.openSettings')}
+            onAction={() => window.electronAPI.setupOpenSettings('screen')}
+          />
+          <CheckRow
+            label={t('setup.accessibility.label')}
+            ok={status.accessibilityPermission}
+            required={true}
+            detail={status.accessibilityPermission ? t('setup.accessibility.granted') : t('setup.accessibility.denied')}
+            actionLabel={t('setup.openSettings')}
+            onAction={() => window.electronAPI.setupOpenSettings('accessibility')}
+          />
+          <CheckRow
             label="Gemini API Key"
             ok={status.geminiApiKey}
             required={true}
@@ -148,14 +172,6 @@ export function SetupApp() {
 
         {/* Optional section */}
         <Section title={t('setup.optional')} color="#facc15">
-          <CheckRow
-            label={t('setup.accessibility.label')}
-            ok={status.accessibilityPermission}
-            required={false}
-            detail={status.accessibilityPermission ? t('setup.accessibility.granted') : t('setup.accessibility.denied')}
-            actionLabel={t('setup.openSettings')}
-            onAction={() => window.electronAPI.setupOpenSettings('accessibility')}
-          />
           <CheckRow
             label={`Gmail (${status.gmailAccounts.length})`}
             ok={status.gmailAccounts.length > 0}
@@ -200,11 +216,7 @@ export function SetupApp() {
 
           {!canLaunch && (
             <div style={{ fontSize: 11, color: '#475569', textAlign: 'center', marginTop: 8 }}>
-              {!micOk && !status.geminiApiKey
-                ? t('setup.missingBoth')
-                : !micOk
-                ? t('setup.missingMic')
-                : t('setup.missingKey')}
+              {t('setup.checkRequired')}
             </div>
           )}
         </div>
