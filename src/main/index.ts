@@ -5,8 +5,10 @@ import * as os from 'os'
 import * as dotenv from 'dotenv'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
+import { getSecretSync } from './skills/secrets/index'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
+import * as regionCapture from './regionCapture'
 
 const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
 const originalConsole = {
@@ -91,6 +93,38 @@ let isMuted = false
 let pttActive = false
 let shuttingDown = false
 
+// ========== Robot window/droid size ==========
+const ROBOT_SIZE_MIN = 180
+const ROBOT_SIZE_MAX = 600
+const ROBOT_SIZE_DEFAULT = 300
+const appearanceFilePath = path.join(app.getPath('userData'), 'appearance.json')
+
+function clampRobotSize(n: number): number {
+  if (!Number.isFinite(n)) return ROBOT_SIZE_DEFAULT
+  return Math.max(ROBOT_SIZE_MIN, Math.min(ROBOT_SIZE_MAX, Math.round(n)))
+}
+
+function loadRobotSize(): number {
+  try {
+    const data = fs.readFileSync(appearanceFilePath, 'utf-8')
+    const parsed = JSON.parse(data) as { robotSize?: number }
+    return clampRobotSize(parsed.robotSize ?? ROBOT_SIZE_DEFAULT)
+  } catch {
+    return ROBOT_SIZE_DEFAULT
+  }
+}
+
+function saveRobotSize(size: number) {
+  try {
+    fs.mkdirSync(path.dirname(appearanceFilePath), { recursive: true })
+    fs.writeFileSync(appearanceFilePath, JSON.stringify({ robotSize: size }), 'utf-8')
+  } catch (e) {
+    console.error('Failed to save appearance:', e)
+  }
+}
+
+let robotSize = loadRobotSize()
+
 function sendRobotVelocity(vx: number, vy: number, speed: number) {
   if (!win || win.isDestroyed()) return
   win.webContents.send('robot-velocity', { vx, vy, speed })
@@ -108,13 +142,13 @@ function openSettingsWindow() {
     return
   }
   settingsWin = new BrowserWindow({
-    width: 480,
-    height: 640,
+    width: 720,
+    height: 700,
     resizable: false,
     frame: false,
     titleBarStyle: 'hidden',
     transparent: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     center: true,
     backgroundColor: '#0a0a14',
     webPreferences: {
@@ -170,6 +204,50 @@ function registerSettingsIpc() {
       await saveDefaultApps(apps as import('./skills/default-apps/index').DefaultApps)
     }
     return { ok: true }
+  })
+
+  ipcMain.handle('settings:list-installed-apps', async () => {
+    const fsp = await import('node:fs/promises')
+    const dirs = [
+      '/Applications',
+      '/Applications/Utilities',
+      '/System/Applications',
+      '/System/Applications/Utilities',
+      path.join(os.homedir(), 'Applications'),
+    ]
+    const found = new Map<string, string>()
+    const walk = async (dir: string, depth: number) => {
+      let entries: import('node:fs').Dirent[]
+      try {
+        entries = await fsp.readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name)
+        if (entry.name.endsWith('.app')) {
+          const name = entry.name.replace(/\.app$/, '')
+          if (!found.has(name)) found.set(name, full)
+        } else if (entry.isDirectory() && depth > 0 && !entry.name.startsWith('.')) {
+          await walk(full, depth - 1)
+        }
+      }
+    }
+    await Promise.all(dirs.map((d) => walk(d, 1)))
+    return Array.from(found.entries())
+      .map(([name, p]) => ({ name, path: p }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
+
+  ipcMain.handle('settings:get-app-icon', async (_event, appPath: unknown) => {
+    if (typeof appPath !== 'string' || !appPath) return null
+    try {
+      const img = await app.getFileIcon(appPath, { size: 'small' })
+      if (img.isEmpty()) return null
+      return img.toDataURL()
+    } catch {
+      return null
+    }
   })
 
   ipcMain.handle('settings:get-memory', async () => {
@@ -276,6 +354,57 @@ function registerSettingsIpc() {
 
   const langFilePath = path.join(app.getPath('userData'), 'language.json')
 
+  ipcMain.handle('settings:get-secrets', async () => {
+    const { getSecretsView } = await import('./skills/secrets/index')
+    return await getSecretsView()
+  })
+
+  ipcMain.handle('settings:set-secret', async (_event, key: unknown, value: unknown) => {
+    if (typeof key !== 'string' || typeof value !== 'string') {
+      throw new Error('settings:set-secret requires (key: string, value: string)')
+    }
+    const { saveSecret, SECRET_KEYS, getSecretsView } = await import('./skills/secrets/index')
+    if (!(SECRET_KEYS as readonly string[]).includes(key)) {
+      throw new Error(`Unknown secret key: ${key}`)
+    }
+    await saveSecret(key as typeof SECRET_KEYS[number], value)
+    return await getSecretsView()
+  })
+
+  ipcMain.handle('settings:get-secret-value', async (_event, key: unknown) => {
+    if (typeof key !== 'string') return undefined
+    const { getSecretValue, SECRET_KEYS } = await import('./skills/secrets/index')
+    if (!(SECRET_KEYS as readonly string[]).includes(key)) return undefined
+    return await getSecretValue(key as typeof SECRET_KEYS[number])
+  })
+
+  ipcMain.handle('settings:list-skills', async () => {
+    const { SKILL_REGISTRY } = await import('../config/skills')
+    const { loadSkillsEnabled } = await import('./skills/skill-toggle/index')
+    const enabled = await loadSkillsEnabled()
+    return SKILL_REGISTRY.map((s) => ({
+      id: s.id,
+      label: s.label,
+      description: s.description,
+      tools: s.tools,
+      enabled: enabled[s.id] ?? s.defaultEnabled,
+      secrets: s.secrets ?? [],
+    }))
+  })
+
+  ipcMain.handle('settings:list-core-secrets', async () => {
+    const { CORE_SECRETS } = await import('../config/skills')
+    return CORE_SECRETS
+  })
+
+  ipcMain.handle('settings:set-skill-enabled', async (_event, id: unknown, enabled: unknown) => {
+    if (typeof id !== 'string' || typeof enabled !== 'boolean') {
+      throw new Error('settings:set-skill-enabled requires (id: string, enabled: boolean)')
+    }
+    const { setSkillEnabled } = await import('./skills/skill-toggle/index')
+    return await setSkillEnabled(id, enabled)
+  })
+
   ipcMain.handle('settings:get-language', () => {
     try {
       const data = fs.readFileSync(langFilePath, 'utf-8')
@@ -283,6 +412,28 @@ function registerSettingsIpc() {
     } catch {
       return 'ja-JP'
     }
+  })
+
+  ipcMain.handle('appearance:get-robot-size', () => ({
+    size: robotSize,
+    min: ROBOT_SIZE_MIN,
+    max: ROBOT_SIZE_MAX,
+    default: ROBOT_SIZE_DEFAULT,
+  }))
+
+  ipcMain.handle('appearance:set-robot-size', (_event, raw: unknown) => {
+    const next = clampRobotSize(typeof raw === 'number' ? raw : Number(raw))
+    robotSize = next
+    saveRobotSize(next)
+    if (win && !win.isDestroyed()) {
+      const [x, y] = win.getPosition()
+      win.setBounds({ x, y, width: next, height: next })
+      currentX = x
+      currentY = y
+      targetX = x
+      targetY = y
+    }
+    return { size: next }
   })
 
   ipcMain.on('set-language', (_event, code: string) => {
@@ -307,9 +458,9 @@ function registerSettingsIpc() {
     return listAccountsForUi()
   })
 
-  ipcMain.handle('google-accounts:add', async (_event, args?: { loginHint?: string }) => {
+  ipcMain.handle('google-accounts:add', async (_event, args?: { loginHint?: string; scopes?: string[] }) => {
     const { addGoogleAccount } = await import('./google/oauthFlow')
-    return await addGoogleAccount({ loginHint: args?.loginHint })
+    return await addGoogleAccount({ loginHint: args?.loginHint, scopes: args?.scopes })
   })
 
   ipcMain.handle('google-accounts:remove', async (_event, email: string) => {
@@ -435,8 +586,8 @@ function registerSetupIpc() {
     return {
       micPermission,
       accessibilityPermission,
-      geminiApiKey: !!(process.env.GEMINI_API_KEY),
-      ticktickToken: !!(process.env.TICKTICK_ACCESS_TOKEN),
+      geminiApiKey: !!getSecretSync('GEMINI_API_KEY'),
+      ticktickToken: !!getSecretSync('TICKTICK_ACCESS_TOKEN'),
       gmailAccounts: getGmailAccounts(),
     }
   })
@@ -457,7 +608,7 @@ function registerSetupIpc() {
       setupWin.close()
       setupWin = null
     }
-    await initMemory(() => process.env.GEMINI_API_KEY)
+    await initMemory(() => getSecretSync('GEMINI_API_KEY'))
     createWindow()
   })
 }
@@ -475,13 +626,13 @@ function createWindow() {
   const { width: _w, height } = screen.getPrimaryDisplay().workAreaSize
   // 起動時は左下（チャットウィンドウの下付近）に配置
   currentX = 24 + 360 + 24  // チャットウィンドウ右端 + 余白
-  currentY = Math.floor(height - 300 - 40)
+  currentY = Math.floor(height - robotSize - 40)
   targetX = currentX
   targetY = currentY
 
   win = new BrowserWindow({
-    width: 300,
-    height: 300,
+    width: robotSize,
+    height: robotSize,
     x: currentX,
     y: currentY,
     transparent: true,
@@ -519,6 +670,8 @@ function createWindow() {
   requestMicPermission()
   requestScreenPermission()
   createChatWindow()
+  // Region capture overlay (Alt+Shift+drag)
+  regionCapture.init(win)
 
   // dev中はDevToolsを開く
   if (isDev) win.webContents.openDevTools({ mode: 'detach' })
@@ -673,6 +826,30 @@ function getOrCreateSearchWindow(): BrowserWindow {
 
 // ========== Push-to-Talk (左 Option キー = keycode 56) ==========
 
+// Modifier state: 'none' | 'alt' (audio-only PTT) | 'alt+shift' (PTT + region overlay)
+let pttModifiers: 'none' | 'alt' | 'alt+shift' = 'none'
+let pttStuckTimer: NodeJS.Timeout | null = null
+const PTT_STUCK_TIMEOUT_MS = 30_000
+
+function armStuckTimer() {
+  if (pttStuckTimer) clearTimeout(pttStuckTimer)
+  pttStuckTimer = setTimeout(() => {
+    if (!pttActive) return
+    console.warn('[PTT:main] stuck detected, force stopping')
+    pttActive = false
+    pttModifiers = 'none'
+    win?.webContents.send('ptt-stop')
+    regionCapture.hide()
+  }, PTT_STUCK_TIMEOUT_MS)
+}
+
+function disarmStuckTimer() {
+  if (pttStuckTimer) {
+    clearTimeout(pttStuckTimer)
+    pttStuckTimer = null
+  }
+}
+
 function setupPTT() {
   // アクセシビリティ権限チェック（グローバルキーフックに必要）
   const trusted = systemPreferences.isTrustedAccessibilityClient(false)
@@ -685,19 +862,48 @@ function setupPTT() {
   }
 
   uIOhook.on('keydown', (e) => {
-    // 左Option のみ（右Option = 3640 は除外）
     if (e.keycode === UiohookKey.Alt && !pttActive) {
-      console.log('[PTT:main] keydown alt')
+      // 左Option のみ（右Option = 3640 は除外）
       pttActive = true
+      pttModifiers = e.shiftKey ? 'alt+shift' : 'alt'
+      armStuckTimer()
+      console.log('[PTT:main] keydown alt modifiers=', pttModifiers)
       win?.webContents.send('ptt-start')
+      if (pttModifiers === 'alt+shift') regionCapture.show()
+      return
+    }
+    // Shift を後から足した場合: PTT 中なら overlay を出す
+    if (e.keycode === UiohookKey.Shift && pttActive && pttModifiers === 'alt') {
+      pttModifiers = 'alt+shift'
+      console.log('[PTT:main] shift added, showing overlay')
+      regionCapture.show()
+      return
+    }
+    // ESC: overlay 表示中のみ rect クリア（PTT 自体は止めない）
+    if (e.keycode === UiohookKey.Escape && pttModifiers === 'alt+shift') {
+      console.log('[PTT:main] ESC → clear region')
+      regionCapture.broadcastClear()
+      return
     }
   })
 
   uIOhook.on('keyup', (e) => {
+    // Shift だけ離した: overlay 閉じるが PTT 音声は継続
+    if (e.keycode === UiohookKey.Shift && pttActive && pttModifiers === 'alt+shift') {
+      pttModifiers = 'alt'
+      console.log('[PTT:main] keyup shift → hide overlay, audio continues')
+      regionCapture.hide()
+      return
+    }
+    // Alt を離した: PTT 完全終了
     if (e.keycode === UiohookKey.Alt && pttActive) {
       console.log('[PTT:main] keyup alt')
       pttActive = false
+      pttModifiers = 'none'
+      disarmStuckTimer()
       win?.webContents.send('ptt-stop')
+      regionCapture.hide()
+      return
     }
   })
 
@@ -748,7 +954,6 @@ async function requestScreenPermission() {
 
 function pickNewTarget() {
   const margin = 50
-  const robotSize = 300
   const displays = screen.getAllDisplays()
   const primaryId = screen.getPrimaryDisplay().id
   // モニターをランダムに選ぶ（全モニターを等確率で）
@@ -1134,6 +1339,14 @@ app.whenReady().then(async () => {
   registerSetupIpc()
   registerSettingsIpc()
 
+  // Pre-populate skill-toggle and secrets caches so synchronous reads inside
+  // tool handlers reflect saved settings on the very first call.
+  void (async () => {
+    const { loadSkillsEnabled } = await import('./skills/skill-toggle/index')
+    const { loadSecrets } = await import('./skills/secrets/index')
+    await Promise.all([loadSkillsEnabled(), loadSecrets()])
+  })()
+
 
   // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -1157,14 +1370,17 @@ app.whenReady().then(async () => {
   const micStatus = process.platform === 'darwin'
     ? systemPreferences.getMediaAccessStatus('microphone')
     : 'granted'
-  const hasGeminiKey = !!(process.env.GEMINI_API_KEY)
+  const hasGeminiKey = !!getSecretSync('GEMINI_API_KEY')
   const needsSetup = micStatus !== 'granted' || !hasGeminiKey
 
   if (needsSetup) {
     createSetupWindow()
   } else {
-    await initMemory(() => process.env.GEMINI_API_KEY)
+    await initMemory(() => getSecretSync('GEMINI_API_KEY'))
     createWindow()
+    // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
+    // instead of cold-starting cc and racing the 1.5s sleep.
+    import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
   }
 })
 
@@ -1183,7 +1399,7 @@ app.on('before-quit', async (e) => {
 app.on('window-all-closed', () => {
   uIOhook.stop()
   stopWandering()
-  import('./skills/shell/pty').then(({ ptyKill }) => ptyKill()).catch(() => {/* not loaded */})
+  import('./skills/shell/pty').then(({ ptyKillAll }) => ptyKillAll()).catch(() => {/* not loaded */})
   if (process.platform !== 'darwin') app.quit()
 })
 

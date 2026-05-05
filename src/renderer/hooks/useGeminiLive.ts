@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react'
 import i18next from 'i18next'
 import { LIMITS, MODELS } from '../../config/models'
 import { secretaryTools } from '../../config/tools'
-import { getSystemPrompt, resolveLocation } from '../prompt/systemPrompt'
+import { getSystemPrompt, getRegionContextSuffix, resolveLocation } from '../prompt/systemPrompt'
 import { useAudioPlayback } from './useAudioPlayback'
 import { useMicCapture } from './useMicCapture'
 import type { RobotState, RobotProcessor } from '../App'
@@ -121,6 +121,39 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       if (sessionRef.current && notifs.length > 0) {
         injectNotifications(sessionRef.current, notifs)
       }
+    })
+    return () => off?.()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const off = window.electronAPI?.onRegionImage?.(({ base64, mediaType: mimeType }) => {
+      const session = sessionRef.current
+      if (!session) {
+        console.warn('[Gemini] region-image received but no active session')
+        return
+      }
+      const send = (msg: unknown, label: string) => {
+        try {
+          session.sendRealtimeInput(msg)
+        } catch (err) {
+          console.error(`[Gemini] ${label} failed:`, err)
+        }
+      }
+      // Force activityStart even if PTT is under PTT_MIN_DURATION_MS, so an image-only
+      // turn still completes when activityEnd fires on Alt release.
+      if (!pttActivityStartedRef.current) {
+        send({ activityStart: {} }, 'activityStart')
+        pttActivityStartedRef.current = true
+        for (const buffered of pttPendingChunksRef.current) {
+          send({ audio: { data: buffered, mimeType: 'audio/pcm;rate=16000' } }, 'pending audio')
+        }
+        if (pttPendingChunksRef.current.length) pttAudioSentRef.current = true
+        pttPendingChunksRef.current = []
+      }
+      send({ text: getRegionContextSuffix(languageCodeRef.current) }, 'region context')
+      // Per Gemini Live capabilities docs, image frames go on the `video` field.
+      send({ video: { data: base64, mimeType } }, 'video frame')
     })
     return () => off?.()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,7 +339,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const sessionEpoch = sessionEpochRef.current + 1
     sessionEpochRef.current = sessionEpoch
 
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim()
+    const stored = (await window.electronAPI.settingsGetSecretValue?.('GEMINI_API_KEY'))?.trim()
+    const apiKey = stored || import.meta.env.VITE_GEMINI_API_KEY?.trim()
     if (!apiKey) {
       console.warn('[Gemini] API Key is not set. Enter it via right-click → Settings.')
       intentionalCloseRef.current = true

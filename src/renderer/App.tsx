@@ -10,6 +10,7 @@ import { SearchApp } from './search/SearchApp'
 import { WeatherApp } from './weather/WeatherApp'
 import { SetupApp } from './setup/SetupApp'
 import { SettingsApp } from './settings/SettingsApp'
+import { OverlayApp } from './overlay/OverlayApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -84,6 +85,8 @@ declare global {
       settingsDeleteProfile: (key: string) => Promise<Record<string, string>>
       settingsGetDefaultApps: () => Promise<{ email?: string; browser?: string; terminal?: string; editor?: string }>
       settingsSaveDefaultApps: (apps: { email?: string; browser?: string; terminal?: string; editor?: string }) => Promise<{ ok: boolean }>
+      settingsListInstalledApps: () => Promise<{ name: string; path: string }[]>
+      settingsGetAppIcon: (appPath: string) => Promise<string | null>
       settingsGetMemory: () => Promise<MemorySnapshot>
       settingsSaveMemory: (memory: MemorySnapshot) => Promise<MemorySnapshot>
       settingsResetMemory: () => Promise<MemorySnapshot>
@@ -104,6 +107,10 @@ declare global {
       ) => Promise<MemorySnapshot>
       settingsGetLanguage: () => Promise<string>
 
+      // Appearance
+      appearanceGetRobotSize: () => Promise<{ size: number; min: number; max: number; default: number }>
+      appearanceSetRobotSize: (size: number) => Promise<{ size: number }>
+
       // Google アカウント連携
       googleAccountsCheckSetup: () => Promise<{
         clientSecretPath: string
@@ -120,15 +127,16 @@ declare global {
         missingScopes: string[]
         expiry: string | null
       }[]>
-      googleAccountsAdd: (loginHint?: string) => Promise<{ email: string }>
+      googleAccountsAdd: (loginHint?: string, scopes?: string[]) => Promise<{ email: string }>
       googleAccountsRemove: (email: string) => Promise<{ ok: boolean }>
       googleAccountsAbort: () => Promise<{ ok: boolean }>
 
-      // Interactive PTY
-      ptyOnData: (cb: (data: string) => void) => () => void
-      ptyWrite: (data: string) => void
-      ptyResize: (cols: number, rows: number) => void
-      ptyGetBuffer: () => Promise<string>
+      // Interactive PTY (two channels)
+      ptyOnData: (cb: (id: 'claude' | 'shell', data: string) => void) => () => void
+      ptyWrite: (id: 'claude' | 'shell', data: string) => void
+      ptyResize: (id: 'claude' | 'shell', cols: number, rows: number) => void
+      ptyGetBuffer: (id: 'claude' | 'shell') => Promise<string>
+      onRegionImage: (cb: (payload: { base64: string; mediaType: string }) => void) => () => void
     }
   }
 }
@@ -143,6 +151,7 @@ const isSearchWindow = hash === '#search'
 const isWeatherWindow = hash === '#weather'
 const isSetupWindow = hash === '#setup'
 const isSettingsWindow = hash === '#settings'
+const isRegionOverlayWindow = hash === '#region-overlay'
 
 export default function App() {
   useEffect(() => {
@@ -154,6 +163,7 @@ export default function App() {
 
   if (isSetupWindow) return <SetupApp />
   if (isSettingsWindow) return <SettingsApp />
+  if (isRegionOverlayWindow) return <OverlayApp />
   if (isChatWindow) return <ChatWindowApp />
   if (isDisplayWindow) return <DisplayApp />
   if (isEmailDetailWindow) return <EmailDetailApp />

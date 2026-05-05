@@ -1,8 +1,10 @@
+import { getSecretSync } from '../secrets/index'
+
 const TAVILY_API_URL = 'https://api.tavily.com/search'
 
 export async function webSearch(query: string): Promise<unknown> {
-  const apiKey = process.env.TAVILY_API_KEY
-  if (!apiKey) throw new Error('TAVILY_API_KEY is not set')
+  const apiKey = getSecretSync('TAVILY_API_KEY')
+  if (!apiKey) throw new Error('TAVILY_API_KEY is not set. Configure it in Settings → Skills.')
   const res = await fetch(TAVILY_API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

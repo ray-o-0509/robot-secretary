@@ -1,6 +1,8 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { homedir } from 'node:os'
 import { optString, reqString } from './shared/validation'
+import { isToolEnabled } from '../../config/skills'
+import { loadSkillsEnabled, getSkillsEnabledSync } from './skill-toggle/index'
 
 type GmailTarget = { account: string; id: string }
 type CalendarEventInput = {
@@ -737,7 +739,16 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
 ]
 
+export async function getEnabledToolSchemas(): Promise<Anthropic.Tool[]> {
+  const enabled = await loadSkillsEnabled()
+  return toolSchemas.filter((t) => isToolEnabled(t.name, enabled))
+}
+
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  const enabled = getSkillsEnabledSync()
+  if (!isToolEnabled(name, enabled)) {
+    throw new Error(`Skill for tool "${name}" is disabled in settings.`)
+  }
   switch (name) {
     case 'get_gmail_inbox': {
       const { getInboxEmails } = await import('./gmail/index')
@@ -979,13 +990,13 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return timer.stopStopwatch(reqString(args, 'id'))
     }
     case 'run_command': {
-      const { runCommand } = await import('./shell/index')
+      const { execInShellPty } = await import('./shell/shellPty')
       const command = reqString(args, 'command')
       if (/^\s*(claude|cc)(\s|$)/.test(command)) {
         return { ok: false, error: 'Claude Code commands are not allowed through run_command.' }
       }
       const cwd = optString(args, 'cwd') ?? homedir()
-      return await runCommand(command, cwd)
+      return await execInShellPty(command, cwd)
     }
     case 'show_panel': {
       const { showPanel, isPanelType } = await import('../display/show-panel')

@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import type { PtyId } from '../../skills/shell/pty'
 
 type PtyMod = typeof import('../../skills/shell/pty')
 
@@ -8,29 +9,37 @@ type Deps = {
 
 export function registerPtyHandlers(deps: Deps): { getPty: () => PtyMod | null } {
   let ptyMod: PtyMod | null = null
-  let pendingPtyData = ''
-  let ptyFlushScheduled = false
 
-  // Coalesce per-keystroke broadcasts so bursty output produces fewer IPC sends.
+  const pendingByTab: Record<PtyId, string> = { claude: '', shell: '' }
+  const flushScheduled: Record<PtyId, boolean> = { claude: false, shell: false }
+
+  function scheduleFlush(id: PtyId) {
+    if (flushScheduled[id]) return
+    flushScheduled[id] = true
+    setImmediate(() => {
+      const out = pendingByTab[id]
+      pendingByTab[id] = ''
+      flushScheduled[id] = false
+      const w = deps.getDisplayWindow()
+      if (w && !w.isDestroyed()) w.webContents.send('pty:data', id, out)
+    })
+  }
+
   import('../../skills/shell/pty').then((mod) => {
     ptyMod = mod
-    mod.ptySubscribe((data) => {
-      pendingPtyData += data
-      if (ptyFlushScheduled) return
-      ptyFlushScheduled = true
-      setImmediate(() => {
-        const out = pendingPtyData
-        pendingPtyData = ''
-        ptyFlushScheduled = false
-        const w = deps.getDisplayWindow()
-        if (w && !w.isDestroyed()) w.webContents.send('pty:data', out)
+    ;(['claude', 'shell'] as const).forEach((id) => {
+      mod.ptySubscribeTo(id, (data) => {
+        pendingByTab[id] += data
+        scheduleFlush(id)
       })
     })
   })
 
-  ipcMain.on('pty:write', (_event, data: string) => ptyMod?.ptyWrite(data))
-  ipcMain.on('pty:resize', (_event, cols: number, rows: number) => ptyMod?.ptyResize(cols, rows))
-  ipcMain.handle('pty:get-buffer', () => ptyMod?.ptyGetBuffer() ?? '')
+  ipcMain.on('pty:write', (_event, id: PtyId, data: string) => ptyMod?.ptyWriteTo(id, data))
+  ipcMain.on('pty:resize', (_event, id: PtyId, cols: number, rows: number) =>
+    ptyMod?.ptyResizeTo(id, cols, rows),
+  )
+  ipcMain.handle('pty:get-buffer', (_event, id: PtyId) => ptyMod?.ptyGetBufferOf(id) ?? '')
 
   return { getPty: () => ptyMod }
 }

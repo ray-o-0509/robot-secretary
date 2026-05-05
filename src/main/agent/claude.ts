@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { toolSchemas, executeTool } from '../skills/dispatcher'
+import { getEnabledToolSchemas, executeTool } from '../skills/dispatcher'
 import { captureScreen } from '../screenshot'
 import { LIMITS, MODELS } from '../../config/models'
+import { getSecretSync } from '../skills/secrets/index'
 import SYSTEM_PROMPT from '../../prompts/claude-delegate.md?raw'
 
 const MAX_ITERATIONS = LIMITS.claudeMaxIterations
@@ -22,17 +23,14 @@ export async function runClaudeTask(opts: {
   task: string
   includeScreenshot?: boolean
 }): Promise<string> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return 'ANTHROPIC_API_KEY is not set. Add it to .env.local'
+  const apiKey = getSecretSync('ANTHROPIC_API_KEY')
+  if (!apiKey) {
+    return 'ANTHROPIC_API_KEY is not set. Configure it in Settings → Skills.'
   }
 
   let client: Anthropic
   try {
-    // The default of 2 retries (≈1.5s total backoff) is too short for the cold
-    // DNS/TLS warmup we hit on first request from a freshly launched Electron
-    // main process — bump it so the first call doesn't surface as a
-    // user-visible "connection error".
-    client = new Anthropic({ maxRetries: 5 })
+    client = new Anthropic({ apiKey, maxRetries: 5 })
   } catch (err) {
     return `Failed to initialize Anthropic client: ${String(err)}`
   }
@@ -51,6 +49,7 @@ export async function runClaudeTask(opts: {
   }
 
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userContent }]
+  const tools = await getEnabledToolSchemas()
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     let res: Anthropic.Message
@@ -64,7 +63,7 @@ export async function runClaudeTask(opts: {
           { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
           { type: 'text', text: buildDateContext() },
         ],
-        tools: toolSchemas,
+        tools,
         messages,
       })
     } catch (err) {

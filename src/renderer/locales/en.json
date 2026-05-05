@@ -64,7 +64,17 @@
       "apps": "Default Apps",
       "api": "API Keys",
       "language": "Language",
-      "google": "Google Accounts"
+      "google": "Google Accounts",
+      "appearance": "Appearance",
+      "skills": "Skills"
+    },
+    "skills": {
+      "description": "Enable or disable individual skills. Tools belonging to a disabled skill are hidden from the AI."
+    },
+    "appearance": {
+      "description": "Adjust the size of the floating robot and its window.",
+      "robotSize": "Robot size",
+      "reset": "Reset"
     },
     "google": {
       "description": "Connect Google accounts to use Gmail / Calendar / Drive. You can add or remove multiple accounts.",
@@ -194,5 +204,11 @@
     "micDenied": "Microphone access denied. Grant Robot Secretary microphone access in System Settings and restart.",
     "network": "Check your internet connection.",
     "connectError": "Connection failed. ({{msg}})"
+  },
+  "regionOverlay": {
+    "dragHint": "Drag to select an area",
+    "escRetry": "ESC to retry",
+    "releaseHint": "Release Option to send",
+    "captured": "Region captured"
   }
 }

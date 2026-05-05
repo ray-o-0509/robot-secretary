@@ -64,3 +64,13 @@ export function getGoogleAuth(email?: string) {
   })
   return oAuth2Client
 }
+
+// GWS アカウントなどで API アクセスが制限されている場合に発生するトークンエラーを
+// ユーザー向けの短いメッセージに変換する。それ以外のエラーはそのまま返す。
+export function sanitizeGoogleError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (/oauth2\.googleapis\.com\/token|invalid_grant|access_denied|unauthorized_client/i.test(msg)) {
+    return 'Google API アクセス不可（GWS ポリシーまたはスコープ制限）'
+  }
+  return msg
+}

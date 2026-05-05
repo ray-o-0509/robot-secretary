@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { getGoogleAuth, listAccounts } from '../shared/googleAuth'
+import { getGoogleAuth, listAccounts, sanitizeGoogleError } from '../shared/googleAuth'
 
 type CalendarEvent = {
   id: string
@@ -50,7 +50,7 @@ async function getEventsInRange(timeMin: Date, timeMax: Date) {
       try {
         return { account: a, events: await getEventsFor(a, timeMin.toISOString(), timeMax.toISOString()), error: null as string | null }
       } catch (err) {
-        return { account: a, events: [] as CalendarEvent[], error: String(err instanceof Error ? err.message : err) }
+        return { account: a, events: [] as CalendarEvent[], error: sanitizeGoogleError(err) }
       }
     }),
   )

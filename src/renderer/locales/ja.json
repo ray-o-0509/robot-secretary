@@ -64,7 +64,17 @@
       "apps": "デフォルトアプリ",
       "api": "APIキー",
       "language": "言語",
-      "google": "Googleアカウント"
+      "google": "Googleアカウント",
+      "appearance": "外観",
+      "skills": "スキル"
+    },
+    "skills": {
+      "description": "ベガが使えるスキルを有効・無効に切り替えます。無効にしたスキルのツールはAIから呼び出せなくなります。"
+    },
+    "appearance": {
+      "description": "ドロイドとウィンドウの大きさを調整します。",
+      "robotSize": "ロボットの大きさ",
+      "reset": "リセット"
     },
     "google": {
       "description": "Gmail / カレンダー / Drive を使うために Google アカウントを連携します。複数アカウントの追加・解除ができます。",
@@ -194,5 +204,11 @@
     "micDenied": "マイク権限が拒否されています。システム設定で Robot Secretary のマイク使用を許可して、アプリを再起動してください。",
     "network": "インターネット接続を確認してください。",
     "connectError": "接続に失敗しました。({{msg}})"
+  },
+  "regionOverlay": {
+    "dragHint": "ドラッグで領域を選択",
+    "escRetry": "ESC でやり直し",
+    "releaseHint": "Option を離して送信",
+    "captured": "領域を送信しました"
   }
 }

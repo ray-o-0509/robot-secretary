@@ -1,5 +1,5 @@
 import { google, type gmail_v1 } from 'googleapis'
-import { getGoogleAuth, listAccounts } from '../shared/googleAuth'
+import { getGoogleAuth, listAccounts, sanitizeGoogleError } from '../shared/googleAuth'
 
 type InboxEmail = {
   id: string
@@ -66,7 +66,7 @@ export async function getInboxEmails(maxResults = 100, account?: string) {
         const { actualAccount, messages } = await getInboxFor(a, maxResults)
         return { account: actualAccount, messages, error: null as string | null }
       } catch (err) {
-        return { account: a, messages: [] as InboxEmail[], error: String(err instanceof Error ? err.message : err) }
+        return { account: a, messages: [] as InboxEmail[], error: sanitizeGoogleError(err) }
       }
     }),
   )
@@ -122,7 +122,7 @@ export async function searchEmails(query: string, maxResults = 20, account?: str
         }
         return { account: actualAccount, messages: results, error: null as string | null }
       } catch (err) {
-        return { account: a, messages: [] as InboxEmail[], error: String(err instanceof Error ? err.message : err) }
+        return { account: a, messages: [] as InboxEmail[], error: sanitizeGoogleError(err) }
       }
     }),
   )
@@ -144,7 +144,7 @@ export async function trashEmails(account: string, ids: string[]) {
         await gmail.users.messages.trash({ userId: 'me', id })
         return { id, ok: true as const }
       } catch (err) {
-        return { id, ok: false as const, error: String(err instanceof Error ? err.message : err) }
+        return { id, ok: false as const, error: sanitizeGoogleError(err) }
       }
     }),
   )

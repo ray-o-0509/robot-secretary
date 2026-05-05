@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -6,13 +6,21 @@ import '@xterm/xterm/css/xterm.css'
 import type { PanelPayload } from '../types'
 import { CYAN, FONT_MONO } from '../styles'
 
+type PtyId = 'claude' | 'shell'
+
 interface Props {
   payload: PanelPayload
 }
 
-// payload is unused: the terminal mirrors the singleton pty in main, not the panel data.
-export function TerminalView(_props: Props) {
+interface PaneProps {
+  id: PtyId
+  active: boolean
+}
+
+function TerminalPane({ id, active }: PaneProps) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const fitRef = useRef<FitAddon | null>(null)
+  const termRef = useRef<Terminal | null>(null)
 
   useEffect(() => {
     const host = hostRef.current
@@ -45,24 +53,26 @@ export function TerminalView(_props: Props) {
     )
     term.open(host)
     fit.fit()
-    window.electronAPI?.ptyResize?.(term.cols, term.rows)
+    fitRef.current = fit
+    termRef.current = term
+    window.electronAPI?.ptyResize?.(id, term.cols, term.rows)
 
     let cancelled = false
     let unsubscribe: (() => void) | undefined
 
-    // Buffer first, then subscribe. Data emitted during the await is dropped from this
-    // mount but persists in main's scrollback, so it reappears on the next mount/refresh.
     window.electronAPI
-      ?.ptyGetBuffer?.()
+      ?.ptyGetBuffer?.(id)
       .then((buf) => {
         if (cancelled) return
         if (buf) term.write(buf)
-        unsubscribe = window.electronAPI?.ptyOnData?.((data) => term.write(data))
+        unsubscribe = window.electronAPI?.ptyOnData?.((evtId, data) => {
+          if (evtId === id) term.write(data)
+        })
       })
-      .catch(() => {/* ignore — pty may not be available in older builds */})
+      .catch(() => {/* ignore */})
 
     const onInput = term.onData((data) => {
-      window.electronAPI?.ptyWrite?.(data)
+      window.electronAPI?.ptyWrite?.(id, data)
     })
 
     let rafId = 0
@@ -72,7 +82,7 @@ export function TerminalView(_props: Props) {
         rafId = 0
         try {
           fit.fit()
-          window.electronAPI?.ptyResize?.(term.cols, term.rows)
+          window.electronAPI?.ptyResize?.(id, term.cols, term.rows)
         } catch {/* host detached mid-resize */}
       })
     })
@@ -85,8 +95,52 @@ export function TerminalView(_props: Props) {
       unsubscribe?.()
       onInput.dispose()
       term.dispose()
+      termRef.current = null
+      fitRef.current = null
     }
-  }, [])
+  }, [id])
+
+  // Refit when this pane becomes visible — display:none zeroes the host's size
+  // and xterm's last fit was against zero width.
+  useEffect(() => {
+    if (!active) return
+    const r = requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+        const t = termRef.current
+        if (t) window.electronAPI?.ptyResize?.(id, t.cols, t.rows)
+      } catch {/* ignore */}
+    })
+    return () => cancelAnimationFrame(r)
+  }, [active, id])
+
+  return (
+    <div
+      ref={hostRef}
+      style={{
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+        background: 'transparent',
+        padding: '6px 8px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        display: active ? 'block' : 'none',
+      }}
+    />
+  )
+}
+
+export function TerminalView({ payload }: Props) {
+  const [activeTab, setActiveTab] = useState<PtyId>('shell')
+
+  // Auto-switch when main process pushes a payload with activeTab.
+  useEffect(() => {
+    const data = payload.data as { activeTab?: PtyId } | null | undefined
+    if (data?.activeTab === 'claude' || data?.activeTab === 'shell') {
+      setActiveTab(data.activeTab)
+    }
+  }, [payload])
 
   return (
     <div
@@ -102,13 +156,12 @@ export function TerminalView(_props: Props) {
         fontFamily: FONT_MONO,
       }}
     >
-      {/* ヘッダーバー */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '5px 10px 5px 12px',
+          gap: 4,
+          padding: '4px 10px 4px 12px',
           background: `linear-gradient(90deg, rgba(0, 240, 255, 0.09) 0%, rgba(0, 240, 255, 0.03) 100%)`,
           border: `1px solid rgba(0, 240, 255, 0.35)`,
           borderBottom: `1px solid rgba(0, 240, 255, 0.12)`,
@@ -127,8 +180,34 @@ export function TerminalView(_props: Props) {
             textTransform: 'uppercase',
           }}
         >
-          ▸ Shell
+          ▸ Term
         </span>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
+          {(['claude', 'shell'] as const).map((id) => {
+            const isActive = activeTab === id
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                style={{
+                  fontFamily: FONT_MONO,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  padding: '3px 10px',
+                  background: isActive ? `${CYAN}22` : 'transparent',
+                  color: isActive ? CYAN : `${CYAN}99`,
+                  border: `1px solid ${isActive ? CYAN : `${CYAN}55`}`,
+                  cursor: 'pointer',
+                  textShadow: isActive ? `0 0 6px ${CYAN}80` : 'none',
+                }}
+              >
+                {id === 'claude' ? 'Claude' : 'Shell'}
+              </button>
+            )
+          })}
+        </div>
         <span
           style={{
             marginLeft: 'auto',
@@ -142,7 +221,6 @@ export function TerminalView(_props: Props) {
         </span>
       </div>
 
-      {/* ターミナル本体 */}
       <div
         style={{
           position: 'relative',
@@ -157,7 +235,6 @@ export function TerminalView(_props: Props) {
           clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%)',
         }}
       >
-        {/* 左下ブラケット */}
         <div
           style={{
             position: 'absolute',
@@ -173,18 +250,8 @@ export function TerminalView(_props: Props) {
           }}
         />
 
-        <div
-          ref={hostRef}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            width: '100%',
-            background: 'transparent',
-            padding: '6px 8px',
-            boxSizing: 'border-box',
-            overflow: 'hidden',
-          }}
-        />
+        <TerminalPane id="claude" active={activeTab === 'claude'} />
+        <TerminalPane id="shell" active={activeTab === 'shell'} />
       </div>
     </div>
   )

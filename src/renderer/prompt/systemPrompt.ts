@@ -94,6 +94,23 @@ export function getSystemPrompt(languageCode: string, location: string): string 
   return buildContextBlock(languageCode, location) + '\n\n' + OPERATIONAL_PROMPT + '\n\n' + prompt
 }
 
+/**
+ * Region-capture context suffix sent before injecting an image into the Live session.
+ * Tells the model the user is referring to a specific region of their screen.
+ */
+export function getRegionContextSuffix(languageCode: string): string {
+  if (languageCode.startsWith('zh')) {
+    return '[屏幕区域] 用户已经截取了屏幕上的特定区域并通过语音询问。请基于该图像内容回答，重点解释所选区域。'
+  }
+  if (languageCode.startsWith('ko')) {
+    return '[화면 영역] 사용자가 화면의 특정 영역을 캡처하여 음성으로 질문하고 있습니다. 이미지 내용을 바탕으로 선택된 영역에 대해 답변해 주세요.'
+  }
+  if (languageCode.startsWith('en')) {
+    return '[Screen region] The user just captured a specific region of their screen and is asking about it by voice. Use the image to answer; focus on the selected region.'
+  }
+  return '[画面領域] ユーザーは画面上の特定の領域を切り抜いて、音声で質問しています。送られた画像の内容を基に、選択された領域について回答してください。'
+}
+
 export async function resolveLocation(): Promise<string> {
   const tzFallback = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Unknown'
   return new Promise((resolve) => {

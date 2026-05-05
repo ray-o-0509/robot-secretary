@@ -90,23 +90,22 @@ export function registerCoreIpc(deps: Deps): void {
     getCurrentRobotState: () => currentRobotState,
   })
 
-  async function showTerminalPanel() {
+  async function showTerminalPanel(tab: 'claude' | 'shell' = 'shell') {
     const { pushPayload } = await import('../display/show-panel')
     const { win, ready } = await deps.getOrCreateDisplayWindow()
     win.show()
-    pushPayload(win, { type: 'terminal_output', data: null, fetchedAt: Date.now() }, ready)
+    pushPayload(win, { type: 'terminal_output', data: { activeTab: tab }, fetchedAt: Date.now() }, ready)
   }
 
   async function injectAndShowTerminal(command: string, stdout: string, stderr: string) {
-    getPty()?.ptyInject(formatVoiceLine(command, stdout, stderr))
-    await showTerminalPanel()
+    getPty()?.ptyInjectTo('shell', formatVoiceLine(command, stdout, stderr))
+    await showTerminalPanel('shell')
   }
 
   const dispatchDeps: DispatchDeps = {
     getOrCreateDisplayWindow: deps.getOrCreateDisplayWindow,
     getOrCreateSearchWindow: deps.getOrCreateSearchWindow,
     showWeatherData: deps.showWeatherData,
-    getPty,
     getCwd: () => currentCwd,
     setCwd: (cwd: string) => { currentCwd = cwd },
     refreshActivePanel,

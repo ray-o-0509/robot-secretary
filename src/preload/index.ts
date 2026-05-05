@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settingsDeleteProfile: (key: string) => ipcRenderer.invoke('settings:delete-profile', key),
   settingsGetDefaultApps: () => ipcRenderer.invoke('settings:get-default-apps'),
   settingsSaveDefaultApps: (apps: unknown) => ipcRenderer.invoke('settings:save-default-apps', apps),
+  settingsListInstalledApps: () => ipcRenderer.invoke('settings:list-installed-apps'),
+  settingsGetAppIcon: (appPath: string): Promise<string | null> =>
+    ipcRenderer.invoke('settings:get-app-icon', appPath),
   settingsGetMemory: () => ipcRenderer.invoke('settings:get-memory'),
   settingsSaveMemory: (memory: unknown) => ipcRenderer.invoke('settings:save-memory', memory),
   settingsResetMemory: () => ipcRenderer.invoke('settings:reset-memory'),
@@ -79,18 +82,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
     text: string,
   ) => ipcRenderer.invoke('settings:delete-memory-item', kind, text),
   settingsGetLanguage: (): Promise<string> => ipcRenderer.invoke('settings:get-language'),
+  settingsListSkills: (): Promise<Array<{ id: string; label: string; description: string; tools: string[]; enabled: boolean; secrets: Array<{ key: string; label: string; hint?: string }> }>> =>
+    ipcRenderer.invoke('settings:list-skills'),
+  settingsListCoreSecrets: (): Promise<Array<{ key: string; label: string; hint?: string }>> =>
+    ipcRenderer.invoke('settings:list-core-secrets'),
+  settingsSetSkillEnabled: (id: string, enabled: boolean): Promise<Record<string, boolean>> =>
+    ipcRenderer.invoke('settings:set-skill-enabled', id, enabled),
+  settingsGetSecrets: (): Promise<Record<string, { set: boolean; preview: string }>> =>
+    ipcRenderer.invoke('settings:get-secrets'),
+  settingsSetSecret: (key: string, value: string): Promise<Record<string, { set: boolean; preview: string }>> =>
+    ipcRenderer.invoke('settings:set-secret', key, value),
+  settingsGetSecretValue: (key: string): Promise<string | undefined> =>
+    ipcRenderer.invoke('settings:get-secret-value', key),
+
+  // Appearance (robot/window size)
+  appearanceGetRobotSize: (): Promise<{ size: number; min: number; max: number; default: number }> =>
+    ipcRenderer.invoke('appearance:get-robot-size'),
+  appearanceSetRobotSize: (size: number): Promise<{ size: number }> =>
+    ipcRenderer.invoke('appearance:set-robot-size', size),
 
   // Google アカウント連携
   googleAccountsCheckSetup: () => ipcRenderer.invoke('google-accounts:check-setup'),
   googleAccountsList: () => ipcRenderer.invoke('google-accounts:list'),
-  googleAccountsAdd: (loginHint?: string) =>
-    ipcRenderer.invoke('google-accounts:add', loginHint ? { loginHint } : undefined),
+  googleAccountsAdd: (loginHint?: string, scopes?: string[]) =>
+    ipcRenderer.invoke('google-accounts:add', (loginHint || scopes) ? { loginHint, scopes } : undefined),
   googleAccountsRemove: (email: string) => ipcRenderer.invoke('google-accounts:remove', email),
   googleAccountsAbort: () => ipcRenderer.invoke('google-accounts:abort'),
 
-  // Interactive PTY (xterm.js front-end ↔ node-pty back-end)
-  ptyOnData: (cb: (data: string) => void) => on<[string]>('pty:data', cb),
-  ptyWrite: (data: string) => ipcRenderer.send('pty:write', data),
-  ptyResize: (cols: number, rows: number) => ipcRenderer.send('pty:resize', cols, rows),
-  ptyGetBuffer: (): Promise<string> => ipcRenderer.invoke('pty:get-buffer'),
+  // Interactive PTY (xterm.js front-end ↔ node-pty back-end). Two channels: 'claude' / 'shell'.
+  ptyOnData: (cb: (id: 'claude' | 'shell', data: string) => void) =>
+    on<['claude' | 'shell', string]>('pty:data', cb),
+  ptyWrite: (id: 'claude' | 'shell', data: string) => ipcRenderer.send('pty:write', id, data),
+  ptyResize: (id: 'claude' | 'shell', cols: number, rows: number) =>
+    ipcRenderer.send('pty:resize', id, cols, rows),
+  ptyGetBuffer: (id: 'claude' | 'shell'): Promise<string> => ipcRenderer.invoke('pty:get-buffer', id),
+
+  onRegionImage: (cb: (payload: { base64: string; mediaType: string }) => void) =>
+    on<[{ base64: string; mediaType: string }]>('region-image', cb),
+})
+
+contextBridge.exposeInMainWorld('overlayAPI', {
+  reportRect: (rect: { x: number; y: number; w: number; h: number; displayId: number }) =>
+    ipcRenderer.send('region-overlay:report-rect', rect),
+  onClear: (cb: () => void) => on('region-overlay:clear', cb),
+  onCaptured: (cb: () => void) => on('region-overlay:captured', cb),
+  getDisplayId: (): Promise<number> => ipcRenderer.invoke('region-overlay:get-display-id'),
 })

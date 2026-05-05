@@ -1,4 +1,5 @@
 import { createClient, type Client } from '@libsql/client'
+import { getSecretSync } from '../secrets/index'
 
 export type DashboardSkill = 'ai-news' | 'best-tools' | 'movies' | 'spending'
 
@@ -6,9 +7,9 @@ let cached: Client | null = null
 
 export function getTursoClient(): Client {
   if (cached) return cached
-  const url = process.env.TURSO_DATABASE_URL
-  const authToken = process.env.TURSO_AUTH_TOKEN
-  if (!url) throw new Error('TURSO_DATABASE_URL is not set. Add it to .env.local')
+  const url = getSecretSync('TURSO_DATABASE_URL')
+  const authToken = getSecretSync('TURSO_AUTH_TOKEN')
+  if (!url) throw new Error('TURSO_DATABASE_URL is not set. Configure it in Settings → Skills.')
   cached = createClient({ url, authToken })
   return cached
 }

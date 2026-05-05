@@ -3,6 +3,10 @@ import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 
 const execAsync = promisify(exec)
+
+export function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`
+}
 const EXTRA_PATHS = [
   '/opt/homebrew/bin',
   '/usr/local/bin',

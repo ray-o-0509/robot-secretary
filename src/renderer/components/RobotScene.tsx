@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, Suspense } from 'react'
+import { useRef, useEffect, useState, Suspense, Component, type ReactNode } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useGLTF, useAnimations } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
@@ -13,96 +13,15 @@ function getAntennaColor(isConnected: boolean, _state: RobotState): string {
 type Velocity = { vx: number; vy: number; speed: number }
 const FEET_TILT_PIVOT_NAME = 'feet_tilt_pivot'
 
-// ========== Placeholder robot ==========
-
-function PlaceholderRobot({ state, isConnected }: { state: RobotState; isConnected: boolean }) {
-  const bodyRef = useRef<THREE.Mesh>(null)
-  const eye1Ref = useRef<THREE.Mesh>(null)
-
-  const thrusterColor = {
-    idle: '#4af',
-    listening: '#f8f',
-    speaking: '#ff6',
-    thinking: '#af4',
-  }[state]
-
-  useFrame((_, delta) => {
-    if (!bodyRef.current) return
-    bodyRef.current.rotation.z *= 0.9
-    if (eye1Ref.current && state === 'thinking') {
-      eye1Ref.current.rotation.z += delta * 3
-    }
-  })
-
-  return (
-    <group>
-      <mesh ref={bodyRef} position={[0, 0.1, 0]}>
-        <sphereGeometry args={[1, 32, 32]} />
-        <meshStandardMaterial color="#e8e8e8" roughness={0.3} metalness={0.6} />
-      </mesh>
-      <mesh position={[0, -0.3, 0]}>
-        <cylinderGeometry args={[1.2, 1.0, 0.25, 32]} />
-        <meshStandardMaterial color="#ccc" roughness={0.4} metalness={0.5} />
-      </mesh>
-      <mesh ref={eye1Ref} position={[0.3, 0.2, 0.92]}>
-        <sphereGeometry args={[0.22, 16, 16]} />
-        <meshStandardMaterial color="#111" roughness={0.1} metalness={0.8} />
-      </mesh>
-      <mesh position={[0.38, 0.32, 1.08]}>
-        <sphereGeometry args={[0.06, 8, 8]} />
-        <meshStandardMaterial color="white" emissive="white" emissiveIntensity={3} />
-      </mesh>
-      <mesh position={[0, 1.15, 0]}>
-        <cylinderGeometry args={[0.04, 0.04, 0.5, 8]} />
-        <meshStandardMaterial color="#c8a000" metalness={0.9} roughness={0.1} />
-      </mesh>
-      <mesh position={[0, 1.45, 0]}>
-        <sphereGeometry args={[0.07, 8, 8]} />
-        <meshStandardMaterial
-          color={getAntennaColor(isConnected, state)}
-          emissive={getAntennaColor(isConnected, state)}
-          emissiveIntensity={20}
-          toneMapped={false}
-        />
-      </mesh>
-      <pointLight
-        position={[0, 1.45, 0]}
-        color={getAntennaColor(isConnected, state)}
-        intensity={8}
-        distance={3}
-      />
-      {[[-0.7, -0.6, 0], [0.7, -0.6, 0], [0, -0.6, 0.7]].map(([x, y, z], i) => (
-        <group key={i} position={[x, y, z]}>
-          <mesh>
-            <cylinderGeometry args={[0.18, 0.22, 0.3, 16]} />
-            <meshStandardMaterial color="#bbb" metalness={0.8} roughness={0.2} />
-          </mesh>
-          <mesh position={[0, -0.18, 0]}>
-            <circleGeometry args={[0.18, 16]} />
-            <meshStandardMaterial
-              color={thrusterColor}
-              emissive={thrusterColor}
-              emissiveIntensity={5}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  )
-}
-
 // ========== GLB robot ==========
 
 function GLBRobot({
   state,
   isConnected,
-  onReady,
   velocityRef,
 }: {
   state: RobotState
   isConnected: boolean
-  onReady?: () => void
   velocityRef?: React.RefObject<Velocity>
 }) {
   const group = useRef<THREE.Group>(null)
@@ -233,11 +152,6 @@ function GLBRobot({
     }
   }, [scene])
 
-  // GLBロード完了を通知
-  useEffect(() => {
-    onReady?.()
-  }, [onReady])
-
   // Blenderの全アニメーションをループ再生
   useEffect(() => {
     Object.values(actions).forEach((clip) => {
@@ -349,33 +263,22 @@ function GLBRobot({
   )
 }
 
-// ========== Robot content (Suspense を使わず即座に表示) ==========
+// ========== Error boundary ==========
 
-function RobotContent({
-  state,
-  isConnected,
-  velocityRef,
-}: {
-  state: RobotState
-  isConnected: boolean
-  velocityRef?: React.RefObject<Velocity>
-}) {
-  const [glbReady, setGlbReady] = useState(false)
-
-  return (
-    <>
-      {/* GLBロード完了まで PlaceholderRobot を即座に表示 */}
-      {!glbReady && <PlaceholderRobot state={state} isConnected={isConnected} />}
-      <Suspense fallback={null}>
-        <GLBRobot
-          state={state}
-          isConnected={isConnected}
-          onReady={() => setGlbReady(true)}
-          velocityRef={velocityRef}
-        />
-      </Suspense>
-    </>
-  )
+class GLBErrorBoundary extends Component<
+  { onError: (msg: string) => void; children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  componentDidCatch(error: Error) {
+    this.props.onError(error?.message ?? String(error))
+  }
+  render() {
+    return this.state.hasError ? null : this.props.children
+  }
 }
 
 // ========== Main Scene ==========
@@ -389,6 +292,30 @@ export function RobotScene({
   isConnected: boolean
   velocityRef?: React.RefObject<Velocity>
 }) {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  if (loadError) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#ff6666',
+          fontFamily: 'monospace',
+          fontSize: 12,
+          padding: 16,
+          textAlign: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        ロボットモデルのロードに失敗しました: {loadError}
+      </div>
+    )
+  }
+
   return (
     <Canvas
       camera={{ position: [-6.11, 1.8, -2.22], fov: 35 }}
@@ -422,7 +349,11 @@ export function RobotScene({
       <pointLight position={[0, -3, 0]} intensity={8} color="#ff0000" distance={8} />
       <pointLight position={[0, -2, 1.5]} intensity={5} color="#cc0000" distance={6} />
 
-      <RobotContent state={state} isConnected={isConnected} velocityRef={velocityRef} />
+      <GLBErrorBoundary onError={setLoadError}>
+        <Suspense fallback={null}>
+          <GLBRobot state={state} isConnected={isConnected} velocityRef={velocityRef} />
+        </Suspense>
+      </GLBErrorBoundary>
 
       <EffectComposer>
         <Bloom

@@ -1,14 +1,13 @@
 import type { WebContents } from 'electron'
-import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { executeTool } from '../skills/dispatcher'
 import { pushPayload } from '../display/show-panel'
-import { runCommand } from '../skills/shell/index'
+import { runCommand, shellQuote } from '../skills/shell/index'
 import * as timerMod from '../skills/timer/index'
-
-type PtyMod = typeof import('../skills/shell/pty')
+import { ptyWriteTo, ptyInjectTo } from '../skills/shell/pty'
+import { pasteToClaudePty } from '../skills/shell/claudePty'
 
 export type EmailSearchState = {
   query: string
@@ -27,19 +26,13 @@ export type DispatchDeps = {
   getOrCreateDisplayWindow: () => Promise<{ win: Electron.BrowserWindow; ready: boolean }>
   getOrCreateSearchWindow: () => Electron.BrowserWindow
   showWeatherData: (data: unknown) => void
-  getPty: () => PtyMod | null
   getCwd: () => string
   setCwd: (cwd: string) => void
   refreshActivePanel: () => Promise<void>
   setLastEmailSearch: (state: EmailSearchState | null) => void
   setLastDriveSearch: (state: DriveSearchState | null) => void
-  showTerminalPanel: () => Promise<void>
+  showTerminalPanel: (tab?: 'claude' | 'shell') => Promise<void>
   injectAndShowTerminal: (command: string, stdout: string, stderr: string) => Promise<void>
-}
-
-// POSIX-shell single-quote escape so paths with spaces / quotes survive.
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, "'\\''")}'`
 }
 
 // Render a voice-issued command + its captured output as ANSI-colored lines for the pty stream.
@@ -51,48 +44,6 @@ export function formatVoiceLine(command: string, stdout: string, stderr: string)
   return head + out + err
 }
 
-function looksLikeClaudeCodePrompt(buffer: string): boolean {
-  const tail = buffer.slice(-8000)
-  return tail.includes('Claude Code') && (
-    tail.includes('bypass permissions on') ||
-    tail.includes('Try "') ||
-    tail.includes('bypass permissions')
-  )
-}
-
-// Walk descendants of `rootPid` and return true if any process's argv looks like Claude Code.
-function hasClaudeDescendant(rootPid: number): boolean {
-  try {
-    const out = execFileSync('ps', ['-axo', 'pid=,ppid=,args='], { encoding: 'utf8', timeout: 1000 })
-    type Proc = { pid: number; ppid: number; args: string }
-    const procs: Proc[] = []
-    for (const line of out.split('\n')) {
-      const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/)
-      if (m) procs.push({ pid: Number(m[1]), ppid: Number(m[2]), args: m[3] })
-    }
-    const childrenOf = new Map<number, Proc[]>()
-    for (const p of procs) {
-      const arr = childrenOf.get(p.ppid) ?? []
-      arr.push(p)
-      childrenOf.set(p.ppid, arr)
-    }
-    const isClaude = (args: string) => /(?:^|\/)claude(?:\s|$|\b)/.test(args)
-    const stack = [rootPid]
-    const seen = new Set<number>()
-    while (stack.length) {
-      const pid = stack.pop()!
-      if (seen.has(pid)) continue
-      seen.add(pid)
-      for (const child of childrenOf.get(pid) ?? []) {
-        if (isClaude(child.args)) return true
-        stack.push(child.pid)
-      }
-    }
-    return false
-  } catch {
-    return false
-  }
-}
 
 const DISPATCHER_PURE_TOOLS = new Set([
   'get_tasks',
@@ -223,8 +174,9 @@ export async function dispatchTool(
       }
     }
     if (toolName === 'run_command') {
-      const r = result as { stdout: string; stderr: string }
-      await deps.injectAndShowTerminal(String(args.command ?? ''), r.stdout, r.stderr)
+      // The command was actually typed into the shell PTY by executeTool, so the panel
+      // already reflects it. Just bring the shell tab forward.
+      await deps.showTerminalPanel('shell')
     }
     if (TIMER_TOOLS.has(toolName)) {
       const { win, ready } = await deps.getOrCreateDisplayWindow()
@@ -275,40 +227,29 @@ export async function dispatchTool(
     if (!stat.isDirectory()) return { error: `cd failed: not a directory: ${target}` }
 
     const ls = await runCommand('ls -la', target)
-    deps.getPty()?.ptyInject(formatVoiceLine(`ls -la ${target}`, ls.stdout, ls.stderr))
+    // Mirror the cd visually into the shell PTY (no execution — just for the user to see).
+    ptyInjectTo('shell', formatVoiceLine(`cd ${target}`, ls.stdout, ls.stderr))
+    ptyWriteTo('shell', `\x15cd ${shellQuote(target)}\n`)
 
     deps.setCwd(target)
-    deps.getPty()?.ptyWrite(`\x15cd ${shellQuote(target)}\n`)
-    await deps.showTerminalPanel()
+    await deps.showTerminalPanel('shell')
     return { ok: true, cwd: target, contents: ls.stdout, lsOk: ls.ok, lsExitCode: ls.exitCode, lsStderr: ls.stderr }
   }
 
   if (toolName === 'run_claude') {
     const prompt = String(args.prompt ?? '')
-    const cwd = (args.cwd as string | undefined) ?? deps.getCwd()
+    const cwd = deps.getCwd()
     const runId = `claude-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     sender.send('claude:run:start', { runId, cwd, prompt })
-    await deps.showTerminalPanel()
-    const pty = deps.getPty()
-    if (!pty) return { error: 'terminal is not ready' }
-    const pastePrompt = () => {
-      pty.ptyWrite(`\x1b[200~${prompt}\x1b[201~\r`)
-    }
+    await deps.showTerminalPanel('claude')
 
-    const shellPid = pty.ptyPid?.() ?? null
-    const ccActive =
-      (shellPid !== null && hasClaudeDescendant(shellPid)) ||
-      looksLikeClaudeCodePrompt(pty.ptyGetBuffer())
-
-    if (ccActive) {
-      pastePrompt()
-    } else {
-      pty.ptyWrite(`\x15cd ${shellQuote(cwd)}\ncc\n`)
-      setTimeout(pastePrompt, 1500)
+    try {
+      await pasteToClaudePty(prompt)
+    } catch (err) {
+      return { error: `Claude Code is not ready: ${(err as Error).message}` }
     }
 
     sender.send('claude:run:done', { runId, exitCode: 0, durationMs: 0 })
-    await deps.showTerminalPanel()
     return {
       result: {
         ok: true,

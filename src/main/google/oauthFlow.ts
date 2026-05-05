@@ -14,6 +14,7 @@ import * as crypto from 'node:crypto'
 import { PRIMARY_TOKENS_DIR, FALLBACK_TOKENS_DIR, listAccountsAll, type AccountEntry } from '../skills/shared/googleAuth'
 
 export const REQUIRED_SCOPES = [
+  'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/gmail.modify',
@@ -109,7 +110,7 @@ async function writeTokenAtomic(targetPath: string, contents: string) {
   fs.renameSync(tmp, targetPath)
 }
 
-export async function addGoogleAccount(opts: { loginHint?: string } = {}): Promise<{ email: string }> {
+export async function addGoogleAccount(opts: { loginHint?: string; scopes?: string[] } = {}): Promise<{ email: string }> {
   if (inFlight) throw new Error('Auth already in progress')
 
   const secret = readClientSecret()
@@ -158,11 +159,12 @@ export async function addGoogleAccount(opts: { loginHint?: string } = {}): Promi
         const port = addr.port
         // 127.0.0.1 で統一 (Google Cloud Console 側に登録する redirect_uri と揃える)
         const redirectUri = `http://127.0.0.1:${port}`
+        const requestedScopes = opts.scopes && opts.scopes.length > 0 ? opts.scopes : REQUIRED_SCOPES
         const oAuth2 = new google.auth.OAuth2(secret.client_id, secret.client_secret, redirectUri)
         const url = oAuth2.generateAuthUrl({
           access_type: 'offline',
           prompt: 'consent',
-          scope: REQUIRED_SCOPES,
+          scope: requestedScopes,
           state,
           login_hint: opts.loginHint,
         })
@@ -208,7 +210,7 @@ export async function addGoogleAccount(opts: { loginHint?: string } = {}): Promi
               token_uri: secret.token_uri ?? 'https://oauth2.googleapis.com/token',
               client_id: secret.client_id,
               client_secret: secret.client_secret,
-              scopes: REQUIRED_SCOPES,
+              scopes: requestedScopes,
               expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
             }
             const tokenPath = path.join(PRIMARY_TOKENS_DIR, `${email}.json`)
