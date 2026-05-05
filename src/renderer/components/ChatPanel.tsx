@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { LuKey, LuRadio, LuMic, LuZap, LuSettings, LuRefreshCw } from 'react-icons/lu'
-import { FONT_MONO, CYAN, MAGENTA, CYBER_STYLES } from '../display/styles'
+import { FONT_MONO, CYAN, CYBER_STYLES } from '../display/styles'
 import { CloseButton } from '../display/TopButtons'
 import type { ConnectionError } from '../hooks/useGeminiLive'
 

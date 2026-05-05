@@ -3,12 +3,25 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as dotenv from 'dotenv'
+import { execFileSync } from 'node:child_process'
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import { initMemory, shutdownMemory } from './memory'
-import { getSecretSync } from './skills/secrets/index'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
+import { getStoredSessionToken, resolveUserFromToken, createUserDbClient, type AppUser } from './auth/userAuth'
+import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
+import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
+import { registerAuthIpc } from './ipc/registerAuthIpc'
+import { initStore } from './memory/store'
+import { initGoogleAuth } from './skills/shared/googleAuth'
+
+// Per-user DB client (set after login/session restore)
+let _userDb: import('@libsql/client').Client | null = null
+function getUserDb(): import('@libsql/client').Client {
+  if (!_userDb) throw new Error('User DB not initialized')
+  return _userDb
+}
 
 const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
 const originalConsole = {
@@ -67,6 +80,8 @@ const isDev = !app.isPackaged
 
 const iconPath = path.join(__dirname, '../../assets/icon.png')
 
+let loginWin: BrowserWindow | null = null
+let currentUser: AppUser | null = null
 let setupWin: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
 let win: BrowserWindow | null = null
@@ -92,38 +107,19 @@ let pinnedUntil = 0
 let isMuted = false
 let pttActive = false
 let shuttingDown = false
+let authenticatedAppStarted = false
 
 // ========== Robot window/droid size ==========
 const ROBOT_SIZE_MIN = 180
 const ROBOT_SIZE_MAX = 600
 const ROBOT_SIZE_DEFAULT = 300
-const appearanceFilePath = path.join(app.getPath('userData'), 'appearance.json')
 
 function clampRobotSize(n: number): number {
   if (!Number.isFinite(n)) return ROBOT_SIZE_DEFAULT
   return Math.max(ROBOT_SIZE_MIN, Math.min(ROBOT_SIZE_MAX, Math.round(n)))
 }
 
-function loadRobotSize(): number {
-  try {
-    const data = fs.readFileSync(appearanceFilePath, 'utf-8')
-    const parsed = JSON.parse(data) as { robotSize?: number }
-    return clampRobotSize(parsed.robotSize ?? ROBOT_SIZE_DEFAULT)
-  } catch {
-    return ROBOT_SIZE_DEFAULT
-  }
-}
-
-function saveRobotSize(size: number) {
-  try {
-    fs.mkdirSync(path.dirname(appearanceFilePath), { recursive: true })
-    fs.writeFileSync(appearanceFilePath, JSON.stringify({ robotSize: size }), 'utf-8')
-  } catch (e) {
-    console.error('Failed to save appearance:', e)
-  }
-}
-
-let robotSize = loadRobotSize()
+let robotSize = ROBOT_SIZE_DEFAULT
 
 function sendRobotVelocity(vx: number, vy: number, speed: number) {
   if (!win || win.isDestroyed()) return
@@ -242,9 +238,11 @@ function registerSettingsIpc() {
   ipcMain.handle('settings:get-app-icon', async (_event, appPath: unknown) => {
     if (typeof appPath !== 'string' || !appPath) return null
     try {
-      const img = await app.getFileIcon(appPath, { size: 'small' })
+      const bundleIcon = getBundleIconDataUrl(appPath)
+      if (bundleIcon) return bundleIcon
+      const img = await app.getFileIcon(appPath, { size: 'normal' })
       if (img.isEmpty()) return null
-      return img.toDataURL()
+      return img.resize({ width: 64, height: 64 }).toDataURL()
     } catch {
       return null
     }
@@ -352,30 +350,51 @@ function registerSettingsIpc() {
     }
   })
 
-  const langFilePath = path.join(app.getPath('userData'), 'language.json')
+  ipcMain.handle('settings:get-language', async () => {
+    try {
+      const s = await loadSettings()
+      return s.language
+    } catch {
+      return 'ja-JP'
+    }
+  })
 
   ipcMain.handle('settings:get-secrets', async () => {
-    const { getSecretsView } = await import('./skills/secrets/index')
-    return await getSecretsView()
+    const user = currentUser
+    if (!user) throw new Error('Not authenticated')
+    return getApiKeysView(user.id)
   })
 
   ipcMain.handle('settings:set-secret', async (_event, key: unknown, value: unknown) => {
     if (typeof key !== 'string' || typeof value !== 'string') {
       throw new Error('settings:set-secret requires (key: string, value: string)')
     }
-    const { saveSecret, SECRET_KEYS, getSecretsView } = await import('./skills/secrets/index')
-    if (!(SECRET_KEYS as readonly string[]).includes(key)) {
+    const user = currentUser
+    if (!user) throw new Error('Not authenticated')
+    if (!(KNOWN_API_KEYS as readonly string[]).includes(key) || key.startsWith('VITE_')) {
       throw new Error(`Unknown secret key: ${key}`)
     }
-    await saveSecret(key as typeof SECRET_KEYS[number], value)
-    return await getSecretsView()
+    const db = getUserDb()
+    const trimmed = value.trim()
+    if (trimmed) {
+      await saveApiKey(user.id, key, trimmed, db)
+      process.env[key] = trimmed
+      if (key === 'GEMINI_API_KEY') process.env['VITE_GEMINI_API_KEY'] = trimmed
+    } else {
+      await deleteApiKey(key, db)
+      delete process.env[key]
+      if (key === 'GEMINI_API_KEY') delete process.env['VITE_GEMINI_API_KEY']
+    }
+    return getApiKeysView(user.id)
   })
 
   ipcMain.handle('settings:get-secret-value', async (_event, key: unknown) => {
     if (typeof key !== 'string') return undefined
-    const { getSecretValue, SECRET_KEYS } = await import('./skills/secrets/index')
-    if (!(SECRET_KEYS as readonly string[]).includes(key)) return undefined
-    return await getSecretValue(key as typeof SECRET_KEYS[number])
+    const user = currentUser
+    if (!user) return undefined
+    if (!(KNOWN_API_KEYS as readonly string[]).includes(key)) return undefined
+    const keys = await loadApiKeys(user.id, getUserDb())
+    return keys[key]
   })
 
   ipcMain.handle('settings:list-skills', async () => {
@@ -405,15 +424,6 @@ function registerSettingsIpc() {
     return await setSkillEnabled(id, enabled)
   })
 
-  ipcMain.handle('settings:get-language', () => {
-    try {
-      const data = fs.readFileSync(langFilePath, 'utf-8')
-      return (JSON.parse(data) as { code: string }).code
-    } catch {
-      return 'ja-JP'
-    }
-  })
-
   ipcMain.handle('appearance:get-robot-size', () => ({
     size: robotSize,
     min: ROBOT_SIZE_MIN,
@@ -421,10 +431,10 @@ function registerSettingsIpc() {
     default: ROBOT_SIZE_DEFAULT,
   }))
 
-  ipcMain.handle('appearance:set-robot-size', (_event, raw: unknown) => {
+  ipcMain.handle('appearance:set-robot-size', async (_event, raw: unknown) => {
     const next = clampRobotSize(typeof raw === 'number' ? raw : Number(raw))
     robotSize = next
-    saveRobotSize(next)
+    await saveSettings({ robotSize: next }).catch((e) => console.error('Failed to save robotSize:', e))
     if (win && !win.isDestroyed()) {
       const [x, y] = win.getPosition()
       win.setBounds({ x, y, width: next, height: next })
@@ -437,11 +447,7 @@ function registerSettingsIpc() {
   })
 
   ipcMain.on('set-language', (_event, code: string) => {
-    try {
-      fs.writeFileSync(langFilePath, JSON.stringify({ code }), 'utf-8')
-    } catch (e) {
-      console.error('Failed to save language:', e)
-    }
+    saveSettings({ language: String(code) }).catch((e) => console.error('Failed to save language:', e))
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send('language-change', code)
     }
@@ -454,8 +460,8 @@ function registerSettingsIpc() {
   })
 
   ipcMain.handle('google-accounts:list', async () => {
-    const { listAccountsForUi } = await import('./google/oauthFlow')
-    return listAccountsForUi()
+    const { listAccountsForUiAsync } = await import('./google/oauthFlow')
+    return listAccountsForUiAsync()
   })
 
   ipcMain.handle('google-accounts:add', async (_event, args?: { loginHint?: string; scopes?: string[] }) => {
@@ -474,6 +480,54 @@ function registerSettingsIpc() {
     abortInFlight('user cancelled')
     return { ok: true }
   })
+}
+
+async function getApiKeysView(userId: string): Promise<Record<string, { set: boolean; preview: string }>> {
+  const [names, values] = await Promise.all([
+    listApiKeyNames(getUserDb()),
+    loadApiKeys(userId, getUserDb()),
+  ])
+  const out: Record<string, { set: boolean; preview: string }> = {}
+  for (const { name, isSet } of names) {
+    const value = values[name]
+    out[name] = isSet && value
+      ? { set: true, preview: value.length <= 8 ? '••••' : `${value.slice(0, 4)}…${value.slice(-4)}` }
+      : { set: isSet, preview: '' }
+  }
+  return out
+}
+
+function getBundleIconDataUrl(appPath: string): string | null {
+  if (!appPath.endsWith('.app')) return null
+  const resourcesDir = path.join(appPath, 'Contents', 'Resources')
+  const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist')
+  if (!fs.existsSync(resourcesDir) || !fs.existsSync(infoPlistPath)) return null
+
+  let iconName: string | null = null
+  try {
+    iconName = execFileSync('plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', infoPlistPath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    iconName = null
+  }
+
+  const candidates = iconName
+    ? [
+        iconName,
+        iconName.endsWith('.icns') ? iconName : `${iconName}.icns`,
+        iconName.endsWith('.png') ? iconName : `${iconName}.png`,
+      ]
+    : ['AppIcon.icns', 'AppIcon.png']
+
+  for (const candidate of candidates) {
+    const iconPath = path.join(resourcesDir, candidate)
+    if (!fs.existsSync(iconPath)) continue
+    const image = nativeImage.createFromPath(iconPath)
+    if (!image.isEmpty()) return image.resize({ width: 64, height: 64 }).toDataURL()
+  }
+  return null
 }
 
 function sanitizeMemoryInput(
@@ -523,6 +577,33 @@ function sanitizeMemoryInput(
   }
 }
 
+// ========== Login Window ==========
+
+function createLoginWindow() {
+  if (loginWin && !loginWin.isDestroyed()) { loginWin.focus(); return }
+  loginWin = new BrowserWindow({
+    width: 420,
+    height: 360,
+    resizable: false,
+    frame: false,
+    transparent: false,
+    alwaysOnTop: false,
+    center: true,
+    backgroundColor: '#0a0a14',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  forwardRendererConsole(loginWin, 'login')
+  if (isDev) {
+    loginWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#login')
+  } else {
+    loginWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'login' })
+  }
+}
+
 // ========== Setup Window ==========
 
 function createSetupWindow() {
@@ -560,18 +641,9 @@ function createSetupWindow() {
   }
 }
 
-function getGmailAccounts(): string[] {
-  try {
-    const primaryDir = path.join(os.homedir(), '.config', 'robot-secretary', 'google-tokens')
-    const fallbackDir = path.join(os.homedir(), '.config', 'gmail-triage', 'tokens')
-    const tokensDir = fs.existsSync(primaryDir) ? primaryDir : fallbackDir
-    if (!fs.existsSync(tokensDir)) return []
-    return fs.readdirSync(tokensDir)
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.replace(/\.json$/, ''))
-  } catch {
-    return []
-  }
+async function getGmailAccounts(): Promise<string[]> {
+  const { listGoogleTokenEmailsForUser } = await import('./skills/shared/googleAuth')
+  return listGoogleTokenEmailsForUser()
 }
 
 function registerSetupIpc() {
@@ -579,22 +651,28 @@ function registerSetupIpc() {
     const micPermission = process.platform === 'darwin'
       ? systemPreferences.getMediaAccessStatus('microphone')
       : 'granted'
+    const screenPermission = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('screen')
+      : 'granted'
     const accessibilityPermission = process.platform === 'darwin'
       ? systemPreferences.isTrustedAccessibilityClient(false)
       : true
 
     return {
       micPermission,
+      screenPermission,
       accessibilityPermission,
-      geminiApiKey: !!getSecretSync('GEMINI_API_KEY'),
-      ticktickToken: !!getSecretSync('TICKTICK_ACCESS_TOKEN'),
-      gmailAccounts: getGmailAccounts(),
+      geminiApiKey: !!process.env.GEMINI_API_KEY,
+      ticktickToken: !!process.env.TICKTICK_ACCESS_TOKEN,
+      gmailAccounts: await getGmailAccounts(),
     }
   })
 
   ipcMain.on('setup:open-settings', (_event, type: string) => {
     if (type === 'microphone') {
       shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+    } else if (type === 'screen') {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture')
     } else if (type === 'accessibility') {
       if (process.platform === 'darwin') {
         systemPreferences.isTrustedAccessibilityClient(true)
@@ -604,11 +682,29 @@ function registerSetupIpc() {
   })
 
   ipcMain.handle('setup:launch', async () => {
+    if (!currentUser) {
+      createLoginWindow()
+      throw new Error('ログインが必要です')
+    }
+    const status = {
+      micPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'granted',
+      screenPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted',
+      accessibilityPermission: process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : true,
+      geminiApiKey: !!process.env.GEMINI_API_KEY,
+    }
+    if (
+      status.micPermission !== 'granted' ||
+      status.screenPermission !== 'granted' ||
+      !status.accessibilityPermission ||
+      !status.geminiApiKey
+    ) {
+      throw new Error('必要な権限または Gemini API Key が未設定です')
+    }
     if (setupWin && !setupWin.isDestroyed()) {
       setupWin.close()
       setupWin = null
     }
-    await initMemory(() => getSecretSync('GEMINI_API_KEY'))
+    await initMemory(() => process.env.GEMINI_API_KEY)
     createWindow()
   })
 }
@@ -622,7 +718,20 @@ function forwardRendererConsole(window: BrowserWindow, label: string) {
   })
 }
 
+function isMainRobotWebContents(webContents: Electron.WebContents): boolean {
+  return !!win && !win.isDestroyed() && webContents === win.webContents
+}
+
 function createWindow() {
+  if (win && !win.isDestroyed()) {
+    win.focus()
+    return
+  }
+  if (!currentUser) {
+    console.warn('[auth] Blocked robot window creation before login')
+    createLoginWindow()
+    return
+  }
   const { width: _w, height } = screen.getPrimaryDisplay().workAreaSize
   // 起動時は左下（チャットウィンドウの下付近）に配置
   currentX = 24 + 360 + 24  // チャットウィンドウ右端 + 余白
@@ -678,7 +787,7 @@ function createWindow() {
 }
 
 function createChatWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const { height } = screen.getPrimaryDisplay().workAreaSize
   const chatW = 360
   const chatH = Math.min(560, height - 80)
 
@@ -831,6 +940,11 @@ let pttModifiers: 'none' | 'alt' | 'alt+shift' = 'none'
 let pttStuckTimer: NodeJS.Timeout | null = null
 const PTT_STUCK_TIMEOUT_MS = 30_000
 
+// macOS の uiohook は Option を押したまま他のキーを押すと偽の keyup Alt を発火することがある。
+// keyup 後 PTT_KEYUP_DEBOUNCE_MS 以内に keydown Alt が来たらキャンセル（誤 stop 防止）。
+let pttKeyupDebounceTimer: NodeJS.Timeout | null = null
+const PTT_KEYUP_DEBOUNCE_MS = 80
+
 function armStuckTimer() {
   if (pttStuckTimer) clearTimeout(pttStuckTimer)
   pttStuckTimer = setTimeout(() => {
@@ -862,14 +976,23 @@ function setupPTT() {
   }
 
   uIOhook.on('keydown', (e) => {
-    if (e.keycode === UiohookKey.Alt && !pttActive) {
-      // 左Option のみ（右Option = 3640 は除外）
-      pttActive = true
-      pttModifiers = e.shiftKey ? 'alt+shift' : 'alt'
-      armStuckTimer()
-      console.log('[PTT:main] keydown alt modifiers=', pttModifiers)
-      win?.webContents.send('ptt-start')
-      if (pttModifiers === 'alt+shift') regionCapture.show()
+    if (e.keycode === UiohookKey.Alt) {
+      // 偽 keyup のデバウンスタイマーが走っていたらキャンセル（押しっぱなし継続）
+      if (pttKeyupDebounceTimer) {
+        clearTimeout(pttKeyupDebounceTimer)
+        pttKeyupDebounceTimer = null
+        console.log('[PTT:main] spurious keyup cancelled, PTT continues')
+        return
+      }
+      if (!pttActive) {
+        // 左Option のみ（右Option = 3640 は除外）
+        pttActive = true
+        pttModifiers = e.shiftKey ? 'alt+shift' : 'alt'
+        armStuckTimer()
+        console.log('[PTT:main] keydown alt modifiers=', pttModifiers)
+        win?.webContents.send('ptt-start')
+        if (pttModifiers === 'alt+shift') regionCapture.show()
+      }
       return
     }
     // Shift を後から足した場合: PTT 中なら overlay を出す
@@ -895,14 +1018,20 @@ function setupPTT() {
       regionCapture.hide()
       return
     }
-    // Alt を離した: PTT 完全終了
+    // Alt を離した: デバウンスタイマーを起動し 80ms 後も keydown が来なければ PTT 終了
     if (e.keycode === UiohookKey.Alt && pttActive) {
-      console.log('[PTT:main] keyup alt')
-      pttActive = false
-      pttModifiers = 'none'
-      disarmStuckTimer()
-      win?.webContents.send('ptt-stop')
-      regionCapture.hide()
+      console.log('[PTT:main] keyup alt (debouncing)')
+      if (pttKeyupDebounceTimer) clearTimeout(pttKeyupDebounceTimer)
+      pttKeyupDebounceTimer = setTimeout(() => {
+        pttKeyupDebounceTimer = null
+        if (!pttActive) return
+        console.log('[PTT:main] keyup alt confirmed → stop PTT')
+        pttActive = false
+        pttModifiers = 'none'
+        disarmStuckTimer()
+        win?.webContents.send('ptt-stop')
+        regionCapture.hide()
+      }, PTT_KEYUP_DEBOUNCE_MS)
       return
     }
   })
@@ -1289,7 +1418,13 @@ ipcMain.on('email:close-detail', () => {
 // ========== Web View Window ==========
 
 ipcMain.on('open-web-view', (_event, url: string) => {
-  if (typeof url !== 'string' || !url.startsWith('http')) return
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return
   if (!webWin || webWin.isDestroyed()) {
     const { width, height } = screen.getPrimaryDisplay().workAreaSize
     const w = Math.min(1100, width - 100)
@@ -1305,7 +1440,7 @@ ipcMain.on('open-web-view', (_event, url: string) => {
     })
     webWin.on('closed', () => { webWin = null })
   }
-  webWin.loadURL(url)
+  webWin.loadURL(parsed.toString())
   webWin.focus()
 })
 
@@ -1320,15 +1455,26 @@ ipcMain.on('open-web-view', (_event, url: string) => {
 
 // ========== App lifecycle ==========
 
+// 多重起動を防ぐ: 2つ目以降のインスタンスは既存ウィンドウにフォーカスして終了
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
+
+app.on('second-instance', () => {
+  // 既存インスタンスがある場合、ロボットウィンドウを前面に出す
+  if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+})
+
 app.whenReady().then(async () => {
-  // rendererのgetUserMediaリクエストを許可する
+  // ロボット本体の renderer だけ getUserMedia を許可する。
+  // 外部 web view や設定画面には Chromium の media permission を渡さない。
   const { session } = await import('electron')
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    if (permission === 'media') {
-      callback(true)
-    } else {
-      callback(false)
-    }
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(permission === 'media' && isMainRobotWebContents(webContents))
   })
 
   if (process.platform === 'darwin' && app.dock) {
@@ -1339,49 +1485,112 @@ app.whenReady().then(async () => {
   registerSetupIpc()
   registerSettingsIpc()
 
-  // Pre-populate skill-toggle and secrets caches so synchronous reads inside
-  // tool handlers reflect saved settings on the very first call.
-  void (async () => {
-    const { loadSkillsEnabled } = await import('./skills/skill-toggle/index')
-    const { loadSecrets } = await import('./skills/secrets/index')
-    await Promise.all([loadSkillsEnabled(), loadSecrets()])
-  })()
+  // ── Turso Auth ────────────────────────────────────────────────────────────
+  const startAuthenticatedApp = async (user: AppUser) => {
+    if (authenticatedAppStarted) return
+    authenticatedAppStarted = true
 
+    // Connect to this user's dedicated DB
+    _userDb = createUserDbClient(user)
+    const db = _userDb
 
-  // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {
-      label: app.name,
-      submenu: [
-        { label: `About ${app.name}`, role: 'about' },
-        { type: 'separator' },
-        {
-          label: 'Preferences...',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => openSettingsWindow(),
-        },
-        { type: 'separator' },
-        { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
-      ],
-    },
-  ]))
+    // Populate process.env with all API keys from DB (so all tool modules continue working)
+    await populateProcessEnv(user.id, db)
+    console.log('[auth] process.env populated with DB keys')
 
-  // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
-  const micStatus = process.platform === 'darwin'
-    ? systemPreferences.getMediaAccessStatus('microphone')
-    : 'granted'
-  const hasGeminiKey = !!getSecretSync('GEMINI_API_KEY')
-  const needsSetup = micStatus !== 'granted' || !hasGeminiKey
+    // Initialize DB-backed stores
+    initStore(user.id, db)
+    initSettingsStore(user.id, db)
+    await initGoogleAuth(user.id, db)
+    const settings = await loadSettings()
+    robotSize = clampRobotSize(settings.robotSize)
 
-  if (needsSetup) {
-    createSetupWindow()
-  } else {
-    await initMemory(() => getSecretSync('GEMINI_API_KEY'))
-    createWindow()
-    // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
-    // instead of cold-starting cc and racing the 1.5s sleep.
-    import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
+    // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { label: `About ${app.name}`, role: 'about' },
+          { type: 'separator' },
+          {
+            label: 'Preferences...',
+            accelerator: 'CmdOrCtrl+,',
+            click: () => openSettingsWindow(),
+          },
+          { type: 'separator' },
+          { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
+        ],
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+    ]))
+
+    // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
+    const micStatus = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('microphone')
+      : 'granted'
+    const screenStatus = process.platform === 'darwin'
+      ? systemPreferences.getMediaAccessStatus('screen')
+      : 'granted'
+    const accessibilityGranted = process.platform === 'darwin'
+      ? systemPreferences.isTrustedAccessibilityClient(false)
+      : true
+    // populateProcessEnv() 済みなので process.env を確認すれば DB の状態が分かる
+    const hasGeminiKey = !!process.env.GEMINI_API_KEY
+    const needsSetup = micStatus !== 'granted' || screenStatus !== 'granted' || !accessibilityGranted || !hasGeminiKey
+
+    if (needsSetup) {
+      createSetupWindow()
+    } else {
+      await initMemory(() => process.env.GEMINI_API_KEY)
+      createWindow()
+      // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
+      // instead of cold-starting cc and racing the 1.5s sleep.
+      import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
+    }
   }
+
+  // Register auth IPC before showing the login window, so OAuth starts only from the button.
+  registerAuthIpc({
+    getDb: () => getUserDb(),
+    getUser: () => currentUser,
+    onLoginSuccess: async (user) => {
+      currentUser = user
+      _userDb = createUserDbClient(user)
+      console.log('[auth] Logged in as:', currentUser.email)
+      if (loginWin && !loginWin.isDestroyed()) {
+        loginWin.close()
+        loginWin = null
+      }
+      await startAuthenticatedApp(user)
+    },
+  })
+
+  // Check for an existing session in Keychain
+  let token = await getStoredSessionToken()
+  if (token) {
+    currentUser = await resolveUserFromToken(token)
+    if (!currentUser) token = null  // stale
+  }
+
+  // No valid session → show login window. OAuth begins only after the user clicks the button.
+  if (!currentUser) {
+    createLoginWindow()
+    return
+  }
+
+  console.log('[auth] Session restored:', currentUser.email)
+  await startAuthenticatedApp(currentUser)
 })
 
 app.on('before-quit', async (e) => {
@@ -1404,5 +1613,12 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  // 初期化中は何もしない（whenReady の async 処理がウィンドウを作成するのを待つ）
+  if (!authenticatedAppStarted && !loginWin) return
+  if (BrowserWindow.getAllWindows().length > 0) return
+  if (!currentUser) {
+    createLoginWindow()
+    return
+  }
+  createWindow()
 })

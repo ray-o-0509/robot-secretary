@@ -1,6 +1,4 @@
-import { app } from 'electron'
-import * as fs from 'fs/promises'
-import * as path from 'path'
+import { loadSettings, saveSettings } from '../../auth/settingsStore'
 
 export type DefaultApps = {
   email?: string
@@ -18,25 +16,13 @@ const CATEGORY_ALIASES: Record<keyof DefaultApps, string[]> = {
   editor:   ['editor', 'エディタ'],
 }
 
-function configPath(): string {
-  return path.join(app.getPath('userData'), 'conversations', 'default-apps.json')
-}
-
 export async function loadDefaultApps(): Promise<DefaultApps> {
-  try {
-    const raw = await fs.readFile(configPath(), 'utf8')
-    return JSON.parse(raw) as DefaultApps
-  } catch {
-    return {}
-  }
+  const settings = await loadSettings()
+  return settings.defaultApps
 }
 
 export async function saveDefaultApps(apps: DefaultApps): Promise<void> {
-  const file = configPath()
-  await fs.mkdir(path.dirname(file), { recursive: true })
-  const tmp = `${file}.tmp.${process.pid}.${Date.now()}`
-  await fs.writeFile(tmp, JSON.stringify(apps, null, 2), 'utf8')
-  await fs.rename(tmp, file)
+  await saveSettings({ defaultApps: apps })
 }
 
 // If appName is a generic category alias (e.g. "Mail", "メール"), return the

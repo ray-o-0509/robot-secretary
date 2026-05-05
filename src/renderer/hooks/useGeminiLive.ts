@@ -281,7 +281,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         (c: { name?: string }) => c.name === 'delegate_task',
       )
       onStateChangeRef.current('thinking', hasDelegate ? 'claude' : 'gemini')
-      const responses = []
+      const responses: Array<{ id: string; name: string; response: { output: string } }> = []
       for (const call of m.toolCall.functionCalls) {
         const result = await window.electronAPI.callTool(call.name, call.args)
         responses.push({ id: call.id, name: call.name, response: { output: JSON.stringify(result) } })
@@ -339,8 +339,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
     const sessionEpoch = sessionEpochRef.current + 1
     sessionEpochRef.current = sessionEpoch
 
-    const stored = (await window.electronAPI.settingsGetSecretValue?.('GEMINI_API_KEY'))?.trim()
-    const apiKey = stored || import.meta.env.VITE_GEMINI_API_KEY?.trim()
+    // IPC 経由で DB から取得。ビルド時埋め込みの VITE_GEMINI_API_KEY は使わない
+    const apiKey = (await window.electronAPI.settingsGetSecretValue?.('GEMINI_API_KEY'))?.trim()
     if (!apiKey) {
       console.warn('[Gemini] API Key is not set. Enter it via right-click → Settings.')
       intentionalCloseRef.current = true

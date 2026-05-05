@@ -101,6 +101,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   appearanceSetRobotSize: (size: number): Promise<{ size: number }> =>
     ipcRenderer.invoke('appearance:set-robot-size', size),
 
+  // Auth
+  authGetStatus: (): Promise<{ isLoggedIn: boolean; email?: string; displayName?: string | null; avatarUrl?: string | null }> =>
+    ipcRenderer.invoke('auth:get-status'),
+  authLogin: (): Promise<{ email: string; displayName?: string | null; avatarUrl?: string | null }> =>
+    ipcRenderer.invoke('auth:login'),
+  authLogout: (): Promise<void> => ipcRenderer.invoke('auth:logout'),
+  authRelaunch: (): Promise<void> => ipcRenderer.invoke('auth:relaunch'),
+  authListApiKeys: (): Promise<Array<{ name: string; isSet: boolean }>> =>
+    ipcRenderer.invoke('auth:list-api-keys'),
+  authSetApiKey: (name: string, value: string): Promise<void> =>
+    ipcRenderer.invoke('auth:set-api-key', name, value),
+  authDeleteApiKey: (name: string): Promise<void> =>
+    ipcRenderer.invoke('auth:delete-api-key', name),
+
   // Google アカウント連携
   googleAccountsCheckSetup: () => ipcRenderer.invoke('google-accounts:check-setup'),
   googleAccountsList: () => ipcRenderer.invoke('google-accounts:list'),

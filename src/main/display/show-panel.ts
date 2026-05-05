@@ -92,6 +92,9 @@ export async function fetchPanelData(type: PanelType): Promise<PanelPayload> {
         // The terminal panel renders the singleton pty directly; payload data is unused.
         return { type, data: null, fetchedAt }
       }
+      case 'email_search':
+      case 'drive_search':
+        return { type, data: null, fetchedAt, error: `${type} cannot be refreshed without its original query` }
     }
   } catch (err) {
     return { type, data: null, fetchedAt, error: String(err instanceof Error ? err.message : err) }

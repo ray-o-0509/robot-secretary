@@ -2,6 +2,7 @@ import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
+import { LoadingState } from '../../display/components/LoadingState'
 import type { PanelPayload } from '../../display/types'
 
 type DriveFile = {
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export function DriveView({ payload }: Props) {
+  if (payload.loading && !payload.data) return <LoadingState count={4} />
   if (payload.error) return <ErrorState message={payload.error} />
 
   const data = payload.data as DriveData | null

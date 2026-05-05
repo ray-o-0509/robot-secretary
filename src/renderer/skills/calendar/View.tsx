@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
+import { LoadingState } from '../../display/components/LoadingState'
 import type { PanelPayload } from '../../display/types'
 
 type CalendarData = {
@@ -24,6 +26,8 @@ interface Props {
 
 export function CalendarView({ payload }: Props) {
   const { t } = useTranslation()
+
+  if (payload.loading && !payload.data) return <LoadingState count={3} />
 
   if (payload.error) {
     return <ErrorState message={payload.error} />
@@ -87,7 +91,7 @@ export function CalendarView({ payload }: Props) {
   )
 }
 
-function EventCard({ event, t }: { event: CalendarData['events'][number]; t: (key: string) => string }) {
+function EventCard({ event, t }: { event: CalendarData['events'][number]; t: TFunction }) {
   return (
     <Card accent="cyan">
       <div
@@ -127,7 +131,7 @@ function EventCard({ event, t }: { event: CalendarData['events'][number]; t: (ke
   )
 }
 
-function formatTime(e: CalendarData['events'][number], t: (key: string) => string): string {
+function formatTime(e: CalendarData['events'][number], t: TFunction): string {
   if (e.allDay) return t('calendar.allDay')
   if (!e.start) return ''
   const start = new Date(e.start)
@@ -137,7 +141,7 @@ function formatTime(e: CalendarData['events'][number], t: (key: string) => strin
   return `${fmt(start)} - ${fmt(end)}`
 }
 
-function groupByDate(events: CalendarData['events'], t: (key: string, opts?: object) => unknown) {
+function groupByDate(events: CalendarData['events'], t: TFunction) {
   const days = t('calendar.daysShort', { returnObjects: true }) as string[]
   const groups = new Map<string, CalendarData['events']>()
   for (const e of events) {
@@ -150,7 +154,7 @@ function groupByDate(events: CalendarData['events'], t: (key: string, opts?: obj
   return groups
 }
 
-function emptyMessage(type: PanelPayload['type'], t: (key: string) => string): string {
+function emptyMessage(type: PanelPayload['type'], t: TFunction): string {
   if (type === 'calendar_today') return t('calendar.noEventsToday')
   if (type === 'calendar_tomorrow') return t('calendar.noEventsTomorrow')
   return t('calendar.noEvents')

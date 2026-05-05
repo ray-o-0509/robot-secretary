@@ -3,6 +3,7 @@ import { CYAN, FONT_MONO, MAGENTA } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
+import { LoadingState } from '../../display/components/LoadingState'
 import type { DashboardPayload, NewsData, PanelPayload } from '../../display/types'
 
 const TAG_COLORS: Record<string, string> = {
@@ -21,6 +22,8 @@ interface Props {
 
 export function NewsView({ payload }: Props) {
   const { t } = useTranslation()
+
+  if (payload.loading && !payload.data) return <LoadingState count={5} />
 
   if (payload.error) {
     return <ErrorState message={payload.error} hint={t('news.dbHint')} />

@@ -22,11 +22,19 @@ import {
   RiCalendar2Line,
   RiHardDriveLine,
   RiFingerprintLine,
+  RiKeyLine,
+  RiEyeLine,
+  RiEyeOffLine,
+  RiLockLine,
+  RiMicLine,
+  RiComputerLine,
+  RiCursorLine,
+  RiExternalLinkLine,
 } from 'react-icons/ri'
 import i18n, { toLng } from '../i18n'
 import type { MemorySnapshot, Procedure } from '../App'
 
-type Tab = 'profile' | 'memory' | 'apps' | 'language' | 'google' | 'appearance' | 'skills'
+type Tab = 'profile' | 'memory' | 'apps' | 'language' | 'google' | 'appearance' | 'skills' | 'permissions'
 
 type ProfileItems = Record<string, string>
 
@@ -40,13 +48,14 @@ type DefaultApps = {
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 const NAV_ITEMS: { id: Tab; icon: React.ReactNode; labelKey: string }[] = [
-  { id: 'profile',    icon: <RiUser3Line size={18} />,       labelKey: 'settings.tabs.profile' },
-  { id: 'memory',     icon: <RiBrainLine size={18} />,       labelKey: 'settings.tabs.memory' },
-  { id: 'google',     icon: <RiGoogleLine size={18} />,      labelKey: 'settings.tabs.google' },
-  { id: 'skills',     icon: <RiToolsLine size={18} />,       labelKey: 'settings.tabs.skills' },
-  { id: 'apps',       icon: <RiApps2Line size={18} />,       labelKey: 'settings.tabs.apps' },
-  { id: 'appearance', icon: <RiPaletteLine size={18} />,     labelKey: 'settings.tabs.appearance' },
-  { id: 'language',   icon: <RiTranslate2 size={18} />,      labelKey: 'settings.tabs.language' },
+  { id: 'profile',     icon: <RiUser3Line size={18} />,      labelKey: 'settings.tabs.profile' },
+  { id: 'memory',      icon: <RiBrainLine size={18} />,      labelKey: 'settings.tabs.memory' },
+  { id: 'google',      icon: <RiGoogleLine size={18} />,     labelKey: 'settings.tabs.google' },
+  { id: 'skills',      icon: <RiToolsLine size={18} />,      labelKey: 'settings.tabs.skills' },
+  { id: 'permissions', icon: <RiLockLine size={18} />,       labelKey: 'settings.tabs.permissions' },
+  { id: 'apps',        icon: <RiApps2Line size={18} />,      labelKey: 'settings.tabs.apps' },
+  { id: 'appearance',  icon: <RiPaletteLine size={18} />,    labelKey: 'settings.tabs.appearance' },
+  { id: 'language',    icon: <RiTranslate2 size={18} />,     labelKey: 'settings.tabs.language' },
 ]
 
 export function SettingsApp() {
@@ -137,13 +146,14 @@ export function SettingsApp() {
 
         {/* Scrollable body — no-drag */}
         <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '20px 24px 28px' }}>
-          {tab === 'profile'    && <ProfileTab />}
-          {tab === 'memory'     && <MemoryTab />}
-          {tab === 'google'     && <GoogleAccountsTab />}
-          {tab === 'skills'     && <SkillsTab />}
-          {tab === 'apps'       && <AppsTab appRows={APP_ROWS} />}
-          {tab === 'appearance' && <AppearanceTab />}
-          {tab === 'language'   && <LanguageTab />}
+          {tab === 'profile'     && <ProfileTab />}
+          {tab === 'memory'      && <MemoryTab />}
+          {tab === 'google'      && <GoogleAccountsTab />}
+          {tab === 'skills'      && <SkillsTab />}
+          {tab === 'permissions' && <PermissionsTab />}
+          {tab === 'apps'        && <AppsTab appRows={APP_ROWS} />}
+          {tab === 'appearance'  && <AppearanceTab />}
+          {tab === 'language'    && <LanguageTab />}
         </div>
       </main>
     </div>
@@ -155,6 +165,7 @@ export function SettingsApp() {
 function ProfileTab() {
   const { t } = useTranslation()
   const [items, setItems] = useState<ProfileItems>({})
+  const [loaded, setLoaded] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [addingNew, setAddingNew] = useState(false)
@@ -165,6 +176,7 @@ function ProfileTab() {
   const load = useCallback(async () => {
     const result = await window.electronAPI.settingsGetProfile()
     setItems(result as ProfileItems)
+    setLoaded(true)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -205,6 +217,8 @@ function ProfileTab() {
   }
 
   const entries = Object.entries(items)
+
+  if (!loaded) return <SettingsSkeleton rows={3} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -295,10 +309,12 @@ type MemoryListKind = 'facts' | 'preferences' | 'ongoing_topics'
 function MemoryTab() {
   const { t } = useTranslation()
   const [memory, setMemory] = useState<MemorySnapshot>(EMPTY_MEMORY)
+  const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
     const m = await window.electronAPI.settingsGetMemory()
     setMemory(m)
+    setLoaded(true)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -325,6 +341,8 @@ function MemoryTab() {
     const wiped = await window.electronAPI.settingsResetMemory()
     setMemory(wiped)
   }
+
+  if (!loaded) return <SettingsSkeleton rows={4} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -654,6 +672,173 @@ function ProcedureSection({
   )
 }
 
+// ── Permissions Tab ──────────────────────────────────────────────────────────
+
+type PermissionStatus = {
+  micPermission: string
+  screenPermission: string
+  accessibilityPermission: boolean
+}
+
+type PermItem = {
+  id: 'microphone' | 'screen' | 'accessibility'
+  label: string
+  description: string
+  icon: React.ReactNode
+  granted: boolean
+  statusLabel: string
+}
+
+function PermissionsTab() {
+  const [status, setStatus] = useState<PermissionStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const s = await window.electronAPI.setupGetStatus()
+      setStatus({
+        micPermission: s.micPermission,
+        screenPermission: s.screenPermission,
+        accessibilityPermission: s.accessibilityPermission,
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  const open = (type: 'microphone' | 'screen' | 'accessibility') => {
+    window.electronAPI.setupOpenSettings(type)
+  }
+
+  if (loading || !status) {
+    return <SettingsSkeleton rows={3} />
+  }
+
+  const items: PermItem[] = [
+    {
+      id: 'microphone',
+      label: 'マイク',
+      description: '音声会話（Gemini Live PTT）に必要です',
+      icon: <RiMicLine size={18} />,
+      granted: status.micPermission === 'granted',
+      statusLabel: status.micPermission === 'granted' ? '許可済み'
+        : status.micPermission === 'denied' ? '拒否済み' : '未設定',
+    },
+    {
+      id: 'screen',
+      label: '画面収録',
+      description: 'スクリーン共有・画面キャプチャ機能に必要です',
+      icon: <RiComputerLine size={18} />,
+      granted: status.screenPermission === 'granted',
+      statusLabel: status.screenPermission === 'granted' ? '許可済み'
+        : status.screenPermission === 'denied' ? '拒否済み' : '未設定',
+    },
+    {
+      id: 'accessibility',
+      label: 'アクセシビリティ',
+      description: 'グローバルホットキー（PTT）の検知に必要です',
+      icon: <RiCursorLine size={18} />,
+      granted: status.accessibilityPermission,
+      statusLabel: status.accessibilityPermission ? '許可済み' : '未許可',
+    },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 6px', lineHeight: 1.6 }}>
+        macOS のシステム権限の状態を確認できます。権限が不足している場合はシステム設定を開いて許可してください。
+      </p>
+
+      {items.map((item) => (
+        <div
+          key={item.id}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '12px 14px',
+            background: item.granted ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+            border: `1px solid ${item.granted ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+            borderRadius: 10,
+          }}
+        >
+          <span style={{ color: item.granted ? '#4ade80' : '#f87171', flexShrink: 0 }}>
+            {item.icon}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{item.label}</span>
+              <span style={{
+                fontSize: 9,
+                padding: '2px 6px',
+                borderRadius: 4,
+                fontWeight: 600,
+                background: item.granted ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                color: item.granted ? '#4ade80' : '#f87171',
+              }}>
+                {item.statusLabel}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{item.description}</div>
+          </div>
+          {!item.granted && (
+            <button
+              onClick={() => open(item.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 600,
+                background: 'rgba(99,102,241,0.2)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: 7,
+                color: '#a5b4fc',
+                cursor: 'pointer',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <RiExternalLinkLine size={12} />
+              設定を開く
+            </button>
+          )}
+          {item.granted && (
+            <span style={{ color: '#4ade80', flexShrink: 0 }}>
+              <RiCheckLine size={18} />
+            </span>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={() => void load()}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          alignSelf: 'flex-start',
+          marginTop: 4,
+          padding: '7px 14px',
+          fontSize: 11,
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 7,
+          color: '#94a3b8',
+          cursor: 'pointer',
+        }}
+      >
+        <RiRefreshLine size={13} />
+        再確認
+      </button>
+    </div>
+  )
+}
+
 // ── Google Accounts Tab ──────────────────────────────────────────────────────
 
 type GoogleAccount = {
@@ -830,7 +1015,7 @@ function GoogleAccountsTab() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {loading && accounts.length === 0 && <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>...</div>}
+        {loading && accounts.length === 0 && <SettingsSkeleton rows={2} />}
         {!loading && accounts.length === 0 && <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>{t('settings.google.empty')}</div>}
         {accounts.map((acc) => (
           <AccountRow
@@ -919,24 +1104,35 @@ function AccountRow({
 
 // ── Skills Tab ───────────────────────────────────────────────────────────────
 
+type SkillSecret = { key: string; label: string; hint?: string }
+
 type SkillInfo = {
   id: string
   label: string
   description: string
   tools: string[]
   enabled: boolean
+  secrets: SkillSecret[]
 }
 
 function SkillsTab() {
   const { t } = useTranslation()
   const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
+  const [needsRestart, setNeedsRestart] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const list = await window.electronAPI.settingsListSkills()
+      const [list, keys] = await Promise.all([
+        window.electronAPI.settingsListSkills(),
+        window.electronAPI.authListApiKeys?.() ?? [],
+      ])
       setSkills(list)
+      const status: Record<string, boolean> = {}
+      for (const k of keys) status[k.name] = k.isSet
+      setApiKeyStatus(status)
     } finally {
       setLoading(false)
     }
@@ -953,23 +1149,106 @@ function SkillsTab() {
     }
   }
 
-  if (loading && skills.length === 0) {
-    return <div style={{ fontSize: 12, color: '#64748b' }}>...</div>
+  const onSecretSaved = (keyName: string, isSet: boolean) => {
+    setApiKeyStatus((prev) => ({ ...prev, [keyName]: isSet }))
+    if (isSet) setNeedsRestart(true)
   }
+
+  if (loading && skills.length === 0) {
+    return <SettingsSkeleton rows={4} />
+  }
+
+  const CORE_KEYS: SkillSecret[] = [
+    { key: 'GEMINI_API_KEY',    label: 'Gemini API Key',    hint: 'Gemini Live 音声会話とメモリ要約で使用' },
+    { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', hint: 'Claude エージェント (delegate_task) で使用' },
+  ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 6px', lineHeight: 1.6 }}>
+      {/* ── 再起動バナー ── */}
+      {needsRestart && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '10px 14px',
+          background: 'rgba(251,191,36,0.1)',
+          border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>⚡</span>
+            <span style={{ fontSize: 12, color: '#fde68a' }}>
+              APIキーを反映するには再起動が必要です
+            </span>
+          </div>
+          <button
+            onClick={() => window.electronAPI.authRelaunch?.()}
+            style={{
+              background: 'rgba(251,191,36,0.2)',
+              border: '1px solid rgba(251,191,36,0.4)',
+              borderRadius: 6,
+              color: '#fbbf24',
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '4px 12px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            今すぐ再起動
+          </button>
+        </div>
+      )}
+      {/* ── コアAPIキー ── */}
+      <div style={{
+        padding: '12px 14px',
+        background: 'rgba(99,102,241,0.06)',
+        border: '1px solid rgba(99,102,241,0.2)',
+        borderRadius: 9,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#a5b4fc', marginBottom: 10 }}>
+          コア API キー
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {CORE_KEYS.map((s) => (
+            <SecretRow
+              key={s.key}
+              keyName={s.key}
+              label={s.label}
+              hint={s.hint}
+              isSet={apiKeyStatus[s.key] ?? false}
+              onSaved={onSecretSaved}
+            />
+          ))}
+        </div>
+      </div>
+
+      <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 2px', lineHeight: 1.6 }}>
         {t('settings.skills.description')}
       </p>
       {skills.map((s) => (
-        <SkillRow key={s.id} skill={s} onToggle={(next) => toggle(s.id, next)} />
+        <SkillRow
+          key={s.id}
+          skill={s}
+          apiKeyStatus={apiKeyStatus}
+          onToggle={(next) => toggle(s.id, next)}
+          onSecretSaved={onSecretSaved}
+        />
       ))}
     </div>
   )
 }
 
-function SkillRow({ skill, onToggle }: { skill: SkillInfo; onToggle: (next: boolean) => void }) {
+function SkillRow({
+  skill, apiKeyStatus, onToggle, onSecretSaved,
+}: {
+  skill: SkillInfo
+  apiKeyStatus: Record<string, boolean>
+  onToggle: (next: boolean) => void
+  onSecretSaved: (keyName: string, isSet: boolean) => void
+}) {
   return (
     <div style={{
       display: 'flex',
@@ -1009,6 +1288,145 @@ function SkillRow({ skill, onToggle }: { skill: SkillInfo; onToggle: (next: bool
           </span>
         ))}
       </div>
+      {skill.secrets && skill.secrets.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          marginTop: 4,
+          paddingTop: 10,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+        }}>
+          {skill.secrets.map((s) => (
+            <SecretRow
+              key={s.key}
+              keyName={s.key}
+              label={s.label}
+              hint={s.hint}
+              isSet={apiKeyStatus[s.key] ?? false}
+              onSaved={onSecretSaved}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SecretRow({
+  keyName, label, hint, isSet, onSaved,
+}: {
+  keyName: string
+  label: string
+  hint?: string
+  isSet: boolean
+  onSaved: (keyName: string, isSet: boolean) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [show, setShow] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!value.trim()) return
+    setSaving(true)
+    try {
+      await window.electronAPI.settingsSetSecret(keyName, value.trim())
+      onSaved(keyName, true)
+      setEditing(false)
+      setValue('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async () => {
+    await window.electronAPI.settingsSetSecret(keyName, '')
+    onSaved(keyName, false)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <RiKeyLine size={12} style={{ color: '#64748b', flexShrink: 0 }} />
+        <span style={{ fontSize: 11, color: '#94a3b8', flex: 1 }}>{label}</span>
+        {isSet ? (
+          <span style={{
+            fontSize: 9, padding: '2px 6px',
+            background: 'rgba(34,197,94,0.12)', color: '#4ade80',
+            borderRadius: 3, fontWeight: 600,
+          }}>設定済み</span>
+        ) : (
+          <span style={{
+            fontSize: 9, padding: '2px 6px',
+            background: 'rgba(251,191,36,0.1)', color: '#fbbf24',
+            borderRadius: 3,
+          }}>未設定</span>
+        )}
+        {isSet && !editing && (
+          <button
+            onClick={remove}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 2 }}
+          >
+            <RiDeleteBinLine size={13} />
+          </button>
+        )}
+        <button
+          onClick={() => { setEditing((v) => !v); setValue(''); setShow(false) }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', padding: 2 }}
+        >
+          {editing ? <RiCloseLine size={13} /> : <RiPencilLine size={13} />}
+        </button>
+      </div>
+      {hint && !editing && (
+        <span style={{ fontSize: 10, color: '#475569', marginLeft: 20 }}>{hint}</span>
+      )}
+      {editing && (
+        <div style={{ display: 'flex', gap: 6, marginLeft: 20 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              type={show ? 'text' : 'password'}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void save() }}
+              placeholder={isSet ? '新しい値を入力...' : '値を入力...'}
+              autoFocus
+              style={{
+                width: '100%',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: 6,
+                color: '#e2e8f0',
+                fontSize: 11,
+                padding: '5px 28px 5px 8px',
+                fontFamily: 'monospace',
+                outline: 'none',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShow((v) => !v)}
+              style={{
+                position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 0,
+              }}
+            >
+              {show ? <RiEyeOffLine size={12} /> : <RiEyeLine size={12} />}
+            </button>
+          </div>
+          <button
+            onClick={() => void save()}
+            disabled={saving || !value.trim()}
+            style={{
+              background: 'rgba(99,102,241,0.8)', border: 'none', borderRadius: 6,
+              color: '#fff', fontSize: 11, padding: '5px 10px', cursor: 'pointer',
+              opacity: saving || !value.trim() ? 0.5 : 1,
+            }}
+          >
+            <RiCheckLine size={13} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1456,7 +1874,7 @@ function AppearanceTab() {
     setSize(res.size)
   }, [min, max])
 
-  if (!loaded) return null
+  if (!loaded) return <SettingsSkeleton rows={2} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1588,6 +2006,80 @@ function IconBtn({
   )
 }
 
+// ── Skeleton helpers ────────────────────────────────────────────────────────
+
+const SETTINGS_SHIMMER_STYLES = `
+@keyframes settings-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes settings-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.7; }
+}
+`
+
+function SkeletonBar({ width = '60%', height = 12, delay = 0 }: { width?: string | number; height?: number; delay?: number }) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        borderRadius: 5,
+        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.05) 100%)',
+        backgroundSize: '200% 100%',
+        animation: `settings-shimmer 1.8s ease-in-out infinite, settings-pulse 2s ease-in-out infinite`,
+        animationDelay: `${delay}s, ${delay + 0.3}s`,
+      }}
+    />
+  )
+}
+
+function SkeletonRow({ delay = 0, wide = false }: { delay?: number; wide?: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 12px',
+        background: 'rgba(255,255,255,0.03)',
+        borderRadius: 8,
+        border: '1px solid rgba(255,255,255,0.05)',
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: 'rgba(255,255,255,0.06)',
+          flexShrink: 0,
+          animation: `settings-pulse 2s ease-in-out ${delay}s infinite`,
+        }}
+      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <SkeletonBar width={wide ? '55%' : '40%'} height={11} delay={delay} />
+        <SkeletonBar width={wide ? '80%' : '65%'} height={9} delay={delay + 0.15} />
+      </div>
+      <SkeletonBar width={52} height={22} delay={delay + 0.1} />
+    </div>
+  )
+}
+
+function SettingsSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <>
+      <style>{SETTINGS_SHIMMER_STYLES}</style>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {Array.from({ length: rows }).map((_, i) => (
+          <SkeletonRow key={i} delay={i * 0.1} wide={i % 2 === 0} />
+        ))}
+      </div>
+    </>
+  )
+}
+
 const rowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -1623,25 +2115,6 @@ const addButtonStyle: React.CSSProperties = {
   color: '#a5b4fc',
   cursor: 'pointer',
   alignSelf: 'flex-start',
-}
-
-function saveButtonStyle(saved: boolean): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: '10px 0',
-    fontSize: 13,
-    fontWeight: 600,
-    background: saved ? 'rgba(74,222,128,0.2)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    border: saved ? '1px solid rgba(74,222,128,0.4)' : 'none',
-    borderRadius: 8,
-    color: saved ? '#4ade80' : '#fff',
-    cursor: 'pointer',
-    transition: 'background 0.2s',
-    marginTop: 4,
-  }
 }
 
 function stepButtonStyle(disabled: boolean): React.CSSProperties {

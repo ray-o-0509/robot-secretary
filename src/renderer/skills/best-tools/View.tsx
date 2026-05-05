@@ -3,6 +3,7 @@ import { CYAN, FONT_MONO } from '../../display/styles'
 import { Card } from '../../display/components/Card'
 import { EmptyState } from '../../display/components/EmptyState'
 import { ErrorState } from '../../display/components/ErrorState'
+import { LoadingState } from '../../display/components/LoadingState'
 import type { DashboardPayload, PanelPayload, ToolsData } from '../../display/types'
 
 const TAG_COLORS: Record<string, string> = {
@@ -19,6 +20,8 @@ interface Props {
 
 export function ToolsView({ payload }: Props) {
   const { t } = useTranslation()
+
+  if (payload.loading && !payload.data) return <LoadingState count={4} />
 
   if (payload.error) {
     return <ErrorState message={payload.error} hint={t('tools.dbHint')} />

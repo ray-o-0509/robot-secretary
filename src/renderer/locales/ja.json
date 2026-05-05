@@ -66,7 +66,8 @@
       "language": "言語",
       "google": "Googleアカウント",
       "appearance": "外観",
-      "skills": "スキル"
+      "skills": "スキル",
+      "permissions": "権限"
     },
     "skills": {
       "description": "ベガが使えるスキルを有効・無効に切り替えます。無効にしたスキルのツールはAIから呼び出せなくなります。"
@@ -153,6 +154,12 @@
       "label": "マイク権限",
       "denied": "システム設定で許可してください",
       "notDetermined": "ダイアログが表示されたら「OK」を押してください",
+      "granted": "許可済み"
+    },
+    "screen": {
+      "label": "画面収録権限",
+      "denied": "システム設定 > プライバシーとセキュリティ > 画面収録で許可してください",
+      "notDetermined": "設定を開いて Robot Secretary を許可してください",
       "granted": "許可済み"
     },
     "geminiKey": {

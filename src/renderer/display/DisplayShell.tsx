@@ -89,7 +89,7 @@ export function DisplayShell({ label, fetchedAt, loading = false, onRefresh, onC
         {label}
       </div>
 
-      {/* 取得時刻 */}
+      {/* 取得時刻 / ローディングインジケーター */}
       <div
         style={{
           position: 'absolute',
@@ -101,9 +101,27 @@ export function DisplayShell({ label, fetchedAt, loading = false, onRefresh, onC
           color: 'rgba(0, 240, 255, 0.7)',
           pointerEvents: 'none',
           whiteSpace: 'nowrap',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
         }}
       >
-        {loading ? 'FETCHING…' : fetchedAt ? formatFetchedAt(fetchedAt) : ''}
+        {loading && (
+          <span
+            style={{
+              display: 'inline-block',
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              border: '1.5px solid rgba(0, 240, 255, 0.3)',
+              borderTopColor: CYAN,
+              animation: 'cyber-spin 0.9s linear infinite',
+              boxShadow: `0 0 6px ${CYAN}60`,
+              flexShrink: 0,
+            }}
+          />
+        )}
+        {loading ? 'SYNCING' : fetchedAt ? formatFetchedAt(fetchedAt) : ''}
       </div>
 
       {/* CLOSE / RELOAD ボタン */}

@@ -11,6 +11,7 @@ import { WeatherApp } from './weather/WeatherApp'
 import { SetupApp } from './setup/SetupApp'
 import { SettingsApp } from './settings/SettingsApp'
 import { OverlayApp } from './overlay/OverlayApp'
+import { LoginApp } from './login/LoginApp'
 import type { PanelPayload } from './display/types'
 import { useGeminiLive } from './hooks/useGeminiLive'
 
@@ -67,9 +68,25 @@ declare global {
       onConnectionError: (cb: (err: unknown) => void) => () => void
       sendGeminiRetry: () => void
       onGeminiRetry: (cb: () => void) => () => void
-      setupGetStatus: () => Promise<unknown>
+      setupGetStatus: () => Promise<{
+        micPermission: string
+        screenPermission: string
+        accessibilityPermission: boolean
+        geminiApiKey: boolean
+        ticktickToken: boolean
+        gmailAccounts: string[]
+      }>
       setupOpenSettings: (type: string) => void
       setupLaunch: () => Promise<void>
+
+      // Auth
+      authGetStatus: () => Promise<{ isLoggedIn: boolean; email?: string; displayName?: string | null; avatarUrl?: string | null }>
+      authLogin: () => Promise<{ email: string; displayName?: string | null; avatarUrl?: string | null }>
+      authLogout: () => Promise<void>
+      authRelaunch: () => Promise<void>
+      authListApiKeys: () => Promise<Array<{ name: string; isSet: boolean }>>
+      authSetApiKey: (name: string, value: string) => Promise<void>
+      authDeleteApiKey: (name: string) => Promise<void>
 
       // Notification watch
       startNotificationWatch: () => Promise<void>
@@ -106,6 +123,12 @@ declare global {
         text: string,
       ) => Promise<MemorySnapshot>
       settingsGetLanguage: () => Promise<string>
+      settingsListSkills: () => Promise<Array<{ id: string; label: string; description: string; tools: string[]; enabled: boolean; secrets: Array<{ key: string; label: string; hint?: string }> }>>
+      settingsListCoreSecrets: () => Promise<Array<{ key: string; label: string; hint?: string }>>
+      settingsSetSkillEnabled: (id: string, enabled: boolean) => Promise<Record<string, boolean>>
+      settingsGetSecrets: () => Promise<Record<string, { set: boolean; preview: string }>>
+      settingsSetSecret: (key: string, value: string) => Promise<Record<string, { set: boolean; preview: string }>>
+      settingsGetSecretValue: (key: string) => Promise<string | undefined>
 
       // Appearance
       appearanceGetRobotSize: () => Promise<{ size: number; min: number; max: number; default: number }>
@@ -152,6 +175,81 @@ const isWeatherWindow = hash === '#weather'
 const isSetupWindow = hash === '#setup'
 const isSettingsWindow = hash === '#settings'
 const isRegionOverlayWindow = hash === '#region-overlay'
+const isLoginWindow = hash === '#login'
+
+// ログインが必要なウィンドウに掛けるガード。
+// メインプロセスは currentUser なしでこれらのウィンドウを作らないが、
+// dev モード（Vite 直接アクセス）やハッシュルーティングのズレに備えた二重チェック。
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<'loading' | 'ok' | 'ng'>('loading')
+
+  useEffect(() => {
+    if (!window.electronAPI) {
+      // Electron 外（ブラウザで直接開いた場合）は表示しない
+      setStatus('ng')
+      return
+    }
+    window.electronAPI.authGetStatus().then((s) => {
+      setStatus(s.isLoggedIn ? 'ok' : 'ng')
+    }).catch(() => setStatus('ng'))
+  }, [])
+
+  if (status === 'loading') return <AppStartingScreen />
+  if (status === 'ng') return null
+  return <>{children}</>
+}
+
+function AppStartingScreen() {
+  return (
+    <>
+      <style>{`
+        @keyframes app-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes app-fade-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+      `}</style>
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 14,
+          background: 'rgba(6, 8, 18, 0.92)',
+          animation: 'app-fade-in 0.2s ease-out',
+        }}
+      >
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            border: '2.5px solid rgba(0, 240, 255, 0.2)',
+            borderTopColor: '#00f0ff',
+            animation: 'app-spin 0.9s linear infinite',
+            boxShadow: '0 0 12px rgba(0, 240, 255, 0.4)',
+          }}
+        />
+        <span
+          style={{
+            fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+            fontSize: 9,
+            letterSpacing: 3,
+            color: 'rgba(0, 240, 255, 0.5)',
+          }}
+        >
+          INITIALIZING
+        </span>
+      </div>
+    </>
+  )
+}
 
 export default function App() {
   useEffect(() => {
@@ -161,15 +259,19 @@ export default function App() {
     return () => off?.()
   }, [])
 
+  // 認証不要ウィンドウ（ログイン・セットアップ・オーバーレイ）はそのまま返す
+  if (isLoginWindow) return <LoginApp />
   if (isSetupWindow) return <SetupApp />
   if (isSettingsWindow) return <SettingsApp />
   if (isRegionOverlayWindow) return <OverlayApp />
-  if (isChatWindow) return <ChatWindowApp />
-  if (isDisplayWindow) return <DisplayApp />
-  if (isEmailDetailWindow) return <EmailDetailApp />
-  if (isSearchWindow) return <SearchApp />
-  if (isWeatherWindow) return <WeatherApp />
-  return <RobotWindowApp />
+
+  // 認証が必要なウィンドウは AuthGate で包む
+  if (isChatWindow) return <AuthGate><ChatWindowApp /></AuthGate>
+  if (isDisplayWindow) return <AuthGate><DisplayApp /></AuthGate>
+  if (isEmailDetailWindow) return <AuthGate><EmailDetailApp /></AuthGate>
+  if (isSearchWindow) return <AuthGate><SearchApp /></AuthGate>
+  if (isWeatherWindow) return <AuthGate><WeatherApp /></AuthGate>
+  return <AuthGate><RobotWindowApp /></AuthGate>
 }
 
 function RobotWindowApp() {

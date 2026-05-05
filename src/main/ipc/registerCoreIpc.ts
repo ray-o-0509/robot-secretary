@@ -17,6 +17,15 @@ type Deps = {
 }
 
 const CHAT_HIDE_DELAY_MS = 10_000 // 10秒会話がなければチャットウィンドウを非表示
+const EXTERNAL_URL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
+
+function isSafeExternalUrl(raw: string): boolean {
+  try {
+    return EXTERNAL_URL_PROTOCOLS.has(new URL(raw).protocol)
+  } catch {
+    return false
+  }
+}
 
 export function registerCoreIpc(deps: Deps): void {
   let chatHideTimer: ReturnType<typeof setTimeout> | null = null
@@ -140,7 +149,10 @@ export function registerCoreIpc(deps: Deps): void {
   })
 
   ipcMain.handle('shell:open-url', (_event, url: string) => {
-    shell.openExternal(url)
+    if (typeof url !== 'string' || !isSafeExternalUrl(url)) {
+      throw new Error(`Blocked external URL: ${String(url)}`)
+    }
+    return shell.openExternal(url)
   })
 
   ipcMain.on('display:close', () => {
