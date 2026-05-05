@@ -940,6 +940,11 @@ let pttModifiers: 'none' | 'alt' | 'alt+shift' = 'none'
 let pttStuckTimer: NodeJS.Timeout | null = null
 const PTT_STUCK_TIMEOUT_MS = 30_000
 
+// macOS の uiohook は Option を押したまま他のキーを押すと偽の keyup Alt を発火することがある。
+// keyup 後 PTT_KEYUP_DEBOUNCE_MS 以内に keydown Alt が来たらキャンセル（誤 stop 防止）。
+let pttKeyupDebounceTimer: NodeJS.Timeout | null = null
+const PTT_KEYUP_DEBOUNCE_MS = 80
+
 function armStuckTimer() {
   if (pttStuckTimer) clearTimeout(pttStuckTimer)
   pttStuckTimer = setTimeout(() => {
@@ -971,14 +976,23 @@ function setupPTT() {
   }
 
   uIOhook.on('keydown', (e) => {
-    if (e.keycode === UiohookKey.Alt && !pttActive) {
-      // 左Option のみ（右Option = 3640 は除外）
-      pttActive = true
-      pttModifiers = e.shiftKey ? 'alt+shift' : 'alt'
-      armStuckTimer()
-      console.log('[PTT:main] keydown alt modifiers=', pttModifiers)
-      win?.webContents.send('ptt-start')
-      if (pttModifiers === 'alt+shift') regionCapture.show()
+    if (e.keycode === UiohookKey.Alt) {
+      // 偽 keyup のデバウンスタイマーが走っていたらキャンセル（押しっぱなし継続）
+      if (pttKeyupDebounceTimer) {
+        clearTimeout(pttKeyupDebounceTimer)
+        pttKeyupDebounceTimer = null
+        console.log('[PTT:main] spurious keyup cancelled, PTT continues')
+        return
+      }
+      if (!pttActive) {
+        // 左Option のみ（右Option = 3640 は除外）
+        pttActive = true
+        pttModifiers = e.shiftKey ? 'alt+shift' : 'alt'
+        armStuckTimer()
+        console.log('[PTT:main] keydown alt modifiers=', pttModifiers)
+        win?.webContents.send('ptt-start')
+        if (pttModifiers === 'alt+shift') regionCapture.show()
+      }
       return
     }
     // Shift を後から足した場合: PTT 中なら overlay を出す
@@ -1004,14 +1018,20 @@ function setupPTT() {
       regionCapture.hide()
       return
     }
-    // Alt を離した: PTT 完全終了
+    // Alt を離した: デバウンスタイマーを起動し 80ms 後も keydown が来なければ PTT 終了
     if (e.keycode === UiohookKey.Alt && pttActive) {
-      console.log('[PTT:main] keyup alt')
-      pttActive = false
-      pttModifiers = 'none'
-      disarmStuckTimer()
-      win?.webContents.send('ptt-stop')
-      regionCapture.hide()
+      console.log('[PTT:main] keyup alt (debouncing)')
+      if (pttKeyupDebounceTimer) clearTimeout(pttKeyupDebounceTimer)
+      pttKeyupDebounceTimer = setTimeout(() => {
+        pttKeyupDebounceTimer = null
+        if (!pttActive) return
+        console.log('[PTT:main] keyup alt confirmed → stop PTT')
+        pttActive = false
+        pttModifiers = 'none'
+        disarmStuckTimer()
+        win?.webContents.send('ptt-stop')
+        regionCapture.hide()
+      }, PTT_KEYUP_DEBOUNCE_MS)
       return
     }
   })
