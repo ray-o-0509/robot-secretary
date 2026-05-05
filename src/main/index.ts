@@ -1430,6 +1430,20 @@ ipcMain.on('open-web-view', (_event, url: string) => {
 
 // ========== App lifecycle ==========
 
+// 多重起動を防ぐ: 2つ目以降のインスタンスは既存ウィンドウにフォーカスして終了
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
+
+app.on('second-instance', () => {
+  // 既存インスタンスがある場合、ロボットウィンドウを前面に出す
+  if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+})
+
 app.whenReady().then(async () => {
   // ロボット本体の renderer だけ getUserMedia を許可する。
   // 外部 web view や設定画面には Chromium の media permission を渡さない。
