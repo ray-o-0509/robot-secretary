@@ -107,6 +107,7 @@ let pinnedUntil = 0
 let isMuted = false
 let pttActive = false
 let shuttingDown = false
+let authenticatedAppStarted = false
 
 // ========== Robot window/droid size ==========
 const ROBOT_SIZE_MIN = 180
@@ -722,6 +723,10 @@ function isMainRobotWebContents(webContents: Electron.WebContents): boolean {
 }
 
 function createWindow() {
+  if (win && !win.isDestroyed()) {
+    win.focus()
+    return
+  }
   if (!currentUser) {
     console.warn('[auth] Blocked robot window creation before login')
     createLoginWindow()
@@ -1461,8 +1466,6 @@ app.whenReady().then(async () => {
   registerSettingsIpc()
 
   // ── Turso Auth ────────────────────────────────────────────────────────────
-  let authenticatedAppStarted = false
-
   const startAuthenticatedApp = async (user: AppUser) => {
     if (authenticatedAppStarted) return
     authenticatedAppStarted = true
@@ -1590,6 +1593,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
+  // 初期化中は何もしない（whenReady の async 処理がウィンドウを作成するのを待つ）
+  if (!authenticatedAppStarted && !loginWin) return
   if (BrowserWindow.getAllWindows().length > 0) return
   if (!currentUser) {
     createLoginWindow()
