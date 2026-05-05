@@ -9,8 +9,7 @@ import { initMemory, shutdownMemory } from './memory'
 import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
-import { getStoredSessionToken, resolveUserFromToken, loginWithGoogle, createUserDbClient, type AppUser } from './auth/userAuth'
-import { getBootstrapDb } from './auth/userRegistry'
+import { getStoredSessionToken, resolveUserFromToken, createUserDbClient, type AppUser } from './auth/userAuth'
 import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
 import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
 import { registerAuthIpc } from './ipc/registerAuthIpc'
@@ -381,7 +380,7 @@ function registerSettingsIpc() {
       process.env[key] = trimmed
       if (key === 'GEMINI_API_KEY') process.env['VITE_GEMINI_API_KEY'] = trimmed
     } else {
-      await deleteApiKey(user.id, key, db)
+      await deleteApiKey(key, db)
       delete process.env[key]
       if (key === 'GEMINI_API_KEY') delete process.env['VITE_GEMINI_API_KEY']
     }
@@ -484,7 +483,7 @@ function registerSettingsIpc() {
 
 async function getApiKeysView(userId: string): Promise<Record<string, { set: boolean; preview: string }>> {
   const [names, values] = await Promise.all([
-    listApiKeyNames(userId, getUserDb()),
+    listApiKeyNames(getUserDb()),
     loadApiKeys(userId, getUserDb()),
   ])
   const out: Record<string, { set: boolean; preview: string }> = {}
@@ -1427,7 +1426,6 @@ app.whenReady().then(async () => {
   registerSettingsIpc()
 
   // ── Turso Auth ────────────────────────────────────────────────────────────
-  void getBootstrapDb()  // eagerly connect to bootstrap DB
   let authenticatedAppStarted = false
 
   const startAuthenticatedApp = async (user: AppUser) => {
