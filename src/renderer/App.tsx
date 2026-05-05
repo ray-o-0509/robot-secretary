@@ -177,6 +177,28 @@ const isSettingsWindow = hash === '#settings'
 const isRegionOverlayWindow = hash === '#region-overlay'
 const isLoginWindow = hash === '#login'
 
+// ログインが必要なウィンドウに掛けるガード。
+// メインプロセスは currentUser なしでこれらのウィンドウを作らないが、
+// dev モード（Vite 直接アクセス）やハッシュルーティングのズレに備えた二重チェック。
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<'loading' | 'ok' | 'ng'>('loading')
+
+  useEffect(() => {
+    if (!window.electronAPI) {
+      // Electron 外（ブラウザで直接開いた場合）は表示しない
+      setStatus('ng')
+      return
+    }
+    window.electronAPI.authGetStatus().then((s) => {
+      setStatus(s.isLoggedIn ? 'ok' : 'ng')
+    }).catch(() => setStatus('ng'))
+  }, [])
+
+  if (status === 'loading') return null
+  if (status === 'ng') return null
+  return <>{children}</>
+}
+
 export default function App() {
   useEffect(() => {
     const off = window.electronAPI?.onLanguageChange((lang) => {
@@ -185,16 +207,19 @@ export default function App() {
     return () => off?.()
   }, [])
 
+  // 認証不要ウィンドウ（ログイン・セットアップ・オーバーレイ）はそのまま返す
   if (isLoginWindow) return <LoginApp />
   if (isSetupWindow) return <SetupApp />
   if (isSettingsWindow) return <SettingsApp />
   if (isRegionOverlayWindow) return <OverlayApp />
-  if (isChatWindow) return <ChatWindowApp />
-  if (isDisplayWindow) return <DisplayApp />
-  if (isEmailDetailWindow) return <EmailDetailApp />
-  if (isSearchWindow) return <SearchApp />
-  if (isWeatherWindow) return <WeatherApp />
-  return <RobotWindowApp />
+
+  // 認証が必要なウィンドウは AuthGate で包む
+  if (isChatWindow) return <AuthGate><ChatWindowApp /></AuthGate>
+  if (isDisplayWindow) return <AuthGate><DisplayApp /></AuthGate>
+  if (isEmailDetailWindow) return <AuthGate><EmailDetailApp /></AuthGate>
+  if (isSearchWindow) return <AuthGate><SearchApp /></AuthGate>
+  if (isWeatherWindow) return <AuthGate><WeatherApp /></AuthGate>
+  return <AuthGate><RobotWindowApp /></AuthGate>
 }
 
 function RobotWindowApp() {
