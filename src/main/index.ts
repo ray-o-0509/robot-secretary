@@ -685,6 +685,20 @@ function registerSetupIpc() {
       createLoginWindow()
       throw new Error('ログインが必要です')
     }
+    const status = {
+      micPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'granted',
+      screenPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted',
+      accessibilityPermission: process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : true,
+      geminiApiKey: !!process.env.GEMINI_API_KEY,
+    }
+    if (
+      status.micPermission !== 'granted' ||
+      status.screenPermission !== 'granted' ||
+      !status.accessibilityPermission ||
+      !status.geminiApiKey
+    ) {
+      throw new Error('必要な権限または Gemini API Key が未設定です')
+    }
     if (setupWin && !setupWin.isDestroyed()) {
       setupWin.close()
       setupWin = null
@@ -701,6 +715,10 @@ function forwardRendererConsole(window: BrowserWindow, label: string) {
     const source = sourceId ? `${path.basename(sourceId)}:${line}` : `line ${line}`
     console.log(`[renderer:${label}]`, message, `(${source}, level ${level})`)
   })
+}
+
+function isMainRobotWebContents(webContents: Electron.WebContents): boolean {
+  return !!win && !win.isDestroyed() && webContents === win.webContents
 }
 
 function createWindow() {
@@ -764,7 +782,7 @@ function createWindow() {
 }
 
 function createChatWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const { height } = screen.getPrimaryDisplay().workAreaSize
   const chatW = 360
   const chatH = Math.min(560, height - 80)
 
@@ -1375,7 +1393,13 @@ ipcMain.on('email:close-detail', () => {
 // ========== Web View Window ==========
 
 ipcMain.on('open-web-view', (_event, url: string) => {
-  if (typeof url !== 'string' || !url.startsWith('http')) return
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return
   if (!webWin || webWin.isDestroyed()) {
     const { width, height } = screen.getPrimaryDisplay().workAreaSize
     const w = Math.min(1100, width - 100)
@@ -1391,7 +1415,7 @@ ipcMain.on('open-web-view', (_event, url: string) => {
     })
     webWin.on('closed', () => { webWin = null })
   }
-  webWin.loadURL(url)
+  webWin.loadURL(parsed.toString())
   webWin.focus()
 })
 
@@ -1407,14 +1431,11 @@ ipcMain.on('open-web-view', (_event, url: string) => {
 // ========== App lifecycle ==========
 
 app.whenReady().then(async () => {
-  // rendererのgetUserMediaリクエストを許可する
+  // ロボット本体の renderer だけ getUserMedia を許可する。
+  // 外部 web view や設定画面には Chromium の media permission を渡さない。
   const { session } = await import('electron')
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    if (permission === 'media') {
-      callback(true)
-    } else {
-      callback(false)
-    }
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(permission === 'media' && isMainRobotWebContents(webContents))
   })
 
   if (process.platform === 'darwin' && app.dock) {

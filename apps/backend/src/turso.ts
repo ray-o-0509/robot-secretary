@@ -32,6 +32,14 @@ export async function provisionUserDb(userId: string): Promise<{ dbName: string;
   return { dbName, dbUrl, dbToken: tokenResult.jwt }
 }
 
+export async function issueUserDbToken(dbName: string): Promise<string> {
+  const { tursoOrg, userDbTokenExpiration } = getEnv()
+  const tokenResult = await apiPost(
+    `/organizations/${tursoOrg}/databases/${dbName}/auth/tokens?expiration=${encodeURIComponent(userDbTokenExpiration)}`,
+  ) as { jwt: string }
+  return tokenResult.jwt
+}
+
 export async function applyUserDbSchema(dbUrl: string, dbToken: string): Promise<void> {
   const client = createClient({ url: dbUrl, authToken: dbToken })
   try {

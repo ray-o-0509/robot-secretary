@@ -19,6 +19,7 @@ export async function loadApiKeys(userId: string, db: Client): Promise<Record<st
   const key = await getDerivedKey(userId)
   const out: Record<string, string> = {}
   for (const row of result.rows) {
+    if (!(KNOWN_API_KEYS as readonly string[]).includes(row.key_name as string)) continue
     try {
       out[row.key_name as string] = decrypt(row.ciphertext as string, key)
     } catch (e) {
@@ -29,6 +30,9 @@ export async function loadApiKeys(userId: string, db: Client): Promise<Record<st
 }
 
 export async function saveApiKey(userId: string, keyName: string, value: string, db: Client): Promise<void> {
+  if (!(KNOWN_API_KEYS as readonly string[]).includes(keyName) || keyName.startsWith('VITE_')) {
+    throw new Error(`Unknown API key: ${keyName}`)
+  }
   const key = await getDerivedKey(userId)
   const ciphertext = encrypt(value, key)
   const id = crypto.randomUUID()
@@ -42,6 +46,9 @@ export async function saveApiKey(userId: string, keyName: string, value: string,
 }
 
 export async function deleteApiKey(keyName: string, db: Client): Promise<void> {
+  if (!(KNOWN_API_KEYS as readonly string[]).includes(keyName) || keyName.startsWith('VITE_')) {
+    throw new Error(`Unknown API key: ${keyName}`)
+  }
   await db.execute({ sql: 'DELETE FROM api_keys WHERE key_name = ?', args: [keyName] })
 }
 

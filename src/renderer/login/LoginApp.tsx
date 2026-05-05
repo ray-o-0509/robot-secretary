@@ -30,7 +30,7 @@ export function LoginApp() {
       gap: 24,
       userSelect: 'none',
       WebkitAppRegion: 'drag',
-    } satisfies DraggableStyle}>
+    } as DraggableStyle}>
       <img
         src="assets/icon.png"
         alt="Robot Secretary"
@@ -66,7 +66,7 @@ export function LoginApp() {
           fontWeight: 500,
           cursor: loading ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s',
-        } satisfies DraggableStyle}
+        } as DraggableStyle}
       >
         {loading ? 'ブラウザで認証中...' : 'Googleでサインイン'}
       </button>

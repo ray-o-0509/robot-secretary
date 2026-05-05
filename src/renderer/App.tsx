@@ -68,7 +68,14 @@ declare global {
       onConnectionError: (cb: (err: unknown) => void) => () => void
       sendGeminiRetry: () => void
       onGeminiRetry: (cb: () => void) => () => void
-      setupGetStatus: () => Promise<unknown>
+      setupGetStatus: () => Promise<{
+        micPermission: string
+        screenPermission: string
+        accessibilityPermission: boolean
+        geminiApiKey: boolean
+        ticktickToken: boolean
+        gmailAccounts: string[]
+      }>
       setupOpenSettings: (type: string) => void
       setupLaunch: () => Promise<void>
 
@@ -116,6 +123,12 @@ declare global {
         text: string,
       ) => Promise<MemorySnapshot>
       settingsGetLanguage: () => Promise<string>
+      settingsListSkills: () => Promise<Array<{ id: string; label: string; description: string; tools: string[]; enabled: boolean; secrets: Array<{ key: string; label: string; hint?: string }> }>>
+      settingsListCoreSecrets: () => Promise<Array<{ key: string; label: string; hint?: string }>>
+      settingsSetSkillEnabled: (id: string, enabled: boolean) => Promise<Record<string, boolean>>
+      settingsGetSecrets: () => Promise<Record<string, { set: boolean; preview: string }>>
+      settingsSetSecret: (key: string, value: string) => Promise<Record<string, { set: boolean; preview: string }>>
+      settingsGetSecretValue: (key: string) => Promise<string | undefined>
 
       // Appearance
       appearanceGetRobotSize: () => Promise<{ size: number; min: number; max: number; default: number }>

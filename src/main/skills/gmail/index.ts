@@ -113,6 +113,7 @@ export async function searchEmails(query: string, maxResults = 20, account?: str
           const get = (name: string) => headers.find((h) => h.name === name)?.value ?? ''
           results.push({
             id: msg.id,
+            threadId: detail.data.threadId ?? msg.id,
             account: actualAccount,
             from: get('From'),
             subject: get('Subject'),

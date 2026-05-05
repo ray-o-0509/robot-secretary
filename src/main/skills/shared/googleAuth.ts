@@ -50,7 +50,7 @@ export function listAccountsAll(): AccountEntry[] {
   return Array.from(_tokenCache.keys()).sort().map((email) => ({ email, path: '', source: 'primary' as const }))
 }
 
-export function getGoogleAuth(email?: string) {
+export function getGoogleAuth(email?: string): any {
   const accounts = listAccounts()
   const account = email ?? process.env.GMAIL_ACCOUNT ?? accounts[0]
   const cached = _tokenCache.get(account)
@@ -58,7 +58,7 @@ export function getGoogleAuth(email?: string) {
   throw new Error(`Google token not found for ${account}`)
 }
 
-function buildOAuthClient(data: GoogleTokenData) {
+function buildOAuthClient(data: GoogleTokenData): any {
   const oAuth2Client = new google.auth.OAuth2(data.client_id, data.client_secret, 'urn:ietf:wg:oauth:2.0:oob')
   oAuth2Client.setCredentials({
     access_token: data.token ?? undefined,

@@ -23,5 +23,6 @@ export function getEnv() {
     registrySecret: readRequiredEnv('ROBOT_SECRETARY_REGISTRY_SECRET'),
     sessionSecret: readRequiredEnv('BACKEND_SESSION_SECRET'),
     googleOAuthClientId: readRequiredEnv('GOOGLE_OAUTH_CLIENT_ID'),
+    userDbTokenExpiration: process.env.TURSO_USER_DB_TOKEN_EXPIRATION ?? '4w',
   }
 }

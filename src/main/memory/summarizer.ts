@@ -94,7 +94,9 @@ function buildUserPayload(
   return `# Existing Memory\n${existingJson}\n\n# Recent Conversation Transcript\n${lines}`
 }
 
-function tryParseMemory(text: string): Partial<Memory> | null {
+type SummarizerResponse = Partial<Memory> & { session_summary?: unknown }
+
+function tryParseMemory(text: string): SummarizerResponse | null {
   // Strip ```json ... ``` fences in case the model wraps the response
   const stripped = text
     .replace(/^```(?:json)?\s*/i, '')
@@ -103,7 +105,7 @@ function tryParseMemory(text: string): Partial<Memory> | null {
   try {
     const parsed = JSON.parse(stripped)
     if (typeof parsed !== 'object' || parsed === null) return null
-    return parsed as Partial<Memory>
+    return parsed as SummarizerResponse
   } catch {
     return null
   }

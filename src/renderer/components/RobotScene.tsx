@@ -157,11 +157,11 @@ function GLBRobot({
     Object.values(actions).forEach((clip) => {
       if (clip) clip.reset().play()
     })
-    return () => mixer.stopAllAction()
+    return () => { mixer.stopAllAction() }
   }, [actions, mixer])
 
   // state別エフェクト + 移動アニメーション
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (!group.current) return
 
     const vel = velocityRef?.current ?? { vx: 0, vy: 0, speed: 0 }

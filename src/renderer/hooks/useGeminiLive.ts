@@ -281,7 +281,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         (c: { name?: string }) => c.name === 'delegate_task',
       )
       onStateChangeRef.current('thinking', hasDelegate ? 'claude' : 'gemini')
-      const responses = []
+      const responses: Array<{ id: string; name: string; response: { output: string } }> = []
       for (const call of m.toolCall.functionCalls) {
         const result = await window.electronAPI.callTool(call.name, call.args)
         responses.push({ id: call.id, name: call.name, response: { output: JSON.stringify(result) } })

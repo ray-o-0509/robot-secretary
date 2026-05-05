@@ -8,7 +8,6 @@ function getBackendUrl(): string {
 
 export type BackendUser = {
   id: string
-  googleId: string
   email: string
   displayName: string | null
   avatarUrl: string | null
