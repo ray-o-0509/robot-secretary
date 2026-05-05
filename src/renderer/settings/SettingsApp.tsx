@@ -25,11 +25,16 @@ import {
   RiKeyLine,
   RiEyeLine,
   RiEyeOffLine,
+  RiLockLine,
+  RiMicLine,
+  RiComputerLine,
+  RiCursorLine,
+  RiExternalLinkLine,
 } from 'react-icons/ri'
 import i18n, { toLng } from '../i18n'
 import type { MemorySnapshot, Procedure } from '../App'
 
-type Tab = 'profile' | 'memory' | 'apps' | 'language' | 'google' | 'appearance' | 'skills'
+type Tab = 'profile' | 'memory' | 'apps' | 'language' | 'google' | 'appearance' | 'skills' | 'permissions'
 
 type ProfileItems = Record<string, string>
 
@@ -43,13 +48,14 @@ type DefaultApps = {
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 const NAV_ITEMS: { id: Tab; icon: React.ReactNode; labelKey: string }[] = [
-  { id: 'profile',    icon: <RiUser3Line size={18} />,       labelKey: 'settings.tabs.profile' },
-  { id: 'memory',     icon: <RiBrainLine size={18} />,       labelKey: 'settings.tabs.memory' },
-  { id: 'google',     icon: <RiGoogleLine size={18} />,      labelKey: 'settings.tabs.google' },
-  { id: 'skills',     icon: <RiToolsLine size={18} />,       labelKey: 'settings.tabs.skills' },
-  { id: 'apps',       icon: <RiApps2Line size={18} />,       labelKey: 'settings.tabs.apps' },
-  { id: 'appearance', icon: <RiPaletteLine size={18} />,     labelKey: 'settings.tabs.appearance' },
-  { id: 'language',   icon: <RiTranslate2 size={18} />,      labelKey: 'settings.tabs.language' },
+  { id: 'profile',     icon: <RiUser3Line size={18} />,      labelKey: 'settings.tabs.profile' },
+  { id: 'memory',      icon: <RiBrainLine size={18} />,      labelKey: 'settings.tabs.memory' },
+  { id: 'google',      icon: <RiGoogleLine size={18} />,     labelKey: 'settings.tabs.google' },
+  { id: 'skills',      icon: <RiToolsLine size={18} />,      labelKey: 'settings.tabs.skills' },
+  { id: 'permissions', icon: <RiLockLine size={18} />,       labelKey: 'settings.tabs.permissions' },
+  { id: 'apps',        icon: <RiApps2Line size={18} />,      labelKey: 'settings.tabs.apps' },
+  { id: 'appearance',  icon: <RiPaletteLine size={18} />,    labelKey: 'settings.tabs.appearance' },
+  { id: 'language',    icon: <RiTranslate2 size={18} />,     labelKey: 'settings.tabs.language' },
 ]
 
 export function SettingsApp() {
@@ -140,13 +146,14 @@ export function SettingsApp() {
 
         {/* Scrollable body — no-drag */}
         <div style={{ ...noDrag, flex: 1, overflowY: 'auto', padding: '20px 24px 28px' }}>
-          {tab === 'profile'    && <ProfileTab />}
-          {tab === 'memory'     && <MemoryTab />}
-          {tab === 'google'     && <GoogleAccountsTab />}
-          {tab === 'skills'     && <SkillsTab />}
-          {tab === 'apps'       && <AppsTab appRows={APP_ROWS} />}
-          {tab === 'appearance' && <AppearanceTab />}
-          {tab === 'language'   && <LanguageTab />}
+          {tab === 'profile'     && <ProfileTab />}
+          {tab === 'memory'      && <MemoryTab />}
+          {tab === 'google'      && <GoogleAccountsTab />}
+          {tab === 'skills'      && <SkillsTab />}
+          {tab === 'permissions' && <PermissionsTab />}
+          {tab === 'apps'        && <AppsTab appRows={APP_ROWS} />}
+          {tab === 'appearance'  && <AppearanceTab />}
+          {tab === 'language'    && <LanguageTab />}
         </div>
       </main>
     </div>
@@ -657,6 +664,173 @@ function ProcedureSection({
   )
 }
 
+// ── Permissions Tab ──────────────────────────────────────────────────────────
+
+type PermissionStatus = {
+  micPermission: string
+  screenPermission: string
+  accessibilityPermission: boolean
+}
+
+type PermItem = {
+  id: 'microphone' | 'screen' | 'accessibility'
+  label: string
+  description: string
+  icon: React.ReactNode
+  granted: boolean
+  statusLabel: string
+}
+
+function PermissionsTab() {
+  const [status, setStatus] = useState<PermissionStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const s = await window.electronAPI.setupGetStatus()
+      setStatus({
+        micPermission: s.micPermission,
+        screenPermission: s.screenPermission,
+        accessibilityPermission: s.accessibilityPermission,
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  const open = (type: 'microphone' | 'screen' | 'accessibility') => {
+    window.electronAPI.setupOpenSettings(type)
+  }
+
+  if (loading || !status) {
+    return <div style={{ fontSize: 12, color: '#64748b' }}>...</div>
+  }
+
+  const items: PermItem[] = [
+    {
+      id: 'microphone',
+      label: 'マイク',
+      description: '音声会話（Gemini Live PTT）に必要です',
+      icon: <RiMicLine size={18} />,
+      granted: status.micPermission === 'granted',
+      statusLabel: status.micPermission === 'granted' ? '許可済み'
+        : status.micPermission === 'denied' ? '拒否済み' : '未設定',
+    },
+    {
+      id: 'screen',
+      label: '画面収録',
+      description: 'スクリーン共有・画面キャプチャ機能に必要です',
+      icon: <RiComputerLine size={18} />,
+      granted: status.screenPermission === 'granted',
+      statusLabel: status.screenPermission === 'granted' ? '許可済み'
+        : status.screenPermission === 'denied' ? '拒否済み' : '未設定',
+    },
+    {
+      id: 'accessibility',
+      label: 'アクセシビリティ',
+      description: 'グローバルホットキー（PTT）の検知に必要です',
+      icon: <RiCursorLine size={18} />,
+      granted: status.accessibilityPermission,
+      statusLabel: status.accessibilityPermission ? '許可済み' : '未許可',
+    },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 6px', lineHeight: 1.6 }}>
+        macOS のシステム権限の状態を確認できます。権限が不足している場合はシステム設定を開いて許可してください。
+      </p>
+
+      {items.map((item) => (
+        <div
+          key={item.id}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '12px 14px',
+            background: item.granted ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+            border: `1px solid ${item.granted ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+            borderRadius: 10,
+          }}
+        >
+          <span style={{ color: item.granted ? '#4ade80' : '#f87171', flexShrink: 0 }}>
+            {item.icon}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{item.label}</span>
+              <span style={{
+                fontSize: 9,
+                padding: '2px 6px',
+                borderRadius: 4,
+                fontWeight: 600,
+                background: item.granted ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                color: item.granted ? '#4ade80' : '#f87171',
+              }}>
+                {item.statusLabel}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{item.description}</div>
+          </div>
+          {!item.granted && (
+            <button
+              onClick={() => open(item.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 600,
+                background: 'rgba(99,102,241,0.2)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: 7,
+                color: '#a5b4fc',
+                cursor: 'pointer',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <RiExternalLinkLine size={12} />
+              設定を開く
+            </button>
+          )}
+          {item.granted && (
+            <span style={{ color: '#4ade80', flexShrink: 0 }}>
+              <RiCheckLine size={18} />
+            </span>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={() => void load()}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          alignSelf: 'flex-start',
+          marginTop: 4,
+          padding: '7px 14px',
+          fontSize: 11,
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 7,
+          color: '#94a3b8',
+          cursor: 'pointer',
+        }}
+      >
+        <RiRefreshLine size={13} />
+        再確認
+      </button>
+    </div>
+  )
+}
+
 // ── Google Accounts Tab ──────────────────────────────────────────────────────
 
 type GoogleAccount = {
@@ -1149,7 +1323,7 @@ function SecretRow({
     if (!value.trim()) return
     setSaving(true)
     try {
-      await window.electronAPI.authSetApiKey?.(keyName, value.trim())
+      await window.electronAPI.settingsSetSecret(keyName, value.trim())
       onSaved(keyName, true)
       setEditing(false)
       setValue('')
@@ -1159,7 +1333,7 @@ function SecretRow({
   }
 
   const remove = async () => {
-    await window.electronAPI.authDeleteApiKey?.(keyName)
+    await window.electronAPI.settingsSetSecret(keyName, '')
     onSaved(keyName, false)
   }
 
@@ -1859,25 +2033,6 @@ const addButtonStyle: React.CSSProperties = {
   color: '#a5b4fc',
   cursor: 'pointer',
   alignSelf: 'flex-start',
-}
-
-function saveButtonStyle(saved: boolean): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: '10px 0',
-    fontSize: 13,
-    fontWeight: 600,
-    background: saved ? 'rgba(74,222,128,0.2)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    border: saved ? '1px solid rgba(74,222,128,0.4)' : 'none',
-    borderRadius: 8,
-    color: saved ? '#4ade80' : '#fff',
-    cursor: 'pointer',
-    transition: 'background 0.2s',
-    marginTop: 4,
-  }
 }
 
 function stepButtonStyle(disabled: boolean): React.CSSProperties {

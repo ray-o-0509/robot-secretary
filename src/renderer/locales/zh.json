@@ -66,7 +66,8 @@
       "language": "语言",
       "google": "Google 账号",
       "appearance": "外观",
-      "skills": "技能"
+      "skills": "技能",
+      "permissions": "权限"
     },
     "skills": {
       "description": "启用或禁用各个技能。禁用的技能对应的工具将对 AI 不可见。"
