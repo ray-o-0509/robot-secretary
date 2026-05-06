@@ -25,6 +25,7 @@ export async function openApp(appName: string): Promise<{ ok: boolean; error?: s
   return new Promise((resolve) => {
     exec(`open -a "${safe}"`, async (err) => {
       if (err) {
+        console.error(`[open_app] error: ${safe} →`, err.message)
         resolve({ ok: false, error: err.message })
         return
       }

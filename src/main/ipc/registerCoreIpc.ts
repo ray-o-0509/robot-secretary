@@ -128,6 +128,7 @@ export function registerCoreIpc(deps: Deps): void {
     try {
       return await dispatchTool(toolName, args, dispatchDeps, event.sender)
     } catch (err) {
+      console.error(`[call-tool] unhandled error in ${toolName}:`, err)
       return { error: String(err) }
     }
   })

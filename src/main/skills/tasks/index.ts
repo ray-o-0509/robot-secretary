@@ -74,9 +74,9 @@ export async function getTodos() {
   const projects = projectsRes.ok ? ((await projectsRes.json()) as { id: string }[]) : []
 
   const sources = [
-    fetch(`${BASE}/project/inbox/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`${BASE}/project/inbox/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch((err) => { console.error('[get_tasks] inbox fetch error:', err); return null }),
     ...projects.map((p) =>
-      fetch(`${BASE}/project/${p.id}/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${BASE}/project/${p.id}/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch((err) => { console.error(`[get_tasks] project ${p.id} fetch error:`, err); return null }),
     ),
   ]
   const results = (await Promise.all(sources)) as ({ tasks?: RawTask[] } | null)[]

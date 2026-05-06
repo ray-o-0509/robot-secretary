@@ -66,6 +66,8 @@ export async function getInboxEmails(maxResults = 100, account?: string) {
         const { actualAccount, messages } = await getInboxFor(a, maxResults)
         return { account: actualAccount, messages, error: null as string | null }
       } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error(`[get_gmail_inbox] error: ${a} →`, raw)
         return { account: a, messages: [] as InboxEmail[], error: sanitizeGoogleError(err) }
       }
     }),
@@ -123,6 +125,8 @@ export async function searchEmails(query: string, maxResults = 20, account?: str
         }
         return { account: actualAccount, messages: results, error: null as string | null }
       } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error(`[search_gmail] error: ${a} →`, raw)
         return { account: a, messages: [] as InboxEmail[], error: sanitizeGoogleError(err) }
       }
     }),
@@ -143,8 +147,11 @@ export async function trashEmails(account: string, ids: string[]) {
     ids.map(async (id) => {
       try {
         await gmail.users.messages.trash({ userId: 'me', id })
+        console.log(`[trash_gmail] ok: ${account} ${id}`)
         return { id, ok: true as const }
       } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error(`[trash_gmail] error: ${account} ${id} →`, raw)
         return { id, ok: false as const, error: sanitizeGoogleError(err) }
       }
     }),

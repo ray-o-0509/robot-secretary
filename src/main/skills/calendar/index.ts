@@ -50,6 +50,8 @@ async function getEventsInRange(timeMin: Date, timeMax: Date) {
       try {
         return { account: a, events: await getEventsFor(a, timeMin.toISOString(), timeMax.toISOString()), error: null as string | null }
       } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error(`[get_calendar_events] error: ${a} →`, raw)
         return { account: a, events: [] as CalendarEvent[], error: sanitizeGoogleError(err) }
       }
     }),
