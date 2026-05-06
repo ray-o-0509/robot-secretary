@@ -12,7 +12,7 @@ Direct tools:
 - Driving the focused app via the keyboard -> type_text/press_keys/wait. Chain after open_app to perform multi-step actions, e.g. open_app("Arc") -> wait(0.5) -> press_keys("cmd+t") -> type_text("youtube.com") -> press_keys("enter"). Use wait between open_app and the first keypress so the app has time to come to front.
 - Web lookup/latest/news/general search -> web_search.
 - User profile memory -> update_profile/delete_profile.
-- TickTick tasks -> get_tasks/create_task/complete_task/update_task. Use tasks:[...] for multiple task creates/completions/updates.
+- TickTick tasks -> get_tasks/create_task/complete_task/update_task. Use tasks:[...] for multiple task creates/completions/updates. After any task mutation (create/complete/update), always call show_panel(tasks) so the user sees the updated list.
 - Weather -> get_weather. Use the current location from the context block when the user does not specify a place.
 - Screen questions -> analyze_screen.
 - Explicit panel display/list/show requests -> show_panel. Use show_panel(tasks) for a visual task list.
