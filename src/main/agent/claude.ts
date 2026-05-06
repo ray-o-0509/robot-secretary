@@ -57,8 +57,7 @@ export async function runClaudeTask(opts: {
       res = await client.messages.create({
         model: MODEL,
         max_tokens: LIMITS.claudeMaxTokens,
-        thinking: { type: 'adaptive' },
-        output_config: { effort: 'high' },
+        thinking: { type: 'enabled', budget_tokens: 2048 },
         system: [
           { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
           { type: 'text', text: buildDateContext() },
