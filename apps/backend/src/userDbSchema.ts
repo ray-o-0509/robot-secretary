@@ -1,9 +1,11 @@
 export const USER_DB_SCHEMA = `
 CREATE TABLE IF NOT EXISTS api_keys (
   id         TEXT PRIMARY KEY,
-  key_name   TEXT NOT NULL UNIQUE,
+  device_id  TEXT NOT NULL,
+  key_name   TEXT NOT NULL,
   ciphertext TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(device_id, key_name)
 );
 
 CREATE TABLE IF NOT EXISTS settings (

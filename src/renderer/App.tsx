@@ -160,6 +160,7 @@ declare global {
       ptyResize: (id: 'claude' | 'shell', cols: number, rows: number) => void
       ptyGetBuffer: (id: 'claude' | 'shell') => Promise<string>
       onRegionImage: (cb: (payload: { base64: string; mediaType: string }) => void) => () => void
+      loadingComplete: () => void
     }
   }
 }
@@ -176,6 +177,7 @@ const isSetupWindow = hash === '#setup'
 const isSettingsWindow = hash === '#settings'
 const isRegionOverlayWindow = hash === '#region-overlay'
 const isLoginWindow = hash === '#login'
+const isLoadingWindow = hash === '#loading'
 
 // ログインが必要なウィンドウに掛けるガード。
 // メインプロセスは currentUser なしでこれらのウィンドウを作らないが、
@@ -197,6 +199,59 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   if (status === 'loading') return <AppStartingScreen />
   if (status === 'ng') return null
   return <>{children}</>
+}
+
+function LoadingScreen() {
+  return (
+    <>
+      <style>{`
+        @keyframes ls-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes ls-fade {
+          from { opacity: 0; transform: scale(0.95); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          background: 'rgba(6, 8, 18, 0.88)',
+          borderRadius: 14,
+          animation: 'ls-fade 0.18s ease-out',
+        }}
+      >
+        <div
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
+            border: '2.5px solid rgba(0, 240, 255, 0.18)',
+            borderTopColor: '#00f0ff',
+            animation: 'ls-spin 0.85s linear infinite',
+            boxShadow: '0 0 14px rgba(0, 240, 255, 0.35)',
+          }}
+        />
+        <span
+          style={{
+            fontFamily: '"JetBrains Mono", "SF Mono", monospace',
+            fontSize: 8,
+            letterSpacing: 3,
+            color: 'rgba(0, 240, 255, 0.45)',
+          }}
+        >
+          LOADING
+        </span>
+      </div>
+    </>
+  )
 }
 
 function AppStartingScreen() {
@@ -259,7 +314,8 @@ export default function App() {
     return () => off?.()
   }, [])
 
-  // 認証不要ウィンドウ（ログイン・セットアップ・オーバーレイ）はそのまま返す
+  // 認証不要ウィンドウ（ローディング・ログイン・セットアップ・オーバーレイ）はそのまま返す
+  if (isLoadingWindow) return <LoadingScreen />
   if (isLoginWindow) return <LoginApp />
   if (isSetupWindow) return <SetupApp />
   if (isSettingsWindow) return <SettingsApp />
@@ -281,6 +337,11 @@ function RobotWindowApp() {
   const [interactive, setInteractive] = useState(false)
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmationRequest | null>(null)
   const [languageCode, setLanguageCode] = useState<string>(DEFAULT_LANGUAGE)
+  const [isModelLoaded, setIsModelLoaded] = useState(false)
+
+  useEffect(() => {
+    if (isModelLoaded) window.electronAPI?.loadingComplete()
+  }, [isModelLoaded])
 
   useEffect(() => {
     window.electronAPI?.settingsGetLanguage().then((lang) => {
@@ -376,7 +437,12 @@ function RobotWindowApp() {
 
   return (
     <div style={wrapperStyle} onMouseLeave={handleLeave}>
-      <RobotScene state={robotState} isConnected={isConnected} velocityRef={velocityRef} />
+      <RobotScene
+        state={robotState}
+        isConnected={isConnected}
+        velocityRef={velocityRef}
+        onLoad={() => setIsModelLoaded(true)}
+      />
       {pendingConfirmation && (
         <ConfirmationCard request={pendingConfirmation} onRespond={handleConfirmationRespond} />
       )}

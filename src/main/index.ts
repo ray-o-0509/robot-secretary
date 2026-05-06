@@ -10,7 +10,7 @@ import { registerCoreIpc } from './ipc/registerCoreIpc'
 import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
 import { getStoredSessionToken, resolveUserFromToken, createUserDbClient, type AppUser } from './auth/userAuth'
-import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
+import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, migrateApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
 import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
 import { registerAuthIpc } from './ipc/registerAuthIpc'
 import { initStore } from './memory/store'
@@ -81,6 +81,8 @@ const isDev = !app.isPackaged
 const iconPath = path.join(__dirname, '../../assets/icon.png')
 
 let loginWin: BrowserWindow | null = null
+let loadingWin: BrowserWindow | null = null
+let loadingCloseTimer: ReturnType<typeof setTimeout> | null = null
 let currentUser: AppUser | null = null
 let setupWin: BrowserWindow | null = null
 let settingsWin: BrowserWindow | null = null
@@ -722,6 +724,43 @@ function isMainRobotWebContents(webContents: Electron.WebContents): boolean {
   return !!win && !win.isDestroyed() && webContents === win.webContents
 }
 
+function closeLoadingWindow() {
+  if (loadingCloseTimer) { clearTimeout(loadingCloseTimer); loadingCloseTimer = null }
+  if (loadingWin && !loadingWin.isDestroyed()) { loadingWin.close(); loadingWin = null }
+}
+
+function createLoadingWindow() {
+  if (loadingWin && !loadingWin.isDestroyed()) return
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
+  const lw = 200, lh = 120
+  loadingWin = new BrowserWindow({
+    width: lw,
+    height: lh,
+    x: Math.floor(sw / 2 - lw / 2),
+    y: Math.floor(sh / 2 - lh / 2),
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    hasShadow: false,
+    skipTaskbar: true,
+    resizable: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  loadingWin.setAlwaysOnTop(true, 'floating')
+  loadingWin.setIgnoreMouseEvents(true, { forward: true })
+  if (isDev) {
+    loadingWin.loadURL(process.env['ELECTRON_RENDERER_URL']! + '#loading')
+  } else {
+    loadingWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'loading' })
+  }
+  // 万一ロード完了通知が届かなくても 20 秒で自動クローズ
+  loadingCloseTimer = setTimeout(closeLoadingWindow, 20000)
+}
+
 function createWindow() {
   if (win && !win.isDestroyed()) {
     win.focus()
@@ -732,6 +771,8 @@ function createWindow() {
     createLoginWindow()
     return
   }
+  createLoadingWindow()
+
   const { width: _w, height } = screen.getPrimaryDisplay().workAreaSize
   // 起動時は左下（チャットウィンドウの下付近）に配置
   currentX = 24 + 360 + 24  // チャットウィンドウ右端 + 余白
@@ -1448,6 +1489,8 @@ ipcMain.on('open-web-view', (_event, url: string) => {
 
 
 
+ipcMain.on('loading:complete', closeLoadingWindow)
+
 // チャットウィンドウは通常クリックスルー。言語セレクター上にカーソルが来たときだけ
 // 一時的に操作可能にする
 
@@ -1493,6 +1536,9 @@ app.whenReady().then(async () => {
     // Connect to this user's dedicated DB
     _userDb = createUserDbClient(user)
     const db = _userDb
+
+    // Run DB migrations before using api_keys
+    await migrateApiKeys(db)
 
     // Populate process.env with all API keys from DB (so all tool modules continue working)
     await populateProcessEnv(user.id, db)

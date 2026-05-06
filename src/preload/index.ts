@@ -133,6 +133,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onRegionImage: (cb: (payload: { base64: string; mediaType: string }) => void) =>
     on<[{ base64: string; mediaType: string }]>('region-image', cb),
+
+  loadingComplete: () => ipcRenderer.send('loading:complete'),
 })
 
 contextBridge.exposeInMainWorld('overlayAPI', {

@@ -283,14 +283,21 @@ class GLBErrorBoundary extends Component<
 
 // ========== Main Scene ==========
 
+function LoadNotifier({ onLoad }: { onLoad: () => void }) {
+  useEffect(() => { onLoad() }, [onLoad])
+  return null
+}
+
 export function RobotScene({
   state,
   isConnected,
   velocityRef,
+  onLoad,
 }: {
   state: RobotState
   isConnected: boolean
   velocityRef?: React.RefObject<Velocity>
+  onLoad?: () => void
 }) {
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -352,6 +359,7 @@ export function RobotScene({
       <GLBErrorBoundary onError={setLoadError}>
         <Suspense fallback={null}>
           <GLBRobot state={state} isConnected={isConnected} velocityRef={velocityRef} />
+          {onLoad && <LoadNotifier onLoad={onLoad} />}
         </Suspense>
       </GLBErrorBoundary>
 

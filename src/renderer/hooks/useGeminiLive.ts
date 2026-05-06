@@ -366,7 +366,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
       const systemText = getSystemPrompt(languageCodeRef.current, locationRef.current) + memoryInjection
 
       const handle = sessionHandleRef.current
-      const session = await (ai.live as {
+      const CONNECT_TIMEOUT_MS = 15_000
+      const connectPromise = (ai.live as {
         connect: (opts: unknown) => Promise<LiveSession>
       }).connect({
         model: MODELS.geminiLive,
@@ -413,8 +414,6 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
             if (sessionEpochRef.current !== sessionEpoch) return
             console.error('[Gemini] Error:', e)
             resetSessionState()
-            // onclose usually follows, but scheduleReconnect guards against double-scheduling
-            scheduleReconnect()
           },
           onclose: (e?: { code?: number; reason?: string }) => {
             const code = e?.code
@@ -430,10 +429,15 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
               setConnectionError({ type: 'auth', message: i18next.t('connection.authError', { code }) })
               return
             }
-            scheduleReconnect()
+            // 次のPTTまで待機（自動リトライなし）
+            console.log('[Gemini] Waiting for next PTT to reconnect')
           },
         },
       })
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Connection timed out after ${CONNECT_TIMEOUT_MS / 1000}s`)), CONNECT_TIMEOUT_MS),
+      )
+      const session = await Promise.race([connectPromise, timeoutPromise])
 
       if (sessionEpochRef.current !== sessionEpoch) {
         try {
@@ -464,7 +468,8 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         type: isNetworkErr ? 'network' : 'connect_error',
         message: isNetworkErr ? i18next.t('connection.network') : i18next.t('connection.connectError', { msg: msg.slice(0, 80) }),
       })
-      scheduleReconnect()
+      // 次のPTTまで待機（自動リトライなし）
+      console.log('[Gemini] Connection failed — waiting for next PTT to retry')
     } finally {
       connectingRef.current = false
       if (pendingConnectRef.current && !sessionRef.current && !intentionalCloseRef.current) {
@@ -472,7 +477,7 @@ export function useGeminiLive({ onStateChange, isMuted, languageCode }: Options)
         setTimeout(() => connectRef.current(), 0)
       }
     }
-  }, [handleMessage, resetSessionState, mic, playback, scheduleReconnect])
+  }, [handleMessage, resetSessionState, mic, playback])
 
   useEffect(() => { connectRef.current = connect }, [connect])
 
