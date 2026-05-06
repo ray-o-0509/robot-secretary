@@ -11,7 +11,7 @@ import { registerDisplayWindowFactory } from './display/registry'
 import * as regionCapture from './regionCapture'
 import { getStoredSessionToken, resolveUserFromToken, createUserDbClient, type AppUser } from './auth/userAuth'
 import { KNOWN_API_KEYS, deleteApiKey, listApiKeyNames, loadApiKeys, migrateApiKeys, populateProcessEnv, saveApiKey } from './auth/apiKeyStore'
-import { initSettingsStore, loadSettings, saveSettings } from './auth/settingsStore'
+import { initSettingsStore, loadSettings, saveSettings, migrateSettings } from './auth/settingsStore'
 import { registerAuthIpc } from './ipc/registerAuthIpc'
 import { initStore } from './memory/store'
 import { initGoogleAuth } from './skills/shared/googleAuth'
@@ -424,6 +424,19 @@ function registerSettingsIpc() {
     }
     const { setSkillEnabled } = await import('./skills/skill-toggle/index')
     return await setSkillEnabled(id, enabled)
+  })
+
+  ipcMain.handle('settings:get-claude-backend', async () => {
+    const settings = await loadSettings()
+    return settings.claudeBackend
+  })
+
+  ipcMain.handle('settings:set-claude-backend', async (_event, backend: unknown) => {
+    if (backend !== 'api' && backend !== 'cli') {
+      throw new Error('settings:set-claude-backend requires "api" or "cli"')
+    }
+    await saveSettings({ claudeBackend: backend })
+    return backend
   })
 
   ipcMain.handle('appearance:get-robot-size', () => ({
@@ -1539,6 +1552,7 @@ app.whenReady().then(async () => {
 
     // Run DB migrations before using api_keys
     await migrateApiKeys(db)
+    await migrateSettings(db)
 
     // Populate process.env with all API keys from DB (so all tool modules continue working)
     await populateProcessEnv(user.id, db)

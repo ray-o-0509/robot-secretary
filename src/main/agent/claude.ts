@@ -3,6 +3,7 @@ import { getEnabledToolSchemas, executeTool } from '../skills/dispatcher'
 import { captureScreen } from '../screenshot'
 import { LIMITS, MODELS } from '../../config/models'
 import { getSecretSync } from '../skills/secrets/index'
+import { loadSettings } from '../auth/settingsStore'
 import SYSTEM_PROMPT from '../../prompts/claude-delegate.md?raw'
 
 const MAX_ITERATIONS = LIMITS.claudeMaxIterations
@@ -23,6 +24,12 @@ export async function runClaudeTask(opts: {
   task: string
   includeScreenshot?: boolean
 }): Promise<string> {
+  const settings = await loadSettings().catch(() => null)
+  if (settings?.claudeBackend === 'cli') {
+    const { runClaudeTaskCli } = await import('./claudeCli')
+    return runClaudeTaskCli({ task: opts.task })
+  }
+
   const apiKey = getSecretSync('ANTHROPIC_API_KEY')
   if (!apiKey) {
     return 'ANTHROPIC_API_KEY is not set. Configure it in Settings → Skills.'

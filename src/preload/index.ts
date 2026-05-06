@@ -88,6 +88,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('settings:list-core-secrets'),
   settingsSetSkillEnabled: (id: string, enabled: boolean): Promise<Record<string, boolean>> =>
     ipcRenderer.invoke('settings:set-skill-enabled', id, enabled),
+  settingsGetClaudeBackend: (): Promise<'api' | 'cli'> =>
+    ipcRenderer.invoke('settings:get-claude-backend'),
+  settingsSetClaudeBackend: (backend: 'api' | 'cli'): Promise<'api' | 'cli'> =>
+    ipcRenderer.invoke('settings:set-claude-backend', backend),
   settingsGetSecrets: (): Promise<Record<string, { set: boolean; preview: string }>> =>
     ipcRenderer.invoke('settings:get-secrets'),
   settingsSetSecret: (key: string, value: string): Promise<Record<string, { set: boolean; preview: string }>> =>

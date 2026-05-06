@@ -1121,18 +1121,21 @@ function SkillsTab() {
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [needsRestart, setNeedsRestart] = useState(false)
+  const [claudeBackend, setClaudeBackend] = useState<'api' | 'cli'>('api')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [list, keys] = await Promise.all([
+      const [list, keys, backend] = await Promise.all([
         window.electronAPI.settingsListSkills(),
         window.electronAPI.authListApiKeys?.() ?? [],
+        window.electronAPI.settingsGetClaudeBackend(),
       ])
       setSkills(list)
       const status: Record<string, boolean> = {}
       for (const k of keys) status[k.name] = k.isSet
       setApiKeyStatus(status)
+      setClaudeBackend(backend)
     } finally {
       setLoading(false)
     }
@@ -1156,6 +1159,15 @@ function SkillsTab() {
 
   if (loading && skills.length === 0) {
     return <SettingsSkeleton rows={4} />
+  }
+
+  const toggleBackend = async (next: 'api' | 'cli') => {
+    setClaudeBackend(next)
+    try {
+      await window.electronAPI.settingsSetClaudeBackend(next)
+    } catch {
+      await load()
+    }
   }
 
   const CORE_KEYS: SkillSecret[] = [
@@ -1201,6 +1213,48 @@ function SkillsTab() {
           </button>
         </div>
       )}
+      {/* ── Claude バックエンド ── */}
+      <div style={{
+        padding: '12px 14px',
+        background: 'rgba(99,102,241,0.06)',
+        border: '1px solid rgba(99,102,241,0.2)',
+        borderRadius: 9,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#a5b4fc', marginBottom: 8 }}>
+          Claude バックエンド
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {(['api', 'cli'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => void toggleBackend(mode)}
+              style={{
+                flex: 1,
+                padding: '7px 0',
+                borderRadius: 6,
+                border: claudeBackend === mode
+                  ? '1px solid rgba(99,102,241,0.6)'
+                  : '1px solid rgba(255,255,255,0.08)',
+                background: claudeBackend === mode
+                  ? 'rgba(99,102,241,0.2)'
+                  : 'rgba(255,255,255,0.04)',
+                color: claudeBackend === mode ? '#a5b4fc' : '#64748b',
+                fontSize: 12,
+                fontWeight: claudeBackend === mode ? 600 : 400,
+                cursor: 'pointer',
+              }}
+            >
+              {mode === 'api' ? 'Anthropic API' : 'claude -p (CLI)'}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>
+          {claudeBackend === 'api'
+            ? 'Anthropic API を直接呼び出します。Gmail・カレンダー等のツールが使用可能です。ANTHROPIC_API_KEY が必要です。'
+            : 'claude -p コマンドを使用します。API キー不要。Claude Code のビルトインツール（Bash・ファイル操作等）が使用可能です。'}
+        </div>
+      </div>
+
       {/* ── コアAPIキー ── */}
       <div style={{
         padding: '12px 14px',
