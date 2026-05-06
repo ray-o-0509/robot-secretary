@@ -80,6 +80,7 @@ let pinnedUntil = 0
 let isMuted = false
 let pttActive = false
 let shuttingDown = false
+let authenticatedAppInitializing = false
 let authenticatedAppStarted = false
 
 // ========== Robot window/droid size ==========
@@ -420,7 +421,13 @@ function registerSettingsIpc() {
   ipcMain.handle('appearance:set-robot-size', async (_event, raw: unknown) => {
     const next = clampRobotSize(typeof raw === 'number' ? raw : Number(raw))
     robotSize = next
-    await saveSettings({ robotSize: next }).catch((e) => logSettings.error('Failed to save robotSize:', e))
+    try {
+      await saveSettings({ robotSize: next })
+      logSettings.log(`robotSize saved: ${next}`)
+    } catch (e) {
+      logSettings.error('Failed to save robotSize:', e)
+      // Don't throw — the in-memory resize still applies this session
+    }
     if (win && !win.isDestroyed()) {
       const [x, y] = win.getPosition()
       win.setBounds({ x, y, width: next, height: next })
@@ -782,6 +789,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
+  logAuth.log(`Robot window created: ${robotSize}x${robotSize}`)
 
   forwardRendererConsole(win, 'robot')
 
@@ -1514,80 +1522,95 @@ app.whenReady().then(async () => {
 
   // ── Turso Auth ────────────────────────────────────────────────────────────
   const startAuthenticatedApp = async (user: AppUser) => {
-    if (authenticatedAppStarted) return
-    authenticatedAppStarted = true
+    if (authenticatedAppStarted || authenticatedAppInitializing) return
+    authenticatedAppInitializing = true
 
-    // Connect to this user's dedicated DB
-    _userDb = createUserDbClient(user)
-    const db = _userDb
+    try {
+      // Connect to this user's dedicated DB
+      _userDb = createUserDbClient(user)
+      const db = _userDb
 
-    // Run DB migrations before using api_keys
-    await migrateApiKeys(db)
-    await migrateSettings(db)
+      // Run DB migrations before using api_keys
+      await migrateApiKeys(db)
+      await migrateSettings(db)
 
-    // Populate process.env with all API keys from DB (so all tool modules continue working)
-    await populateProcessEnv(user.id, db)
-    logAuth.log('process.env populated with DB keys')
+      // Populate process.env with all API keys from DB (so all tool modules continue working)
+      await populateProcessEnv(user.id, db)
+      logAuth.log('process.env populated with DB keys')
 
-    // Initialize DB-backed stores
-    initStore(user.id, db)
-    initSettingsStore(user.id, db)
-    await initGoogleAuth(user.id, db)
-    const settings = await loadSettings()
-    robotSize = clampRobotSize(settings.robotSize)
+      // Initialize DB-backed stores
+      initStore(user.id, db)
+      initSettingsStore(user.id, db)
+      await initGoogleAuth(user.id, db)
+      const settings = await loadSettings()
+      robotSize = clampRobotSize(settings.robotSize)
+      logAuth.log(`robotSize set to ${robotSize} (from settings.robotSize=${settings.robotSize})`)
+      if (win && !win.isDestroyed()) {
+        const [x, y] = win.getPosition()
+        win.setBounds({ x, y, width: robotSize, height: robotSize })
+        currentX = x
+        currentY = y
+        targetX = x
+        targetY = y
+        logAuth.warn(`Corrected early robot window bounds to ${robotSize}x${robotSize}`)
+      }
+      authenticatedAppStarted = true
 
-    // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
-    Menu.setApplicationMenu(Menu.buildFromTemplate([
-      {
-        label: app.name,
-        submenu: [
-          { label: `About ${app.name}`, role: 'about' },
-          { type: 'separator' },
-          {
-            label: 'Preferences...',
-            accelerator: 'CmdOrCtrl+,',
-            click: () => openSettingsWindow(),
-          },
-          { type: 'separator' },
-          { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
-        ],
-      },
-      {
-        label: 'Edit',
-        submenu: [
-          { role: 'undo' },
-          { role: 'redo' },
-          { type: 'separator' },
-          { role: 'cut' },
-          { role: 'copy' },
-          { role: 'paste' },
-          { role: 'selectAll' },
-        ],
-      },
-    ]))
+      // macOS 標準のアプリケーションメニュー（Cmd+, でPreferences）
+      Menu.setApplicationMenu(Menu.buildFromTemplate([
+        {
+          label: app.name,
+          submenu: [
+            { label: `About ${app.name}`, role: 'about' },
+            { type: 'separator' },
+            {
+              label: 'Preferences...',
+              accelerator: 'CmdOrCtrl+,',
+              click: () => openSettingsWindow(),
+            },
+            { type: 'separator' },
+            { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
+          ],
+        },
+        {
+          label: 'Edit',
+          submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+            { role: 'selectAll' },
+          ],
+        },
+      ]))
 
-    // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
-    const micStatus = process.platform === 'darwin'
-      ? systemPreferences.getMediaAccessStatus('microphone')
-      : 'granted'
-    const screenStatus = process.platform === 'darwin'
-      ? systemPreferences.getMediaAccessStatus('screen')
-      : 'granted'
-    const accessibilityGranted = process.platform === 'darwin'
-      ? systemPreferences.isTrustedAccessibilityClient(false)
-      : true
-    // populateProcessEnv() 済みなので process.env を確認すれば DB の状態が分かる
-    const hasGeminiKey = !!process.env.GEMINI_API_KEY
-    const needsSetup = micStatus !== 'granted' || screenStatus !== 'granted' || !accessibilityGranted || !hasGeminiKey
+      // 必須権限チェック：問題あればセットアップ画面、問題なければ直接起動
+      const micStatus = process.platform === 'darwin'
+        ? systemPreferences.getMediaAccessStatus('microphone')
+        : 'granted'
+      const screenStatus = process.platform === 'darwin'
+        ? systemPreferences.getMediaAccessStatus('screen')
+        : 'granted'
+      const accessibilityGranted = process.platform === 'darwin'
+        ? systemPreferences.isTrustedAccessibilityClient(false)
+        : true
+      // populateProcessEnv() 済みなので process.env を確認すれば DB の状態が分かる
+      const hasGeminiKey = !!process.env.GEMINI_API_KEY
+      const needsSetup = micStatus !== 'granted' || screenStatus !== 'granted' || !accessibilityGranted || !hasGeminiKey
 
-    if (needsSetup) {
-      createSetupWindow()
-    } else {
-      await initMemory(() => process.env.GEMINI_API_KEY)
-      createWindow()
-      // Pre-launch Claude Code in its dedicated PTY for the terminal panel display
-      // instead of cold-starting cc and racing the 1.5s sleep.
-      import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
+      if (needsSetup) {
+        createSetupWindow()
+      } else {
+        await initMemory(() => process.env.GEMINI_API_KEY)
+        createWindow()
+        // Pre-launch Claude Code in its dedicated PTY for the terminal panel display
+        // instead of cold-starting cc and racing the 1.5s sleep.
+        import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
+      }
+    } finally {
+      authenticatedAppInitializing = false
     }
   }
 
@@ -1645,6 +1668,7 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   // 初期化中は何もしない（whenReady の async 処理がウィンドウを作成するのを待つ）
+  if (authenticatedAppInitializing) return
   if (!authenticatedAppStarted && !loginWin) return
   if (BrowserWindow.getAllWindows().length > 0) return
   if (!currentUser) {

@@ -64,13 +64,23 @@ export async function loadSettings(): Promise<UserSettings> {
 
   const row = result.rows[0]
   const rawBackend = row.claude_backend as string | null
+  const rawRobotSize = row.robot_size
+  log.log(`robot_size from DB: ${rawRobotSize} (type: ${typeof rawRobotSize})`)
+  const robotSize = typeof rawRobotSize === 'number'
+    ? rawRobotSize
+    : typeof rawRobotSize === 'bigint'
+      ? Number(rawRobotSize)
+      : rawRobotSize != null
+        ? Number(rawRobotSize)
+        : DEFAULT_SETTINGS.robotSize
   _cached = {
     language: (row.language as string) ?? DEFAULT_SETTINGS.language,
-    robotSize: (row.robot_size as number) ?? DEFAULT_SETTINGS.robotSize,
+    robotSize: Number.isFinite(robotSize) ? robotSize : DEFAULT_SETTINGS.robotSize,
     defaultApps: parseJson(row.default_apps as string, {}),
     skillToggles: parseJson(row.skill_toggles as string, defaultSkillsEnabled()),
     claudeBackend: (rawBackend === 'cli' ? 'cli' : 'api'),
   }
+  log.log(`robotSize resolved to: ${_cached.robotSize}`)
   return { ..._cached }
 }
 
