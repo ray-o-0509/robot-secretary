@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { executeTool } from '../skills/dispatcher'
-import { pushPayload } from '../display/show-panel'
+import { pushPayload, showPanel } from '../display/show-panel'
 import { runCommand, shellQuote } from '../skills/shell/index'
 import * as timerMod from '../skills/timer/index'
 import { ptyWriteTo, ptyInjectTo } from '../skills/shell/pty'
@@ -45,12 +45,22 @@ export function formatVoiceLine(command: string, stdout: string, stderr: string)
 }
 
 
+const TASK_MUTATING_TOOLS = new Set([
+  'create_task',
+  'complete_task',
+  'complete_subtask',
+  'update_task',
+  'delete_task',
+])
+
 const DISPATCHER_PURE_TOOLS = new Set([
+  'get_projects',
   'get_tasks',
   'create_task',
   'complete_task',
   'complete_subtask',
   'update_task',
+  'delete_task',
   'get_gmail_inbox',
   'get_email_detail',
   'reply_gmail',
@@ -108,7 +118,9 @@ const MUTATING_TOOLS = new Set([
   'create_calendar_event',
   'create_task',
   'complete_task',
+  'complete_subtask',
   'update_task',
+  'delete_task',
   'create_drive_file',
   'upload_drive_file',
   'move_drive_item',
@@ -189,7 +201,9 @@ export async function dispatchTool(
       win.show()
       pushPayload(win, { type: 'timer', data: timerMod.getTimerSnapshot(), fetchedAt: Date.now() }, ready)
     }
-    if (MUTATING_TOOLS.has(toolName)) {
+    if (TASK_MUTATING_TOOLS.has(toolName)) {
+      await showPanel('tasks', { getOrCreateWindow: deps.getOrCreateDisplayWindow })
+    } else if (MUTATING_TOOLS.has(toolName)) {
       await deps.refreshActivePanel()
     }
     return { result }

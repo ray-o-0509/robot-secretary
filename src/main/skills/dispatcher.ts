@@ -20,9 +20,9 @@ type DriveMoveInput = { fileId: string; newParentId: string; account?: string }
 type DriveCopyInput = { fileId: string; newName?: string; parentId?: string; account?: string }
 type DriveTrashInput = { fileId: string; account?: string }
 type DriveShareInput = { fileId: string; email: string; role: 'reader' | 'commenter' | 'writer'; account?: string }
-type TaskCreateInput = { title: string; due?: string; priority?: 'low' | 'medium' | 'high'; projectId?: string; subtasks?: string[] }
+type TaskCreateInput = { title: string; due?: string; priority?: 'low' | 'medium' | 'high'; projectId?: string; subtasks?: string[]; description?: string }
 type TaskRef = { taskId: string; projectId: string }
-type TaskUpdateInput = TaskRef & { title?: string; due?: string | null; priority?: 'low' | 'medium' | 'high' | 'none' }
+type TaskUpdateInput = TaskRef & { title?: string; due?: string | null; priority?: 'low' | 'medium' | 'high' | 'none'; description?: string | null; addSubtasks?: string[]; updateSubtasks?: { id: string; title: string }[] }
 
 function gmailTargets(args: Record<string, unknown>): Map<string, string[]> {
   const grouped = new Map<string, string[]>()
@@ -153,6 +153,7 @@ function taskCreates(args: Record<string, unknown>): TaskCreateInput[] {
       if (typeof task.projectId === 'string') out.projectId = task.projectId
       const subs = normalizeSubtasks(task.subtasks)
       if (subs) out.subtasks = subs
+      if (typeof task.description === 'string') out.description = task.description
       return out
     })
   }
@@ -164,6 +165,8 @@ function taskCreates(args: Record<string, unknown>): TaskCreateInput[] {
   if (projectId) out.projectId = projectId
   const subs = normalizeSubtasks(args.subtasks)
   if (subs) out.subtasks = subs
+  const description = optString(args, 'description')
+  if (description) out.description = description
   return [out]
 }
 
@@ -186,13 +189,17 @@ function taskUpdates(args: Record<string, unknown>): TaskUpdateInput[] {
       return task as TaskUpdateInput
     })
   }
-  return [{
+  const out: TaskUpdateInput = {
     taskId: reqString(args, 'taskId'),
     projectId: reqString(args, 'projectId'),
-    title: args.title as string | undefined,
-    due: args.due as string | null | undefined,
-    priority: args.priority as 'low' | 'medium' | 'high' | 'none' | undefined,
-  }]
+  }
+  if (args.title !== undefined) out.title = args.title as string
+  if (args.due !== undefined) out.due = args.due as string | null
+  if (args.priority !== undefined) out.priority = args.priority as 'low' | 'medium' | 'high' | 'none'
+  if (args.description !== undefined) out.description = args.description as string | null
+  if (Array.isArray(args.addSubtasks)) out.addSubtasks = args.addSubtasks as string[]
+  if (Array.isArray(args.updateSubtasks)) out.updateSubtasks = args.updateSubtasks as { id: string; title: string }[]
+  return [out]
 }
 
 export const toolSchemas: Anthropic.Tool[] = [
@@ -316,6 +323,11 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_projects',
+    description: 'List all TickTick projects with their IDs and names. Call before create_task when the user specifies a project by name.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'get_tasks',
     description: 'Fetch all incomplete tasks from TickTick across all projects',
     input_schema: { type: 'object', properties: {} },
@@ -327,11 +339,12 @@ export const toolSchemas: Anthropic.Tool[] = [
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Task title' },
-        due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
+        due: { type: 'string', description: 'Due date: YYYY-MM-DD (all-day) or "YYYY-MM-DD HH:mm" (with time, JST)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional)' },
         projectId: { type: 'string', description: 'Project ID (optional, defaults to inbox)' },
-        subtasks: { type: 'array', items: { type: 'string' }, description: 'Optional subtask (checklist) titles to attach to the task' },
-        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId, subtasks' },
+        subtasks: { type: 'array', items: { type: 'string' }, description: 'Optional subtask (checklist) titles' },
+        description: { type: 'string', description: 'Note/description for the task (optional)' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId, subtasks, description' },
       },
     },
   },
@@ -361,6 +374,18 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'delete_task',
+    description: 'Permanently delete a TickTick task. Requires taskId and projectId from get_tasks. This cannot be undone.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID' },
+        projectId: { type: 'string', description: 'Project ID' },
+      },
+      required: ['taskId', 'projectId'],
+    },
+  },
+  {
     name: 'get_email_detail',
     description: 'Fetch the body (HTML/text) of a Gmail message. Fetch id and account from get_gmail_inbox first.',
     input_schema: {
@@ -385,15 +410,18 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
   {
     name: 'update_task',
-    description: 'Update one or more TickTick tasks. Use for changing due date, title, or priority. Fetch taskId and projectId from get_tasks first. Use tasks for batch updates.',
+    description: 'Update one or more TickTick tasks. Use for changing title, due date/time, priority, description, or subtasks. Fetch taskId and projectId from get_tasks first. Use tasks for batch updates.',
     input_schema: {
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Task ID' },
         projectId: { type: 'string', description: 'Project ID' },
         title: { type: 'string', description: 'New title (if changing)' },
-        due: { type: 'string', description: 'New due date YYYY-MM-DD. Pass null to remove the due date.' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority' },
+        due: { type: 'string', description: 'New due date: YYYY-MM-DD (all-day) or "YYYY-MM-DD HH:mm" (with time, JST). Pass null to clear.' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority ("none" to clear)' },
+        description: { type: 'string', description: 'New note/description. Pass null to clear.' },
+        addSubtasks: { type: 'array', items: { type: 'string' }, description: 'New subtask titles to append to the existing checklist' },
+        updateSubtasks: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' } }, required: ['id', 'title'] }, description: 'Update existing subtask titles by ID' },
         tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple task updates, each with taskId, projectId, and fields to change' },
       },
     },
@@ -837,9 +865,17 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       if (range === 'upcoming') return await getUpcomingEvents((args.days as number | undefined) ?? 7)
       return await getTodayEvents()
     }
+    case 'get_projects': {
+      const { getProjects } = await import('./tasks/index')
+      return await getProjects()
+    }
     case 'get_tasks': {
       const { getTodos } = await import('./tasks/index')
       return await getTodos()
+    }
+    case 'delete_task': {
+      const { deleteTask } = await import('./tasks/index')
+      return await deleteTask({ taskId: reqString(args, 'taskId'), projectId: reqString(args, 'projectId') })
     }
     case 'create_task': {
       const { createTask } = await import('./tasks/index')

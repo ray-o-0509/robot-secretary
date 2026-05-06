@@ -32,22 +32,28 @@ export const secretaryTools: ToolDeclaration[] = [
     },
   },
   {
+    name: 'get_projects',
+    description: 'List all TickTick projects (id and name). Call before create_task when the user specifies a project by name.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
     name: 'get_tasks',
     description: 'Retrieve all incomplete tasks from TickTick across all projects. Call this directly when asked about tasks or to-dos.',
     parameters: { type: 'object', properties: {} },
   },
   {
     name: 'create_task',
-    description: 'Create one or more tasks in TickTick. If projectId is omitted, the task goes to inbox. Use tasks for batch creation. Pass subtasks (string array of checklist titles) when the user wants a task broken down into steps.',
+    description: 'Create one or more tasks in TickTick. If projectId is omitted, the task goes to inbox. Use tasks for batch creation.',
     parameters: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Task title' },
-        due: { type: 'string', description: 'Due date (YYYY-MM-DD, optional)' },
+        due: { type: 'string', description: 'Due date: YYYY-MM-DD (all-day) or "YYYY-MM-DD HH:mm" (with time, JST assumed)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Priority (optional; use "high" for urgent/important)' },
         projectId: { type: 'string', description: 'Project ID (optional; omit to use inbox)' },
-        subtasks: { type: 'array', items: { type: 'string' }, description: 'Optional checklist subtask titles (e.g. ["買い物", "掃除"])' },
-        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId, subtasks' },
+        subtasks: { type: 'array', items: { type: 'string' }, description: 'Checklist subtask titles (e.g. ["買い物", "掃除"])' },
+        description: { type: 'string', description: 'Note/description for the task (optional)' },
+        tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to create; each item uses title and optional due, priority, projectId, subtasks, description' },
       },
     },
   },
@@ -61,6 +67,18 @@ export const secretaryTools: ToolDeclaration[] = [
         projectId: { type: 'string', description: 'Project ID (from get_tasks result)' },
         tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple tasks to complete, each with taskId and projectId' },
       },
+    },
+  },
+  {
+    name: 'delete_task',
+    description: 'Permanently delete a TickTick task. Requires taskId and projectId from get_tasks. Cannot be undone.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (from get_tasks result)' },
+        projectId: { type: 'string', description: 'Project ID (from get_tasks result)' },
+      },
+      required: ['taskId', 'projectId'],
     },
   },
   {
@@ -148,15 +166,18 @@ export const secretaryTools: ToolDeclaration[] = [
   },
   {
     name: 'update_task',
-    description: 'Update the due date, title, or priority of one or more TickTick tasks. Confirm taskId and projectId via get_tasks before calling. Use tasks for batch updates.',
+    description: 'Update title, due date/time, priority, description, or subtasks of one or more TickTick tasks. Confirm taskId and projectId via get_tasks before calling. Use tasks for batch updates.',
     parameters: {
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Task ID (from get_tasks result)' },
         projectId: { type: 'string', description: 'Project ID (from get_tasks result)' },
         title: { type: 'string', description: 'New title (if changing)' },
-        due: { type: 'string', description: 'New due date YYYY-MM-DD. Pass null to clear the due date.' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority' },
+        due: { type: 'string', description: 'New due: YYYY-MM-DD (all-day) or "YYYY-MM-DD HH:mm" (with time, JST). Pass null to clear.' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'none'], description: 'New priority ("none" to clear)' },
+        description: { type: 'string', description: 'New note/description. Pass null to clear.' },
+        addSubtasks: { type: 'array', items: { type: 'string' }, description: 'New subtask titles to append to the existing checklist' },
+        updateSubtasks: { type: 'array', items: { type: 'object' }, description: 'Update existing subtask titles: [{id, title}, ...]' },
         tasks: { type: 'array', items: { type: 'object' }, description: 'Multiple task updates, each with taskId, projectId, and fields to change' },
       },
     },
