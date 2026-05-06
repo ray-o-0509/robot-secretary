@@ -248,6 +248,72 @@ export async function replyToEmail(opts: {
   return { ok: true, to: originalFrom, subject: reSubject }
 }
 
+// ゴミ箱から受信トレイに復元する
+export async function untrashEmails(account: string, ids: string[]) {
+  const auth = getGoogleAuth(account)
+  const gmail = google.gmail({ version: 'v1', auth })
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        await gmail.users.messages.untrash({ userId: 'me', id })
+        console.log(`[untrash_gmail] ok: ${account} ${id}`)
+        return { id, ok: true as const }
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error(`[untrash_gmail] error: ${account} ${id} →`, raw)
+        return { id, ok: false as const, error: sanitizeGoogleError(err) }
+      }
+    }),
+  )
+  return { account, results }
+}
+
+// 送信者をブロック (スパムフィルターを作成)
+export async function blockSender(account: string, senderEmail: string) {
+  const auth = getGoogleAuth(account)
+  const gmail = google.gmail({ version: 'v1', auth })
+  try {
+    const filter = await gmail.users.settings.filters.create({
+      userId: 'me',
+      requestBody: {
+        criteria: { from: senderEmail },
+        action: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+      },
+    })
+    console.log(`[block_sender] ok: ${account} blocked ${senderEmail} (filterId: ${filter.data.id})`)
+    return { account, senderEmail, ok: true as const, filterId: filter.data.id }
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err)
+    console.error(`[block_sender] error: ${account} ${senderEmail} →`, raw)
+    return { account, senderEmail, ok: false as const, error: sanitizeGoogleError(err) }
+  }
+}
+
+// 送信者のブロックを解除 (スパムフィルターを削除)
+export async function unblockSender(account: string, senderEmail: string) {
+  const auth = getGoogleAuth(account)
+  const gmail = google.gmail({ version: 'v1', auth })
+  try {
+    const listRes = await gmail.users.settings.filters.list({ userId: 'me' })
+    const matching = (listRes.data.filter ?? []).filter((f) => f.criteria?.from === senderEmail)
+    if (matching.length === 0) {
+      return { account, senderEmail, ok: true as const, removed: 0, message: 'No block filter found' }
+    }
+    await Promise.all(
+      matching.map((f) => f.id
+        ? gmail.users.settings.filters.delete({ userId: 'me', id: f.id })
+        : Promise.resolve()
+      )
+    )
+    console.log(`[unblock_sender] ok: ${account} unblocked ${senderEmail} (removed ${matching.length} filter(s))`)
+    return { account, senderEmail, ok: true as const, removed: matching.length }
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err)
+    console.error(`[unblock_sender] error: ${account} ${senderEmail} →`, raw)
+    return { account, senderEmail, ok: false as const, error: sanitizeGoogleError(err) }
+  }
+}
+
 // INBOX ラベルを外す (アーカイブ。メール自体は残る)
 export async function archiveEmails(account: string, ids: string[]) {
   if (ids.length === 0) return { account, modified: 0 }

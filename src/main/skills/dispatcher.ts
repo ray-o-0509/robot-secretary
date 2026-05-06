@@ -254,6 +254,53 @@ export const toolSchemas: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'untrash_gmail',
+    description: 'Restore one or more Gmail messages from trash back to the inbox. Fetch id and account from search_gmail(query:"in:trash ...") first. Use account+ids for one account, or targets for messages across multiple accounts.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Email address of the target account' },
+        ids: { type: 'array', items: { type: 'string' }, description: 'Array of message IDs to restore from trash' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              account: { type: 'string' },
+              id: { type: 'string' },
+            },
+            required: ['account', 'id'],
+          },
+          description: 'Messages to restore across accounts.',
+        },
+      },
+    },
+  },
+  {
+    name: 'block_sender',
+    description: 'Block a sender by creating a Gmail spam filter so future emails from them go to spam. Requires gmail.settings.basic scope — tell the user to re-auth via Settings if this fails with a scope error.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Gmail account to apply the block on' },
+        senderEmail: { type: 'string', description: 'Email address of the sender to block' },
+      },
+      required: ['account', 'senderEmail'],
+    },
+  },
+  {
+    name: 'unblock_sender',
+    description: 'Unblock a sender by deleting the Gmail spam filter for that address. Requires gmail.settings.basic scope — tell the user to re-auth via Settings if this fails with a scope error.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Gmail account to remove the block from' },
+        senderEmail: { type: 'string', description: 'Email address of the sender to unblock' },
+      },
+      required: ['account', 'senderEmail'],
+    },
+  },
+  {
     name: 'get_calendar_events',
     description: 'Fetch events from Google Calendar. Spans primary calendars across all registered accounts. Duplicate events are deduplicated by event id.',
     input_schema: {
@@ -767,6 +814,21 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
         Array.from(gmailTargets(args)).map(async ([account, ids]) => archiveEmails(account, ids))
       )
       return { results }
+    }
+    case 'untrash_gmail': {
+      const { untrashEmails } = await import('./gmail/index')
+      const results = await Promise.all(
+        Array.from(gmailTargets(args)).map(async ([account, ids]) => untrashEmails(account, ids))
+      )
+      return { results }
+    }
+    case 'block_sender': {
+      const { blockSender } = await import('./gmail/index')
+      return await blockSender(reqString(args, 'account'), reqString(args, 'senderEmail'))
+    }
+    case 'unblock_sender': {
+      const { unblockSender } = await import('./gmail/index')
+      return await unblockSender(reqString(args, 'account'), reqString(args, 'senderEmail'))
     }
     case 'get_calendar_events': {
       const { getTodayEvents, getTomorrowEvents, getUpcomingEvents } = await import('./calendar/index')

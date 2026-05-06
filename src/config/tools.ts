@@ -218,12 +218,62 @@ export const secretaryTools: ToolDeclaration[] = [
     },
   },
   {
-    name: 'search_gmail',
-    description: 'Search Gmail messages by keyword, sender, subject, etc. Searches across all accounts including non-inbox. Results are shown on the display.',
+    name: 'untrash_gmail',
+    description:
+      'Restore one or more Gmail messages from trash back to the inbox. Use account+ids for one account, or targets for messages across multiple accounts.',
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Gmail search query (e.g. "from:hoge@example.com", "subject:invoice", "John")' },
+        account: { type: 'string', description: 'Email account address from Gmail results' },
+        ids: { type: 'array', items: { type: 'string' }, description: 'Message IDs to restore from trash' },
+        targets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              account: { type: 'string', description: 'Email account address' },
+              id: { type: 'string', description: 'Message ID to restore' },
+            },
+            required: ['account', 'id'],
+          },
+          description: 'Messages to restore across multiple Gmail accounts',
+        },
+      },
+    },
+  },
+  {
+    name: 'block_sender',
+    description:
+      'Block a sender by creating a Gmail spam filter. Future emails from this sender will go to spam automatically. Requires gmail.settings.basic scope — prompt user to re-auth if this fails.',
+    parameters: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Gmail account to apply the block on' },
+        senderEmail: { type: 'string', description: 'Email address of the sender to block' },
+      },
+      required: ['account', 'senderEmail'],
+    },
+  },
+  {
+    name: 'unblock_sender',
+    description:
+      'Unblock a sender by deleting the Gmail spam filter for that address. Requires gmail.settings.basic scope — prompt user to re-auth if this fails.',
+    parameters: {
+      type: 'object',
+      properties: {
+        account: { type: 'string', description: 'Gmail account to remove the block from' },
+        senderEmail: { type: 'string', description: 'Email address of the sender to unblock' },
+      },
+      required: ['account', 'senderEmail'],
+    },
+  },
+  {
+    name: 'search_gmail',
+    description: 'Search Gmail messages by keyword, sender, subject, etc. Supports Gmail search operators including in:trash for trash search. Results are shown on the display.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Gmail search query (e.g. "from:hoge@example.com", "subject:invoice", "in:trash subject:Amazon")' },
         account: { type: 'string', description: 'Restrict to a specific account (omit to search all accounts)' },
         maxResults: { type: 'number', description: 'Max results per account (default 20)' },
       },

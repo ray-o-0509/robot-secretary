@@ -37,7 +37,9 @@ Code and shell:
 - Do not run Claude Code commands through run_command.
 
 Gmail and Drive actions:
-- For Gmail trash/archive, first obtain message ids and account values with get_gmail_inbox or search_gmail, then use trash_gmail or archive_gmail. Use one call with account+ids for multiple messages in one account; use one call with targets:[{account,id}] for messages across multiple accounts.
+- For Gmail trash/archive/restore, first obtain message ids and account values with get_gmail_inbox or search_gmail, then use trash_gmail / archive_gmail / untrash_gmail. Use account+ids for one account, targets:[{account,id}] for multiple accounts.
+- To search trash, use search_gmail with query containing "in:trash" (e.g. "in:trash from:amazon.com"). To restore from trash, use untrash_gmail with the ids from that search.
+- To block a sender, use block_sender(account, senderEmail). To unblock, use unblock_sender(account, senderEmail). If a scope error occurs, tell the user to re-auth via Settings > Google.
 - For Drive move/copy/trash/share actions, first obtain file ids with list_drive_recent/search_drive/list_drive_folder, then use the dedicated Drive tools. Use fileIds for multiple files with the same options, or items for per-file options/accounts. Do not use run_claude or run_command for Drive actions.
 - For multiple calendar events, use one create_calendar_event call with events:[...]. For attendee invites, the tool handles confirmation.
 

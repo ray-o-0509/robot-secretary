@@ -42,8 +42,8 @@ export const SKILL_REGISTRY: SkillDef[] = [
   {
     id: 'gmail',
     label: 'Gmail',
-    description: 'Gmail の受信トレイ取得・検索・返信・アーカイブ・ゴミ箱',
-    tools: ['get_gmail_inbox', 'trash_gmail', 'archive_gmail', 'get_email_detail', 'reply_gmail', 'search_gmail'],
+    description: 'Gmail の受信トレイ取得・検索・返信・アーカイブ・ゴミ箱・復元・送信者ブロック',
+    tools: ['get_gmail_inbox', 'trash_gmail', 'archive_gmail', 'untrash_gmail', 'block_sender', 'unblock_sender', 'get_email_detail', 'reply_gmail', 'search_gmail'],
     defaultEnabled: true,
   },
   {

@@ -34,6 +34,23 @@ export function DisplayApp() {
     return (
       <>
         <style>{CYBER_STYLES}</style>
+        {/* 背景: DisplayShellのHUDフレームと同じ暗い背景を常に表示 */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 56,
+            left: 16,
+            right: 16,
+            bottom: 16,
+            pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(6, 8, 18, 0.92), rgba(10, 4, 20, 0.92))',
+            border: `1px solid rgba(0, 240, 255, 0.25)`,
+            boxShadow: '0 0 24px rgba(0, 240, 255, 0.08), inset 0 0 40px rgba(255, 43, 214, 0.04)',
+            clipPath: 'polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+          }}
+        />
         <div
           style={{
             position: 'absolute',
@@ -59,7 +76,7 @@ export function DisplayApp() {
     setLoading(true)
     window.electronAPI?.displayRefresh(payload.type)
   }
-  const canRefresh = payload.type !== 'drive_search'
+  const canRefresh = payload.type !== 'drive_search' && payload.type !== 'email_search'
 
   return (
     <DisplayShell
