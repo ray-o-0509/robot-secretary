@@ -2,6 +2,9 @@ import * as crypto from 'node:crypto'
 import type { Client } from '@libsql/client'
 import { encrypt, decrypt, getDerivedKey } from './crypto'
 import { getDeviceId } from './deviceId'
+import { createLogger } from '../logger'
+
+const log = createLogger('apiKeyStore')
 
 export const KNOWN_API_KEYS = [
   'GEMINI_API_KEY',
@@ -17,7 +20,7 @@ export type ApiKeyName = (typeof KNOWN_API_KEYS)[number]
 export async function migrateApiKeys(db: Client): Promise<void> {
   try {
     await db.execute(`ALTER TABLE api_keys ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`)
-    console.log('[apiKeyStore] Migrated: added device_id column')
+    log.log('Migrated: added device_id column')
   } catch {
     // Column already exists — ignore
   }
@@ -42,7 +45,7 @@ export async function loadApiKeys(userId: string, db: Client): Promise<Record<st
     try {
       out[row.key_name as string] = decrypt(row.ciphertext as string, key)
     } catch (e) {
-      console.error(`[apiKeyStore] Failed to decrypt ${row.key_name as string}:`, e)
+      log.error(`Failed to decrypt ${row.key_name as string}:`, e)
     }
   }
   return out

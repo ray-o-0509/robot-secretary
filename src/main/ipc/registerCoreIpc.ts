@@ -1,4 +1,7 @@
 import { ipcMain, shell, type BrowserWindow } from 'electron'
+import { createLogger } from '../logger'
+
+const log = createLogger('call-tool')
 import { homedir } from 'node:os'
 import { dispatchTool, formatVoiceLine, type DispatchDeps, type EmailSearchState, type DriveSearchState } from './dispatchTool'
 import { registerNotificationHandlers, flushActiveNotifications } from './handlers/notifications'
@@ -128,7 +131,7 @@ export function registerCoreIpc(deps: Deps): void {
     try {
       return await dispatchTool(toolName, args, dispatchDeps, event.sender)
     } catch (err) {
-      console.error(`[call-tool] unhandled error in ${toolName}:`, err)
+      log.error(`unhandled error in ${toolName}:`, err)
       return { error: String(err) }
     }
   })

@@ -1,4 +1,7 @@
 import { ipcMain } from 'electron'
+import { createLogger } from '../logger'
+
+const log = createLogger('memory')
 import * as crypto from 'crypto'
 import {
   appendEvent,
@@ -95,7 +98,7 @@ async function buildInjection(memory: Memory): Promise<string> {
 async function summarizePending(apiKey: string | undefined): Promise<void> {
   if (summarizing) return
   if (!apiKey) {
-    console.warn('[memory] Skipping summarization: GEMINI_API_KEY is not set')
+    log.warn('Skipping summarization: GEMINI_API_KEY is not set')
     return
   }
   summarizing = true
@@ -108,10 +111,10 @@ async function summarizePending(apiKey: string | undefined): Promise<void> {
         const updated = await summarize(existing, transcripts, apiKey, session.id)
         await saveMemory(updated)
         await markSummarized(session.id)
-        console.log('[memory] Summarization complete:', session.id, `(${transcripts.length} entries)`)
+        log.log('Summarization complete:', session.id, `(${transcripts.length} entries)`)
       } catch (err) {
         // Failure in one session does not block the next; it will be picked up again on next startup
-        console.error('[memory] Summarization failed:', session.id, err)
+        log.error('Summarization failed:', session.id, err)
       }
     }
   } finally {
@@ -123,7 +126,7 @@ export async function initMemory(getApiKey: () => string | undefined): Promise<v
   // 1. Start a new session on startup
   activeSessionId = newSessionId()
   await startSession(activeSessionId)
-  console.log('[memory] Session started:', activeSessionId)
+  log.log('Session started:', activeSessionId)
 
   // 2. Repair any incomplete sessions from previous runs (fill in endedAt)
   await repairCrashedSessions(activeSessionId)
@@ -140,13 +143,13 @@ export async function initMemory(getApiKey: () => string | undefined): Promise<v
 
   ipcMain.handle('memory:upsert-profile', async (_event, key: string, value: string) => {
     const profile = await upsertProfileItem(key, value)
-    console.log('[memory] Profile updated:', key, '=', value)
+    log.log('Profile updated:', key, '=', value)
     return { ok: true, items: profile.items }
   })
 
   ipcMain.handle('memory:delete-profile', async (_event, key: string) => {
     const profile = await deleteProfileItem(key)
-    console.log('[memory] Profile item deleted:', key)
+    log.log('Profile item deleted:', key)
     return { ok: true, items: profile.items }
   })
 
@@ -164,7 +167,7 @@ export async function initMemory(getApiKey: () => string | undefined): Promise<v
       ts: new Date().toISOString(),
       role: payload.role,
       text: payload.text,
-    }).catch((err) => console.error('[memory] Failed to append transcript:', err))
+    }).catch((err) => log.error('Failed to append transcript:', err))
   })
 }
 
@@ -174,9 +177,9 @@ export async function shutdownMemory(): Promise<void> {
   if (!activeSessionId) return
   try {
     await endSession(activeSessionId)
-    console.log('[memory] Session ended:', activeSessionId)
+    log.log('Session ended:', activeSessionId)
   } catch (err) {
-    console.error('[memory] Failed to end session:', err)
+    log.error('Failed to end session:', err)
   }
   activeSessionId = null
 }

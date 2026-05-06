@@ -1,5 +1,8 @@
 import { google } from 'googleapis'
 import { getGoogleAuth, listAccounts, sanitizeGoogleError } from '../shared/googleAuth'
+import { createLogger } from '../../logger'
+
+const log = createLogger('calendar')
 
 type CalendarEvent = {
   id: string
@@ -51,7 +54,7 @@ async function getEventsInRange(timeMin: Date, timeMax: Date) {
         return { account: a, events: await getEventsFor(a, timeMin.toISOString(), timeMax.toISOString()), error: null as string | null }
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
-        console.error(`[get_calendar_events] error: ${a} →`, raw)
+        log.error(`get_events error: ${a} →`, raw)
         return { account: a, events: [] as CalendarEvent[], error: sanitizeGoogleError(err) }
       }
     }),

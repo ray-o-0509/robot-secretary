@@ -1,5 +1,4 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, nativeImage, screen, shell, systemPreferences } from 'electron'
-import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as dotenv from 'dotenv'
@@ -15,6 +14,7 @@ import { initSettingsStore, loadSettings, saveSettings, migrateSettings } from '
 import { registerAuthIpc } from './ipc/registerAuthIpc'
 import { initStore } from './memory/store'
 import { initGoogleAuth } from './skills/shared/googleAuth'
+import { initLogger, createLogger } from './logger'
 
 // Per-user DB client (set after login/session restore)
 let _userDb: import('@libsql/client').Client | null = null
@@ -23,42 +23,13 @@ function getUserDb(): import('@libsql/client').Client {
   return _userDb
 }
 
-const debugLogPath = path.join(app.getPath('userData'), 'debug.log')
-const originalConsole = {
-  log: console.log.bind(console),
-  warn: console.warn.bind(console),
-  error: console.error.bind(console),
-}
+initLogger(path.join(app.getPath('userData'), 'debug.log'))
 
-function writeDebugLog(level: 'log' | 'warn' | 'error', args: unknown[]) {
-  try {
-    fs.mkdirSync(path.dirname(debugLogPath), { recursive: true })
-    const line = args.map((arg) => {
-      if (typeof arg === 'string') return arg
-      try {
-        return JSON.stringify(arg)
-      } catch {
-        return String(arg)
-      }
-    }).join(' ')
-    fs.appendFileSync(debugLogPath, `${new Date().toISOString()} [${level}] ${line}\n`)
-  } catch {
-    // ログ書き込み失敗でアプリ本体を止めない
-  }
-}
-
-console.log = (...args: unknown[]) => {
-  originalConsole.log(...args)
-  writeDebugLog('log', args)
-}
-console.warn = (...args: unknown[]) => {
-  originalConsole.warn(...args)
-  writeDebugLog('warn', args)
-}
-console.error = (...args: unknown[]) => {
-  originalConsole.error(...args)
-  writeDebugLog('error', args)
-}
+const logEnv = createLogger('env')
+const logAuth = createLogger('auth')
+const logPTT = createLogger('PTT:main')
+const logPerm = createLogger('Permission')
+const logSettings = createLogger('settings')
 
 // .env / .env.local の探索パス。
 // - dev: プロジェクトルート（__dirname = out/main/ なので ../../）
@@ -74,7 +45,7 @@ for (const dir of envSearchDirs) {
   dotenv.config({ path: path.join(dir, '.env') })
   dotenv.config({ path: path.join(dir, '.env.local'), override: true })
 }
-console.log('[env] searched:', envSearchDirs.join(', '), 'has GEMINI_API_KEY:', !!process.env.GEMINI_API_KEY)
+logEnv.log('searched:', envSearchDirs.join(', '), 'has GEMINI_API_KEY:', !!process.env.GEMINI_API_KEY)
 
 const isDev = !app.isPackaged
 
@@ -449,7 +420,7 @@ function registerSettingsIpc() {
   ipcMain.handle('appearance:set-robot-size', async (_event, raw: unknown) => {
     const next = clampRobotSize(typeof raw === 'number' ? raw : Number(raw))
     robotSize = next
-    await saveSettings({ robotSize: next }).catch((e) => console.error('Failed to save robotSize:', e))
+    await saveSettings({ robotSize: next }).catch((e) => logSettings.error('Failed to save robotSize:', e))
     if (win && !win.isDestroyed()) {
       const [x, y] = win.getPosition()
       win.setBounds({ x, y, width: next, height: next })
@@ -462,7 +433,7 @@ function registerSettingsIpc() {
   })
 
   ipcMain.on('set-language', (_event, code: string) => {
-    saveSettings({ language: String(code) }).catch((e) => console.error('Failed to save language:', e))
+    saveSettings({ language: String(code) }).catch((e) => logSettings.error('Failed to save language:', e))
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send('language-change', code)
     }
@@ -729,7 +700,7 @@ function registerSetupIpc() {
 function forwardRendererConsole(window: BrowserWindow, label: string) {
   window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     const source = sourceId ? `${path.basename(sourceId)}:${line}` : `line ${line}`
-    console.log(`[renderer:${label}]`, message, `(${source}, level ${level})`)
+    createLogger(`renderer:${label}`).log(message, `(${source}, level ${level})`)
   })
 }
 
@@ -780,7 +751,7 @@ function createWindow() {
     return
   }
   if (!currentUser) {
-    console.warn('[auth] Blocked robot window creation before login')
+    logAuth.warn('Blocked robot window creation before login')
     createLoginWindow()
     return
   }
@@ -1003,7 +974,7 @@ function armStuckTimer() {
   if (pttStuckTimer) clearTimeout(pttStuckTimer)
   pttStuckTimer = setTimeout(() => {
     if (!pttActive) return
-    console.warn('[PTT:main] stuck detected, force stopping')
+    logPTT.warn('stuck detected, force stopping')
     pttActive = false
     pttModifiers = 'none'
     win?.webContents.send('ptt-stop')
@@ -1024,7 +995,7 @@ function setupPTT() {
   if (!trusted) {
     // システム設定を開いてユーザーに許可を促す
     systemPreferences.isTrustedAccessibilityClient(true) // promptフラグでダイアログ表示
-    console.warn('[PTT] アクセシビリティ権限が必要です。システム設定→プライバシー→アクセシビリティでこのアプリを許可後、再起動してください。')
+    logPTT.warn('アクセシビリティ権限が必要です。システム設定→プライバシー→アクセシビリティでこのアプリを許可後、再起動してください。')
     // 権限なしでも起動できるよう、PTTなしモードで続行
     return
   }
@@ -1035,7 +1006,7 @@ function setupPTT() {
       if (pttKeyupDebounceTimer) {
         clearTimeout(pttKeyupDebounceTimer)
         pttKeyupDebounceTimer = null
-        console.log('[PTT:main] spurious keyup cancelled, PTT continues')
+        logPTT.log('spurious keyup cancelled, PTT continues')
         return
       }
       if (!pttActive) {
@@ -1043,7 +1014,7 @@ function setupPTT() {
         pttActive = true
         pttModifiers = e.shiftKey ? 'alt+shift' : 'alt'
         armStuckTimer()
-        console.log('[PTT:main] keydown alt modifiers=', pttModifiers)
+        logPTT.log('keydown alt modifiers=', pttModifiers)
         win?.webContents.send('ptt-start')
         if (pttModifiers === 'alt+shift') regionCapture.show()
       }
@@ -1052,13 +1023,13 @@ function setupPTT() {
     // Shift を後から足した場合: PTT 中なら overlay を出す
     if (e.keycode === UiohookKey.Shift && pttActive && pttModifiers === 'alt') {
       pttModifiers = 'alt+shift'
-      console.log('[PTT:main] shift added, showing overlay')
+      logPTT.log('shift added, showing overlay')
       regionCapture.show()
       return
     }
     // ESC: overlay 表示中のみ rect クリア（PTT 自体は止めない）
     if (e.keycode === UiohookKey.Escape && pttModifiers === 'alt+shift') {
-      console.log('[PTT:main] ESC → clear region')
+      logPTT.log('ESC → clear region')
       regionCapture.broadcastClear()
       return
     }
@@ -1068,18 +1039,18 @@ function setupPTT() {
     // Shift だけ離した: overlay 閉じるが PTT 音声は継続
     if (e.keycode === UiohookKey.Shift && pttActive && pttModifiers === 'alt+shift') {
       pttModifiers = 'alt'
-      console.log('[PTT:main] keyup shift → hide overlay, audio continues')
+      logPTT.log('keyup shift → hide overlay, audio continues')
       regionCapture.hide()
       return
     }
     // Alt を離した: デバウンスタイマーを起動し 80ms 後も keydown が来なければ PTT 終了
     if (e.keycode === UiohookKey.Alt && pttActive) {
-      console.log('[PTT:main] keyup alt (debouncing)')
+      logPTT.log('keyup alt (debouncing)')
       if (pttKeyupDebounceTimer) clearTimeout(pttKeyupDebounceTimer)
       pttKeyupDebounceTimer = setTimeout(() => {
         pttKeyupDebounceTimer = null
         if (!pttActive) return
-        console.log('[PTT:main] keyup alt confirmed → stop PTT')
+        logPTT.log('keyup alt confirmed → stop PTT')
         pttActive = false
         pttModifiers = 'none'
         disarmStuckTimer()
@@ -1113,23 +1084,23 @@ async function requestMicPermission() {
 async function requestScreenPermission() {
   if (process.platform !== 'darwin') return
   const status = systemPreferences.getMediaAccessStatus('screen')
-  console.log('[Permission] 画面収録 status:', status)
+  logPerm.log('画面収録 status:', status)
   if (status === 'granted') return
-  console.warn('[Permission] 画面収録未許可。プロンプトを上げる')
+  logPerm.warn('画面収録未許可。プロンプトを上げる')
   try {
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width: 1, height: 1 },
     })
     const after = systemPreferences.getMediaAccessStatus('screen')
-    console.log('[Permission] getSources 後 status:', after, 'sources:', sources.length)
+    logPerm.log('getSources 後 status:', after, 'sources:', sources.length)
     if (status === 'denied' || after === 'denied') {
-      console.warn(
-        '[Permission] Screen capture was previously denied and the prompt is suppressed. Run `tccutil reset ScreenCapture` in a terminal and restart the app.',
+      logPerm.warn(
+        'Screen capture was previously denied and the prompt is suppressed. Run `tccutil reset ScreenCapture` in a terminal and restart the app.',
       )
     }
   } catch (err) {
-    console.error('[Permission] Screen capture prompt failed:', err)
+    logPerm.error('Screen capture prompt failed:', err)
   }
 }
 
@@ -1556,7 +1527,7 @@ app.whenReady().then(async () => {
 
     // Populate process.env with all API keys from DB (so all tool modules continue working)
     await populateProcessEnv(user.id, db)
-    console.log('[auth] process.env populated with DB keys')
+    logAuth.log('process.env populated with DB keys')
 
     // Initialize DB-backed stores
     initStore(user.id, db)
@@ -1627,7 +1598,7 @@ app.whenReady().then(async () => {
     onLoginSuccess: async (user) => {
       currentUser = user
       _userDb = createUserDbClient(user)
-      console.log('[auth] Logged in as:', currentUser.email)
+      logAuth.log('Logged in as:', currentUser.email)
       if (loginWin && !loginWin.isDestroyed()) {
         loginWin.close()
         loginWin = null
@@ -1649,7 +1620,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  console.log('[auth] Session restored:', currentUser.email)
+  logAuth.log('Session restored:', currentUser.email)
   await startAuthenticatedApp(currentUser)
 })
 

@@ -1,4 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { createLogger } from '../../logger'
+
+const log = createLogger('notifications')
 
 export type NotifEvent = {
   bundleId: string
@@ -128,10 +131,10 @@ export function startNotificationWatch(
   })
 
   watchProc.on('error', (err) => {
-    console.error('[notifications] log stream error:', err)
+    log.error('log stream error:', err)
   })
   watchProc.on('close', (code) => {
-    console.warn('[notifications] log stream closed, code:', code)
+    log.warn('log stream closed, code:', code)
     watchProc = null
   })
 }

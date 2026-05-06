@@ -1,4 +1,7 @@
 import { getTickTickToken } from '../shared/tickTickAuth'
+import { createLogger } from '../../logger'
+
+const log = createLogger('tasks')
 
 const BASE = 'https://api.ticktick.com/open/v1'
 
@@ -114,9 +117,9 @@ export async function getTodos() {
   const projects = projectsRes.ok ? ((await projectsRes.json()) as { id: string }[]) : []
 
   const sources = [
-    fetch(`${BASE}/project/inbox/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch((err) => { console.error('[get_tasks] inbox fetch error:', err); return null }),
+    fetch(`${BASE}/project/inbox/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch((err) => { log.error('inbox fetch error:', err); return null }),
     ...projects.map((p) =>
-      fetch(`${BASE}/project/${p.id}/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch((err) => { console.error(`[get_tasks] project ${p.id} fetch error:`, err); return null }),
+      fetch(`${BASE}/project/${p.id}/data`, { headers }).then((r) => (r.ok ? r.json() : null)).catch((err) => { log.error(`project ${p.id} fetch error:`, err); return null }),
     ),
   ]
   const results = (await Promise.all(sources)) as ({ tasks?: RawTask[] } | null)[]

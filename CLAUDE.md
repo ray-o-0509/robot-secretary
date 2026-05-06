@@ -78,7 +78,7 @@ prod ビルドはプロジェクトルートの `.env.local` を読まない。`
 cp .env.local ~/Library/Application\ Support/robot-secretary/.env.local
 ```
 
-`.env.local` を更新したら毎回このコピーが必要。
+`.env.local` を更新したら毎回このコピーが必要（ただし Gemini/Anthropic/TickTick などのキーは Settings UI から DB 経由で保存するほうが推奨）。
 
 ### 権限リセット（bundle ID 変更後など）
 
@@ -87,31 +87,6 @@ tccutil reset Microphone <your-app-id>
 tccutil reset Accessibility <your-app-id>
 tccutil reset ScreenCapture <your-app-id>
 ```
-
-### セットアップ画面
-
-起動時に必須権限（マイク + Gemini API Key）をチェックする。問題があれば自動的にセットアップウィンドウ（`#setup` ルート）を表示し、問題なければ直接ロボットを起動する。セットアップ画面の実装は `src/renderer/setup/SetupApp.tsx`、IPC ハンドラは `src/main/index.ts` の `registerSetupIpc()`。
-
-### Renderer の getUserMedia 権限
-
-`session.defaultSession.setPermissionRequestHandler` で `media` を明示的に許可している（`src/main/index.ts` の `app.whenReady`）。これがないと renderer の `getUserMedia` が常に拒否される。
-
-### `DefaultTransporter is not a constructor` エラー
-
-`googleapis-common` が `google-auth-library` の `DefaultTransporter` を使うが、pnpm パッチは top-level `node_modules/google-auth-library/` にのみ適用される。electron-builder は pnpm virtual store (`node_modules/.pnpm/google-auth-library@10.6.2/`) から asar を作るため、**パッチなしの版が asar に入る**。
-
-`build:app` の冒頭に `patch:pnpm` スクリプトを実行してvirtual storeのファイルを上書きする：
-
-```bash
-npm run patch:pnpm  # node_modules/.pnpm/.../ に patched index.js をコピー
-```
-
-確認コマンド：
-```bash
-node -e "const asar = require('@electron/asar'); const c = asar.extractFile('dist/mac-arm64/Robot Secretary.app/Contents/Resources/app.asar', 'node_modules/google-auth-library/build/src/index.js').toString(); console.log('patched:', c.includes('DefaultTransporter'), 'size:', c.length)"
-```
-
-`pnpm install` を実行すると virtual store が上書きされてパッチが消えるので、再度 `npm run build:app` でリビルドすること。
 
 ### マイクがシステム設定に表示されない問題
 
@@ -125,13 +100,6 @@ Hardened Runtime（署名済みアプリ）では `NSMicrophoneUsageDescription`
 <true/>
 ```
 
-`package.json` の `build.mac` に以下が必要：
-```json
-"hardenedRuntime": true,
-"entitlements": "build/entitlements.mac.plist",
-"entitlementsInherit": "build/entitlements.mac.plist"
-```
-
 確認コマンド：
 ```bash
 codesign -d --entitlements - "/Applications/Robot Secretary.app" 2>/dev/null | grep -E "audio-input|microphone"
@@ -139,93 +107,203 @@ codesign -d --entitlements - "/Applications/Robot Secretary.app" 2>/dev/null | g
 
 ## Architecture
 
-This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Gmail / Google Calendar / TickTick.
+This is an **Electron + React + Three.js** desktop app: a transparent, always-on-top, click-through window containing a floating 3D robot that runs as a Gemini Live voice assistant with function-calling into Gmail / Google Calendar / TickTick / Google Drive / Apple Music / NordVPN / shell, etc.
 
 ### Three processes (electron-vite layout)
 
-- `src/main/index.ts` — main process. Owns the BrowserWindow, the global PTT hotkey, the wandering animation, the right-click context menu, and the IPC tool dispatcher.
-- `src/preload/index.ts` — exposes a small `window.electronAPI` surface to the renderer via `contextBridge`. All renderer→main communication goes through it.
-- `src/renderer/` — React app. `App.tsx` owns top-level state; `RobotScene.tsx` is the r3f canvas; `useGeminiLive.ts` is the voice loop.
+- `src/main/index.ts` — main process。BrowserWindow 管理・グローバル PTT ホットキー・放浪アニメーション・右クリックメニュー・認証フロー。
+- `src/preload/index.ts` — `contextBridge` で `window.electronAPI` を renderer に公開。すべての renderer→main 通信はここを経由する。
+- `src/renderer/` — React app。`App.tsx` がトップレベル状態を保持。`RobotScene.tsx` が r3f canvas。`useGeminiLive.ts` が音声ループ。
 
-Build outputs land in `out/{main,preload,renderer}/` and are referenced by `package.json` `main` (`out/main/index.js`).
+Build 成果物は `out/{main,preload,renderer}/` に入り、`package.json` の `main` (`out/main/index.js`) で参照される。
+
+### 起動シーケンス
+
+1. `app.whenReady()` → Keychain からセッショントークンを取得
+2. トークンがあれば Turso DB でユーザー解決 → `startAuthenticatedApp(user)` → DB マイグレーション → `populateProcessEnv()` → 権限チェック
+3. 権限/APIキー不足 → Setup ウィンドウ表示。すべて OK → `createWindow()` で robot ウィンドウ起動 + `launchClaudePty()` で Claude Code PTY を事前起動
+4. セッションなし → Login ウィンドウ表示
+
+### ウィンドウ一覧
+
+| 変数 | ハッシュ | 役割 |
+|------|---------|------|
+| `win` | `#` (デフォルト) | メインロボット（透過・click-through） |
+| `chatWin` | `#chat` | チャット履歴表示（透過・click-through） |
+| `loginWin` | `#login` | ログイン画面 |
+| `setupWin` | `#setup` | 権限セットアップ画面 |
+| `settingsWin` | `#settings` | 設定画面 |
+| `displayWin` | `#display` | メール/カレンダー/タスク表示パネル（右側） |
+| `searchWin` | `#search` | 検索パネル |
+| `weatherWin` | `#weather` | 天気パネル |
+| `emailDetailWin` | `#email-detail` | メール詳細ビュー |
+| `webWin` | — | 外部 URL の Web ビュー |
+| `loadingWin` | `#loading` | 起動中スプラッシュ |
 
 ### Voice loop (`src/renderer/hooks/useGeminiLive.ts`)
 
-This is the central piece. On startup the renderer:
-1. Opens a Gemini Live session (model from `MODELS.geminiLive` in `src/config/models.ts`, currently `gemini-3.1-flash-live-preview`; audio modality, voice `Kore`) with a Japanese system prompt and a static `secretaryTools` function-declaration list.
-2. Opens the mic at 16 kHz via `getUserMedia` and pipes PCM into `sendRealtimeInput` — but **only when `isPTTActiveRef.current` is true**. The mic stream is always live; PTT just gates upload.
-3. PTT is driven by main-process events `ptt-start` / `ptt-stop`. On release, the renderer sends a small silence buffer so Gemini's VAD detects end-of-utterance.
-4. Incoming `serverContent.modelTurn.parts[].inlineData` is base64 PCM at 24 kHz, scheduled sequentially on `playbackCtxRef` using `nextPlayTimeRef` so chunks don't overlap.
-5. `toolCall.functionCalls` are forwarded to the main process via `electronAPI.callTool(name, args)` and the result is sent back with `sendToolResponse`. Tool names must match between `secretaryTools` (renderer) and the `switch` in `ipcMain.handle('call-tool', ...)` (main) — these two lists are the source of truth and are kept in sync manually.
-6. Robot state (`idle | listening | speaking | thinking`) is mirrored to the main process via `sendRobotState` so wandering pauses during conversation.
+1. Gemini Live セッションを開く（モデル: `MODELS.geminiLive = gemini-3.1-flash-live-preview`）。音声モダリティ、ボイス `Kore`、日本語システムプロンプト、`secretaryTools` 関数宣言リスト付き。
+2. 16 kHz で `getUserMedia` → PCM を `sendRealtimeInput` に流す。**`isPTTActiveRef.current` が true のときのみ送信**。マイクストリームは常時オープン。PTT がゲートする。
+3. PTT は main process イベント `ptt-start` / `ptt-stop` で駆動。離すと短い無音バッファを送りGemini VAD に発話終了を通知。PTT 最小保持時間 1000ms（誤タップ防止）。
+4. 受信した `serverContent.modelTurn.parts[].inlineData` は base64 PCM 24 kHz。`playbackCtxRef` + `nextPlayTimeRef` で順次スケジュール。
+5. `toolCall.functionCalls` を `electronAPI.callTool(name, args)` で main process へ転送 → `sendToolResponse` で返す。
+6. ロボット状態（`idle | listening | speaking | thinking`）を `sendRobotState` で main に送り、会話中は放浪を停止。
+
+### Claude エージェント (`src/main/agent/claude.ts`)
+
+Gemini が `delegate_task` を呼ぶと main process で `runClaudeTask()` が実行される。
+
+- **バックエンド選択**: `settingsStore.claudeBackend` が `"api"` なら Anthropic SDK (`claude-sonnet-4-6`)、`"cli"` なら Claude Code CLI（`claudePty.ts` 経由）
+- **ツール共有**: Claude エージェントも `executeTool()` (dispatcher) を呼ぶ。同じツールセットを Gemini と共有。
+- **PTY 事前起動**: 起動時に `launchClaudePty()` で Claude Code CLI を温めておく（最初の呼び出しのコールドスタートを回避）
 
 ### Global hotkey & permissions (macOS-specific)
 
-PTT uses `uiohook-napi` to capture the left Option key globally. This requires macOS **Accessibility** permission; `setupPTT()` calls `systemPreferences.isTrustedAccessibilityClient(true)` to prompt, and the app continues without PTT if denied. Mic access is requested via `askForMediaAccess('microphone')`. If you change PTT behavior, remember the keycode is `UiohookKey.Alt` (left Option only — right Option `3640` is intentionally excluded).
+PTT は `uiohook-napi` で左 Option キーをグローバルキャプチャ。macOS **Accessibility** 権限が必要。`setupPTT()` が `isTrustedAccessibilityClient(true)` でプロンプトを出し、権限なしでも PTT なしモードで起動を継続する。
+
+- 左 Option のみ（右 Option `3640` は意図的に除外）
+- Alt+Shift でリージョンキャプチャオーバーレイを表示
+- 誤 keyup デバウンス: 80ms 以内に keydown が来たらキャンセル
+- スタックタイマー: 30秒 PTT 押しっぱなし検出で強制解除
 
 ### Window behavior
 
-The window is `transparent: true, frame: false, alwaysOnTop: true, hasShadow: false`, and uses `setIgnoreMouseEvents(true, { forward: true })` so clicks pass through except for right-click (custom context menu in `setupContextMenu`). The wandering interval lerps `currentX/Y` toward random targets at 50ms ticks; pausing/resuming wandering toggles `isWandering`.
+`transparent: true, frame: false, alwaysOnTop: true, hasShadow: false`。`setIgnoreMouseEvents(true, { forward: true })` でクリックスルー（右クリックのみ有効 → コンテキストメニュー）。放浪インターバルは 50ms tick で指数イージング + 最低速度 60px/s。
 
-### Tool modules (`src/main/tools/*.ts`)
+### Skills system (`src/config/skills.ts`)
 
-Each tool reads its credentials from `process.env` at call time and constructs its client lazily. Important quirks:
+スキルは `SKILL_REGISTRY` で管理。各スキルはツール名リスト・有効/無効デフォルト・必要シークレットを持つ。ユーザーごとに Turso DB へ保存（`skillToggles`）。
 
-- **Gmail and Calendar** use Google OAuth2 tokens via `src/main/tools/googleAuth.ts`. トークンは **`~/.config/robot-secretary/google-tokens/<email>.json`** に置く（プロジェクト専用ディレクトリ）。このディレクトリがなければ旧 `~/.config/gmail-triage/tokens/` にフォールバックする。各トークン JSON には `client_id` / `client_secret` / `refresh_token` / `scopes` (gmail.readonly + gmail.send + calendar) が含まれる。`gmail.ts` と `calendar.ts` は `listAccounts()` で全トークンを自動検出しファンアウト。`GMAIL_ACCOUNT` env で絞り込み可能。refresh token は有効期限なし（手動失効しない限り）のでコピーするだけで再認証不要。トークンを再発行する場合は `node scripts/auth-google.mjs <email>` を実行し出力を `~/.config/robot-secretary/google-tokens/<email>.json` に保存する。
-- **TickTick** reads its access token from `TICKTICK_ACCESS_TOKEN` in `.env.local` (via `src/main/tools/tickTickAuth.ts`). Obtain the token via TickTick's OAuth flow and place it in `.env.local`.
-- **Dashboard** (`dashboard.ts`) reads daily summary entries from a Turso (libSQL) DB via `@libsql/client`. Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` in `.env.local`. Read-only; the `entries` table is expected to have rows keyed by skill name. `getDashboardEntry(skill, id?)` resolves `id` to the latest row when omitted; supported skills are `ai-news` / `best-tools` / `movies` / `spending`.
+**スキル一覧**: gmail / calendar / tasks / drive / weather / web_search / open_app / keyboard / timer / shell / screen / memory / dashboard / apple_music（nordvpn は SKILL_REGISTRY 未登録だが dispatcher に実装済み）
+
+### Tool dispatch (`src/main/skills/dispatcher.ts`)
+
+**ツール名の二重管理（重要）**：
+- `toolSchemas` (`dispatcher.ts`) — Anthropic SDK ツール定義（Claude エージェント用）
+- `secretaryTools` (`src/config/tools.ts`) — Gemini Live 関数宣言（renderer 用）
+- `executeTool()` switch ブランチ — 実装
+
+3つを常に同期すること。スキルを追加したときは3か所すべてに追加が必要。
+
+### Authentication & API keys
+
+- **ログイン**: Turso 上のバックエンド API でメールアドレス認証。セッショントークンを macOS Keychain に保存（`keytar`）。
+- **APIキー保存**: `src/main/auth/apiKeyStore.ts` が Turso DB の `api_keys` テーブルに暗号化保存。起動時 `populateProcessEnv()` で `process.env` に展開。
+- **KNOWN_API_KEYS**: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `TICKTICK_ACCESS_TOKEN` など。Settings UI から変更可能。変更は即座に `process.env` にも反映される。
+- **.env.local**: 開発時やフォールバック用。prod では `~/Library/Application Support/robot-secretary/` に置く。DB キーが優先される。
+
+### Google OAuth (`src/main/google/oauthFlow.ts`)
+
+- ローカルホストのコールバックサーバーを立てて OAuth flow を完了する。
+- トークンは `googleTokenStore.ts` 経由で Turso DB に保存（per user）。
+- `initGoogleAuth(userId, db)` で起動時に初期化し、各スキルが `getGoogleAuth(email)` で利用する。
+- Settings → Googleアカウントから追加/削除可能。`google-accounts:add/remove/list` IPC。
+
+### Settings (`src/main/auth/settingsStore.ts`)
+
+Turso DB の `settings` テーブルに保存。スキーマ：`language`, `robot_size`, `default_apps` (JSON), `skill_toggles` (JSON), `claude_backend`。`loadSettings()` / `saveSettings(partial)` でアクセス。
+
+### Memory system (`src/main/memory/`)
+
+- `store.ts` — `Memory` 型（facts / preferences / ongoing_topics / procedures / session_summaries）を Turso DB に保存・読み込み。
+- `summarizer.ts` — Gemini Flash Lite でセッションサマリーを生成。
+- `index.ts` — `initMemory()` / `shutdownMemory()` のライフサイクル管理。
+
+### Display panel (`src/main/display/`)
+
+- `show-panel.ts` — `showPanel(type, opts)` でデータフェッチ → `displayWin` に IPC 送信。`flushPending()` で起動前にキューされた payload を吐き出す。
+- `registry.ts` — `displayWin` ファクトリを登録。Claude エージェントと Gemini の両方が同じウィンドウを使えるよう共有。
+
+### Shell / PTY (`src/main/skills/shell/`)
+
+- `shellPty.ts` — `execInShellPty()` でシェルコマンドを node-pty で実行（タイムアウト・バッファリング付き）
+- `pty.ts` — PTY インスタンス管理（`ptyKillAll()` でシャットダウン時に全 PTY を終了）
+- `claudePty.ts` — Claude Code CLI 専用 PTY。`launchClaudePty()` で事前起動してコールドスタートを回避。
 
 ### Configuration: split between two stores
 
-Two separate configuration mechanisms exist and they are not unified:
+設定の二重管理（注意）：
 
-- **`.env` / `.env.local`** — loaded by the main process at startup (`dotenv.config` against `__dirname/../.env*`). Tool modules in `src/main/tools/*` read from `process.env`. This is where API-key style credentials (Gemini / Anthropic / Turso / TickTick) live; Google instead reads from external token files (see Tool modules above).
-- **`localStorage`** in the renderer — written by `SettingsPanel.tsx`. **Only `GEMINI_API_KEY` is actually consumed** (by `useGeminiLive`, which falls back to `import.meta.env.VITE_GEMINI_API_KEY`). Main-process tools only see `process.env`. Treat this as a known gap when touching settings: if you wire a key through the UI, you must also propagate it to the main process (e.g. via IPC) or the tool calls will keep using `.env`.
+- **Turso DB** — Settings UI で変更したキー・設定（言語、ロボットサイズ、スキルトグル、Claude バックエンド、Google トークン、API キー）。起動時 `populateProcessEnv()` で `process.env` に反映される。
+- **`.env` / `.env.local`** — 開発時または DB 未設定時のフォールバック。Tool modules は `process.env` を読むので、DB のキーと `.env` のキーは起動後に統合されている。
+
+UI からキーを設定した場合、`process.env` への反映は `set-secret` IPC ハンドラが即座に行う。
 
 ### TypeScript configs
 
-`tsconfig.json` is a project-references root pointing to `tsconfig.node.json` (main + preload + vite config) and `tsconfig.web.json` (renderer).
+`tsconfig.json` はプロジェクト参照ルート。`tsconfig.node.json`（main + preload + vite config）と `tsconfig.web.json`（renderer）を指す。
 
 ### 3D robot asset
 
-`RobotScene.tsx` loads `/assets/robot.glb` via `useGLTF`. The actual file lives at `src/renderer/public/assets/robot.glb` and is served by Vite's public-dir convention. `hasGLB` is hard-coded `true`; the `PlaceholderRobot` is the Suspense fallback. All embedded animations are auto-played in a loop, and emissive materials get `emissiveIntensity = 6` + `toneMapped = false` so bloom reads them as HDR.
+`RobotScene.tsx` が `/assets/robot.glb` を `useGLTF` でロード。実ファイルは `src/renderer/public/assets/robot.glb`（Vite public-dir）。エミッシブマテリアルは `emissiveIntensity = 6` + `toneMapped = false`（bloom HDR 用）。
 
-## Error handling rules
+### Models (`src/config/models.ts`)
 
-エラーハンドリングを書くときは必ず `console.error(...)` でログを残すこと。
+| 定数 | 値 | 用途 |
+|------|----|------|
+| `MODELS.geminiLive` | `gemini-3.1-flash-live-preview` | 音声ループ |
+| `MODELS.geminiMemorySummarizer` | `gemini-2.5-flash-lite` | メモリ要約 |
+| `MODELS.claudeDelegate` | `claude-sonnet-4-6` | Claude エージェント |
 
-**なぜ必要か：** mainプロセスでは `console.error` が `writeDebugLog('error', ...)` に接続されており、`~/Library/Application Support/robot-secretary/debug.log` に自動追記される。`console.error` を呼ばないとデバッグログに何も残らず、本番環境でのトラブルシューティングが不可能になる。
+### DefaultTransporter patch (`pnpm patch`)
+
+`googleapis-common` が `google-auth-library` の `DefaultTransporter` を使うが、pnpm パッチは top-level にのみ適用される。electron-builder は pnpm virtual store から asar を作るためパッチなし版が入る。`build:app` 冒頭の `patch:pnpm` スクリプトで回避。`pnpm install` 後は再度 `npm run build:app` が必要。
+
+## Private skills (`src/private/`)
+
+`src/private/main-skills/` と `src/private/renderer-skills/` は外部には公開しない有料/非公開スキル。構造は `src/main/skills/` / `src/renderer/skills/` と同じ。`src/private/main-skills/dispatcher.ts` が独自の `executeTool` を持ち、main dispatcher からフォールバックで呼ばれる。
+
+## Logging rules
+
+### ロガーの仕組み
+
+`src/main/logger.ts` がログ基盤。起動時に `initLogger(path)` を1回呼び（`index.ts` 冒頭）、`console.log/warn/error` をパッチして `~/Library/Application Support/robot-secretary/debug.log` へ自動追記する。ログは 5MB 超で `.1` にローテーション。
+
+### 新しいモジュールへのロガー追加
+
+**mainプロセスのファイルでは必ず `createLogger` を使う。** 生の `console.*` は書かない。
+
+```ts
+import { createLogger } from '../logger' // パスは適宜調整
+
+const log = createLogger('モジュール名')
+
+// 使用例
+log.log('処理完了:', result)
+log.warn('想定外の状態:', state)
+log.error('fetch failed:', e)   // ← catch ブロックでは必ずこれ
+```
+
+`createLogger` は内部で `console.*` を呼ぶため、monkey-patch 経由でファイルに書き込まれる。
 
 ### ルール
 
-1. **catch ブロックは必ず `console.error` を呼ぶ** — エラーを握りつぶさない
+1. **catch ブロックは必ず `log.error` を呼ぶ** — エラーを握りつぶさない
 
    ```ts
    // Bad
    try { ... } catch { /* 無視 */ }
 
    // Good
-   try { ... } catch (e) { console.error('[モジュール名] 何が失敗したか:', e) }
+   const log = createLogger('nordvpn')
+   try { ... } catch (e) { log.error('connect failed:', e) }
    ```
 
-2. **ログの prefix に `[モジュール名]` を入れる** — `debug.log` で grep しやすくするため
-
-   ```ts
-   console.error('[nordvpn] connect failed:', e)
-   console.error('[gmail] fetchInbox error:', e)
-   ```
-
-3. **エラーオブジェクトをそのまま渡す** — `e.message` だけでなく `e` ごと渡してスタックトレースを残す
+2. **エラーオブジェクトをそのまま渡す** — `e.message` だけでなく `e` ごと渡してスタックトレースを残す
 
    ```ts
    // Bad
-   console.error('[skill] failed:', (e as Error).message)
+   log.error('failed:', (e as Error).message)
 
    // Good
-   console.error('[skill] failed:', e)
+   log.error('failed:', e)
    ```
 
-4. **rendererのエラーはIPCで伝播するか `console.error` を使う** — rendererの `console.error` はmainプロセスの `webContents.on('console-message')` 経由で `[renderer:error]` としてdebug.logに書き込まれる（`src/main/index.ts` の `page.on('console')` ハンドラ参照）
+3. **モジュール名は短く一意にする** — `grep '[nordvpn]' debug.log` で絞れるようにするため
+
+   既存モジュール名: `auth`, `env`, `settings`, `PTT:main`, `Permission`, `call-tool`, `notification`, `memory`, `regionCapture`, `gmail`, `calendar`, `tasks`, `open_app`, `nordvpn`, `notifications`, `apiKeyStore`, `settingsStore`
+
+4. **rendererのエラーはそのまま `console.error` を使う** — `forwardRendererConsole()` が `[renderer:ラベル]` として debug.log に転送する
 
 ### debug.log の確認方法
 

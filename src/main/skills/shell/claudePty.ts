@@ -9,10 +9,10 @@ let readyPromise: Promise<void> | null = null
 
 function looksLikeCcPrompt(buffer: string): boolean {
   const tail = buffer.slice(-8000)
-  return (
-    tail.includes('Claude Code') &&
-    (tail.includes('bypass permissions on') || tail.includes('Try "') || tail.includes('bypass permissions'))
-  )
+  // "Claude Code" appears as plain text in the tmux status bar.
+  // "bypass" and "permissions" appear as individual words in the TUI welcome screen,
+  // though ANSI escape codes split the phrase — so we match each word separately.
+  return tail.includes('Claude Code') && tail.includes('bypass') && tail.includes('permissions')
 }
 
 function sanitizeForBracketedPaste(s: string): string {

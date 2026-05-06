@@ -1,6 +1,9 @@
 import { BrowserWindow, ipcMain, screen } from 'electron'
 import * as path from 'path'
 import { captureRegion, type LogicalRect } from './screenshot'
+import { createLogger } from './logger'
+
+const log = createLogger('regionCapture')
 
 type Rect = LogicalRect & { displayId: number }
 
@@ -135,7 +138,7 @@ function registerIpc() {
         overlay.webContents.send('region-overlay:captured')
       }
     } catch (err) {
-      console.error('[regionCapture] capture failed:', err)
+      log.error('capture failed:', err)
     } finally {
       // Restore overlay opacity if still visible (Option still held)
       if (visible) {

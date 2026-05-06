@@ -1,4 +1,7 @@
 import { shell, session } from 'electron'
+import { createLogger } from '../logger'
+
+const log = createLogger('auth')
 import { google } from 'googleapis'
 import * as http from 'node:http'
 import * as crypto from 'node:crypto'
@@ -121,10 +124,10 @@ async function runOAuthFlow(): Promise<{ idToken: string }> {
 
 export async function loginWithGoogle(): Promise<AppUser> {
   const { idToken } = await runOAuthFlow()
-  console.log('[auth] OAuth complete, calling backend...')
+  log.log('OAuth complete, calling backend...')
   const { sessionToken, user } = await loginWithBackend(idToken)
   await storeSessionToken(sessionToken)
-  console.log(`[auth] Login success: ${user.email} → ${user.dbName}`)
+  log.log(`Login success: ${user.email} → ${user.dbName}`)
   return user
 }
 
@@ -133,7 +136,7 @@ export async function resolveUserFromToken(sessionToken: string): Promise<AppUse
     const user = await getMe(sessionToken)
     return user
   } catch (err) {
-    console.warn('[auth] resolveUserFromToken failed:', (err as Error).message)
+    log.warn('resolveUserFromToken failed:', (err as Error).message)
     return null
   }
 }

@@ -1,4 +1,7 @@
 import type { Client } from '@libsql/client'
+import { createLogger } from '../logger'
+
+const log = createLogger('memory')
 
 export type LogEvent =
   | { type: 'session_start'; sessionId: string; ts: string }
@@ -216,7 +219,7 @@ export async function repairCrashedSessions(activeSessionId: string | null): Pro
     if (s.id === activeSessionId || s.endedAt || s.summarized) continue
     const lastTs = await findLastEventTs(s.id)
     await ctx().execute({ sql: 'UPDATE conv_sessions SET ended_at = ? WHERE id = ?', args: [lastTs ?? s.startedAt, s.id] })
-    console.log('[memory] クラッシュセッション復旧:', s.id)
+    log.log('クラッシュセッション復旧:', s.id)
   }
 }
 

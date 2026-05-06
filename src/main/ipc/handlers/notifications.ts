@@ -1,4 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { createLogger } from '../../logger'
+
+const log = createLogger('notification')
 
 type Deps = {
   getMainWindow: () => BrowserWindow | null
@@ -14,7 +17,7 @@ export function registerNotificationHandlers(deps: Deps): void {
         },
         deps.getCurrentRobotState,
       )
-    }).catch((e) => console.error('[notification] watch start failed:', e))
+    }).catch((e) => log.error('watch start failed:', e))
   })
 
   ipcMain.handle('notification:session-ready', async () => {

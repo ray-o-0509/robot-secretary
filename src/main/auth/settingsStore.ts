@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client'
 import { defaultSkillsEnabled, type SkillsEnabled } from '../../config/skills'
+import { createLogger } from '../logger'
+
+const log = createLogger('settingsStore')
 
 export type DefaultApps = { email?: string; browser?: string; terminal?: string; editor?: string }
 export type ClaudeBackend = 'api' | 'cli'
@@ -31,7 +34,7 @@ export function initSettingsStore(_userId: string, db: Client): void {
 export async function migrateSettings(db: Client): Promise<void> {
   try {
     await db.execute(`ALTER TABLE settings ADD COLUMN claude_backend TEXT NOT NULL DEFAULT 'api'`)
-    console.log('[settingsStore] Migrated: added claude_backend column')
+    log.log('Migrated: added claude_backend column')
   } catch {
     // Column already exists — ignore
   }

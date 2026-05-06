@@ -1,6 +1,9 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { resolveAppName } from '../default-apps/index'
+import { createLogger } from '../../logger'
+
+const log = createLogger('open_app')
 
 const execAsync = promisify(exec)
 
@@ -25,7 +28,7 @@ export async function openApp(appName: string): Promise<{ ok: boolean; error?: s
   return new Promise((resolve) => {
     exec(`open -a "${safe}"`, async (err) => {
       if (err) {
-        console.error(`[open_app] error: ${safe} →`, err.message)
+        log.error(`error: ${safe} →`, err.message)
         resolve({ ok: false, error: err.message })
         return
       }

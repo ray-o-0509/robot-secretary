@@ -1,5 +1,8 @@
 import { google, type gmail_v1 } from 'googleapis'
 import { getGoogleAuth, listAccounts, sanitizeGoogleError } from '../shared/googleAuth'
+import { createLogger } from '../../logger'
+
+const log = createLogger('gmail')
 
 type InboxEmail = {
   id: string
@@ -67,7 +70,7 @@ export async function getInboxEmails(maxResults = 100, account?: string) {
         return { account: actualAccount, messages, error: null as string | null }
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
-        console.error(`[get_gmail_inbox] error: ${a} →`, raw)
+        log.error(`get_inbox error: ${a} →`, raw)
         return { account: a, messages: [] as InboxEmail[], error: sanitizeGoogleError(err) }
       }
     }),
@@ -126,7 +129,7 @@ export async function searchEmails(query: string, maxResults = 20, account?: str
         return { account: actualAccount, messages: results, error: null as string | null }
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
-        console.error(`[search_gmail] error: ${a} →`, raw)
+        log.error(`search error: ${a} →`, raw)
         return { account: a, messages: [] as InboxEmail[], error: sanitizeGoogleError(err) }
       }
     }),
@@ -147,11 +150,11 @@ export async function trashEmails(account: string, ids: string[]) {
     ids.map(async (id) => {
       try {
         await gmail.users.messages.trash({ userId: 'me', id })
-        console.log(`[trash_gmail] ok: ${account} ${id}`)
+        log.log(`trash ok: ${account} ${id}`)
         return { id, ok: true as const }
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
-        console.error(`[trash_gmail] error: ${account} ${id} →`, raw)
+        log.error(`trash error: ${account} ${id} →`, raw)
         return { id, ok: false as const, error: sanitizeGoogleError(err) }
       }
     }),
@@ -256,11 +259,11 @@ export async function untrashEmails(account: string, ids: string[]) {
     ids.map(async (id) => {
       try {
         await gmail.users.messages.untrash({ userId: 'me', id })
-        console.log(`[untrash_gmail] ok: ${account} ${id}`)
+        log.log(`untrash ok: ${account} ${id}`)
         return { id, ok: true as const }
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
-        console.error(`[untrash_gmail] error: ${account} ${id} →`, raw)
+        log.error(`untrash error: ${account} ${id} →`, raw)
         return { id, ok: false as const, error: sanitizeGoogleError(err) }
       }
     }),
@@ -280,11 +283,11 @@ export async function blockSender(account: string, senderEmail: string) {
         action: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
       },
     })
-    console.log(`[block_sender] ok: ${account} blocked ${senderEmail} (filterId: ${filter.data.id})`)
+    log.log(`block_sender ok: ${account} blocked ${senderEmail} (filterId: ${filter.data.id})`)
     return { account, senderEmail, ok: true as const, filterId: filter.data.id }
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)
-    console.error(`[block_sender] error: ${account} ${senderEmail} →`, raw)
+    log.error(`block_sender error: ${account} ${senderEmail} →`, raw)
     return { account, senderEmail, ok: false as const, error: sanitizeGoogleError(err) }
   }
 }
@@ -305,11 +308,11 @@ export async function unblockSender(account: string, senderEmail: string) {
         : Promise.resolve()
       )
     )
-    console.log(`[unblock_sender] ok: ${account} unblocked ${senderEmail} (removed ${matching.length} filter(s))`)
+    log.log(`unblock_sender ok: ${account} unblocked ${senderEmail} (removed ${matching.length} filter(s))`)
     return { account, senderEmail, ok: true as const, removed: matching.length }
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)
-    console.error(`[unblock_sender] error: ${account} ${senderEmail} →`, raw)
+    log.error(`unblock_sender error: ${account} ${senderEmail} →`, raw)
     return { account, senderEmail, ok: false as const, error: sanitizeGoogleError(err) }
   }
 }
