@@ -43,9 +43,14 @@ export function TasksView({ payload }: Props) {
   }
 
   const data = payload.data as TaskData
-  const todos = (data?.tasks ?? []).filter(
-    (t) => t.status === 'todo' && !pendingTasks.has(t.taskId),
-  )
+  const todos = (data?.tasks ?? [])
+    .filter((t) => t.status === 'todo' && !pendingTasks.has(t.taskId))
+    .sort((a, b) => {
+      if (!a.due && !b.due) return 0
+      if (!a.due) return 1
+      if (!b.due) return -1
+      return a.due < b.due ? -1 : a.due > b.due ? 1 : 0
+    })
   if (todos.length === 0) {
     return <EmptyState message={t('tasks.noTasks')} />
   }
