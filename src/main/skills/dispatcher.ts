@@ -855,6 +855,32 @@ export const toolSchemas: Anthropic.Tool[] = [
       required: ['query'],
     },
   },
+  {
+    name: 'nordvpn_status',
+    description: 'Get the current NordVPN connection status.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'nordvpn_connect',
+    description: 'Connect to NordVPN. Optionally specify country and/or city.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        country: { type: 'string', description: 'Country name (e.g. Japan, United States)' },
+        city: { type: 'string', description: 'City name (e.g. Tokyo)' },
+      },
+    },
+  },
+  {
+    name: 'nordvpn_disconnect',
+    description: 'Disconnect from NordVPN.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'nordvpn_countries',
+    description: 'List countries available on NordVPN.',
+    input_schema: { type: 'object', properties: {} },
+  },
 ]
 
 export async function getEnabledToolSchemas(): Promise<Anthropic.Tool[]> {
@@ -1175,6 +1201,22 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case 'music_play_track': {
       const music = await import('./apple-music/index')
       return music.playTrack(reqString(args, 'query'))
+    }
+    case 'nordvpn_status': {
+      const { getStatus } = await import('./nordvpn/index')
+      return await getStatus()
+    }
+    case 'nordvpn_connect': {
+      const { connect } = await import('./nordvpn/index')
+      return await connect(optString(args, 'country'), optString(args, 'city'))
+    }
+    case 'nordvpn_disconnect': {
+      const { disconnect } = await import('./nordvpn/index')
+      return await disconnect()
+    }
+    case 'nordvpn_countries': {
+      const { listCountries } = await import('./nordvpn/index')
+      return await listCountries()
     }
     default:
       throw new Error(`Unknown tool: ${name}`)

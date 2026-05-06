@@ -190,6 +190,49 @@ Two separate configuration mechanisms exist and they are not unified:
 
 `RobotScene.tsx` loads `/assets/robot.glb` via `useGLTF`. The actual file lives at `src/renderer/public/assets/robot.glb` and is served by Vite's public-dir convention. `hasGLB` is hard-coded `true`; the `PlaceholderRobot` is the Suspense fallback. All embedded animations are auto-played in a loop, and emissive materials get `emissiveIntensity = 6` + `toneMapped = false` so bloom reads them as HDR.
 
+## Error handling rules
+
+エラーハンドリングを書くときは必ず `console.error(...)` でログを残すこと。
+
+**なぜ必要か：** mainプロセスでは `console.error` が `writeDebugLog('error', ...)` に接続されており、`~/Library/Application Support/robot-secretary/debug.log` に自動追記される。`console.error` を呼ばないとデバッグログに何も残らず、本番環境でのトラブルシューティングが不可能になる。
+
+### ルール
+
+1. **catch ブロックは必ず `console.error` を呼ぶ** — エラーを握りつぶさない
+
+   ```ts
+   // Bad
+   try { ... } catch { /* 無視 */ }
+
+   // Good
+   try { ... } catch (e) { console.error('[モジュール名] 何が失敗したか:', e) }
+   ```
+
+2. **ログの prefix に `[モジュール名]` を入れる** — `debug.log` で grep しやすくするため
+
+   ```ts
+   console.error('[nordvpn] connect failed:', e)
+   console.error('[gmail] fetchInbox error:', e)
+   ```
+
+3. **エラーオブジェクトをそのまま渡す** — `e.message` だけでなく `e` ごと渡してスタックトレースを残す
+
+   ```ts
+   // Bad
+   console.error('[skill] failed:', (e as Error).message)
+
+   // Good
+   console.error('[skill] failed:', e)
+   ```
+
+4. **rendererのエラーはIPCで伝播するか `console.error` を使う** — rendererの `console.error` はmainプロセスの `webContents.on('console-message')` 経由で `[renderer:error]` としてdebug.logに書き込まれる（`src/main/index.ts` の `page.on('console')` ハンドラ参照）
+
+### debug.log の確認方法
+
+```bash
+tail -f ~/Library/Application\ Support/robot-secretary/debug.log
+```
+
 ## Notes on user-facing strings
 
 UI labels, the Gemini system prompt, and console warnings are all in Japanese. Keep new user-facing strings consistent with that unless explicitly asked otherwise.
