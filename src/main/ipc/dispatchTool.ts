@@ -102,6 +102,13 @@ const DISPATCHER_PURE_TOOLS = new Set([
   'stop_stopwatch',
   'run_command',
   'show_panel',
+  'music_play_pause',
+  'music_next_track',
+  'music_prev_track',
+  'music_stop',
+  'music_get_current',
+  'music_set_volume',
+  'music_play_track',
 ])
 
 const TIMER_TOOLS = new Set([

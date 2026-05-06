@@ -698,4 +698,51 @@ export const secretaryTools: ToolDeclaration[] = [
       required: ['name'],
     },
   },
+  {
+    name: 'music_play_pause',
+    description: 'Apple Music の再生・一時停止をトグルする。',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_next_track',
+    description: 'Apple Music で次の曲にスキップする。',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_prev_track',
+    description: 'Apple Music で前の曲に戻る。',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_stop',
+    description: 'Apple Music の再生を停止する。',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_get_current',
+    description: '現在 Apple Music で再生中の曲名・アーティスト・アルバム・再生状態を取得する。',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_set_volume',
+    description: 'Apple Music の音量を 0〜100 の範囲で設定する。',
+    parameters: {
+      type: 'object',
+      properties: {
+        level: { type: 'number', description: '音量 (0〜100)' },
+      },
+      required: ['level'],
+    },
+  },
+  {
+    name: 'music_play_track',
+    description: 'Apple Music のライブラリから曲名またはアーティスト名で検索して再生する。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '曲名またはアーティスト名' },
+      },
+      required: ['query'],
+    },
+  },
 ]

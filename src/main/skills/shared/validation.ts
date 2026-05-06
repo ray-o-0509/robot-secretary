@@ -15,3 +15,10 @@ export function optString(args: Record<string, unknown>, key: string): string | 
   if (typeof value !== 'string') throw new Error(`${key} must be a string`)
   return value
 }
+
+export function reqNumber(args: Record<string, unknown>, key: string): number {
+  const value = args[key]
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) throw new Error(`${key} must be a finite number`)
+  return n
+}

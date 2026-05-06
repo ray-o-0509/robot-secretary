@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { homedir } from 'node:os'
-import { optString, reqString } from './shared/validation'
+import { optString, reqNumber, reqString } from './shared/validation'
 import { isToolEnabled } from '../../config/skills'
 import { loadSkillsEnabled, getSkillsEnabledSync } from './skill-toggle/index'
 
@@ -812,6 +812,49 @@ export const toolSchemas: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: 'music_play_pause',
+    description: 'Apple Music の再生・一時停止をトグルする。',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_next_track',
+    description: 'Apple Music で次の曲にスキップする。',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_prev_track',
+    description: 'Apple Music で前の曲に戻る。',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_stop',
+    description: 'Apple Music の再生を停止する。',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_get_current',
+    description: '現在 Apple Music で再生中の曲名・アーティスト・アルバム・再生状態を取得する。',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'music_set_volume',
+    description: 'Apple Music の音量を 0〜100 の範囲で設定する。',
+    input_schema: {
+      type: 'object',
+      properties: { level: { type: 'number', description: '音量 (0〜100)' } },
+      required: ['level'],
+    },
+  },
+  {
+    name: 'music_play_track',
+    description: 'Apple Music のライブラリから曲名またはアーティスト名で検索して再生する。',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: '曲名またはアーティスト名' } },
+      required: ['query'],
+    },
+  },
 ]
 
 export async function getEnabledToolSchemas(): Promise<Anthropic.Tool[]> {
@@ -1104,6 +1147,34 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       const factory = getDisplayWindowFactory()
       if (!factory) return { ok: false, error: 'display window not initialized' }
       return await showPanel(t, { getOrCreateWindow: factory })
+    }
+    case 'music_play_pause': {
+      const music = await import('./apple-music/index')
+      return music.playPause()
+    }
+    case 'music_next_track': {
+      const music = await import('./apple-music/index')
+      return music.nextTrack()
+    }
+    case 'music_prev_track': {
+      const music = await import('./apple-music/index')
+      return music.prevTrack()
+    }
+    case 'music_stop': {
+      const music = await import('./apple-music/index')
+      return music.stopMusic()
+    }
+    case 'music_get_current': {
+      const music = await import('./apple-music/index')
+      return music.getMusicState()
+    }
+    case 'music_set_volume': {
+      const music = await import('./apple-music/index')
+      return music.setVolume(reqNumber(args, 'level'))
+    }
+    case 'music_play_track': {
+      const music = await import('./apple-music/index')
+      return music.playTrack(reqString(args, 'query'))
     }
     default:
       throw new Error(`Unknown tool: ${name}`)

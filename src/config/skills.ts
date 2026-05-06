@@ -16,6 +16,7 @@ export type SkillId =
   | 'screen'
   | 'memory'
   | 'dashboard'
+  | 'apple_music'
 
 export type SkillSecret = {
   key: string
@@ -142,6 +143,13 @@ export const SKILL_REGISTRY: SkillDef[] = [
       { key: 'TURSO_DATABASE_URL', label: 'Turso Database URL', hint: 'libsql://… 形式' },
       { key: 'TURSO_AUTH_TOKEN', label: 'Turso Auth Token' },
     ],
+  },
+  {
+    id: 'apple_music',
+    label: 'Apple Music',
+    description: 'Apple Music の再生・一時停止・曲送り・音量調整・曲検索',
+    tools: ['music_play_pause', 'music_next_track', 'music_prev_track', 'music_set_volume', 'music_play_track', 'music_stop', 'music_get_current'],
+    defaultEnabled: true,
   },
 ]
 
