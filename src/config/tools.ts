@@ -15,7 +15,7 @@ export const secretaryTools: ToolDeclaration[] = [
   {
     name: 'delegate_task',
     description:
-      'Delegate read-only or analytical work to a Claude agent: checking Gmail, Google Calendar, screen contents, complex summarization, or cross-cutting research. Do not use this for code edits; use run_claude_code for code. Do not use this for destructive actions like deleting or archiving email; use the dedicated Gmail tools.',
+      'Delegate any task to the Claude agent. Use for: multi-step research, cross-source analysis, Gmail/Calendar work, screen inspection, asking Claude a question, or any work that benefits from a second AI. Do not use for code edits (use run_claude_code) or destructive Gmail/Calendar actions (use the dedicated tools).',
     parameters: {
       type: 'object',
       properties: {

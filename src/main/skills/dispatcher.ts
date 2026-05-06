@@ -1202,6 +1202,13 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       const music = await import('./apple-music/index')
       return music.playTrack(reqString(args, 'query'))
     }
+    case 'delegate_task': {
+      const { runClaudeTask } = await import('../agent/claude')
+      return await runClaudeTask({
+        task: optString(args, 'task') ?? '',
+        includeScreenshot: args['includeScreenshot'] === true,
+      })
+    }
     case 'nordvpn_status': {
       const { getStatus } = await import('./nordvpn/index')
       return await getStatus()
