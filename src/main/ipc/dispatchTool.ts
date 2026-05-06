@@ -263,7 +263,7 @@ export async function dispatchTool(
     return { ok: true, cwd: target, contents: ls.stdout, lsOk: ls.ok, lsExitCode: ls.exitCode, lsStderr: ls.stderr }
   }
 
-  if (toolName === 'run_claude') {
+  if (toolName === 'run_claude_code') {
     const prompt = String(args.prompt ?? '')
     const cwd = deps.getCwd()
     const runId = `claude-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`

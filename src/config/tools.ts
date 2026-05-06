@@ -15,7 +15,7 @@ export const secretaryTools: ToolDeclaration[] = [
   {
     name: 'delegate_task',
     description:
-      'Delegate read-only or analytical work to a Claude agent: checking Gmail, Google Calendar, screen contents, complex summarization, or cross-cutting research. Do not use this for code edits; use run_claude for code. Do not use this for destructive actions like deleting or archiving email; use the dedicated Gmail tools.',
+      'Delegate read-only or analytical work to a Claude agent: checking Gmail, Google Calendar, screen contents, complex summarization, or cross-cutting research. Do not use this for code edits; use run_claude_code for code. Do not use this for destructive actions like deleting or archiving email; use the dedicated Gmail tools.',
     parameters: {
       type: 'object',
       properties: {
@@ -96,7 +96,7 @@ export const secretaryTools: ToolDeclaration[] = [
   {
     name: 'trash_gmail',
     description:
-      'Move one or more Gmail messages to trash. Use this for user-approved email deletion/trashing instead of run_claude or shell commands. Requires message ids and account from Gmail lookup results. Use account+ids for one account, or targets for messages across multiple accounts.',
+      'Move one or more Gmail messages to trash. Use this for user-approved email deletion/trashing instead of run_claude_code or shell commands. Requires message ids and account from Gmail lookup results. Use account+ids for one account, or targets for messages across multiple accounts.',
     parameters: {
       type: 'object',
       properties: {
@@ -120,7 +120,7 @@ export const secretaryTools: ToolDeclaration[] = [
   {
     name: 'archive_gmail',
     description:
-      'Archive one or more Gmail messages by removing them from the inbox. Use this for user-approved email archiving instead of run_claude or shell commands. Requires message ids and account from Gmail lookup results. Use account+ids for one account, or targets for messages across multiple accounts.',
+      'Archive one or more Gmail messages by removing them from the inbox. Use this for user-approved email archiving instead of run_claude_code or shell commands. Requires message ids and account from Gmail lookup results. Use account+ids for one account, or targets for messages across multiple accounts.',
     parameters: {
       type: 'object',
       properties: {
@@ -614,7 +614,7 @@ export const secretaryTools: ToolDeclaration[] = [
   {
     name: 'cd',
     description:
-      'Change the working directory. Validates that the path exists and is a directory before switching, runs `ls -la` so the contents show up in the terminal panel, and mirrors the cd into the live pty. Subsequent run_command / run_claude calls execute in the new cwd. If the response contains an `error` field the cd did NOT happen — surface the failure or retry with a corrected path; do NOT claim success.',
+      'Change the working directory. Validates that the path exists and is a directory before switching, runs `ls -la` so the contents show up in the terminal panel, and mirrors the cd into the live pty. Subsequent run_command / run_claude_code calls execute in the new cwd. If the response contains an `error` field the cd did NOT happen — surface the failure or retry with a corrected path; do NOT claim success.',
     parameters: {
       type: 'object',
       properties: {
@@ -629,7 +629,7 @@ export const secretaryTools: ToolDeclaration[] = [
   {
     name: 'run_command',
     description:
-      'Run a shell command and display the output on screen. Supports git, ls, cat, npm, and anything else. If cwd is omitted, runs in the current working directory. Results appear in the panel. Always inspect ok/exitCode/stdout/stderr before answering. If ok is false, say the command failed and use stderr to explain or retry. Do not use this for persistent directory changes; call the cd tool instead. Do not run Claude Code commands through this tool; use run_claude for code work and dedicated app tools for email/calendar/Drive actions.',
+      'Run a shell command and display the output on screen. Supports git, ls, cat, npm, and anything else. If cwd is omitted, runs in the current working directory. Results appear in the panel. Always inspect ok/exitCode/stdout/stderr before answering. If ok is false, say the command failed and use stderr to explain or retry. Do not use this for persistent directory changes; call the cd tool instead. Do not run Claude Code commands through this tool; use run_claude_code for code work and dedicated app tools for email/calendar/Drive actions.',
     parameters: {
       type: 'object',
       properties: {
@@ -646,7 +646,7 @@ export const secretaryTools: ToolDeclaration[] = [
     },
   },
   {
-    name: 'run_claude',
+    name: 'run_claude_code',
     description:
       'Type a prompt into the interactive Claude Code terminal. If Claude Code is already open, paste the prompt there; otherwise start `cc` in the current working directory and paste the prompt. Use this only for codebase work such as reading code, editing files, debugging, tests, refactors, or reviews. Do not use this for Gmail deletion/archive, calendar changes, Drive operations, tasks, or profile updates; use the dedicated tools. This returns after handing off the prompt; the user should watch the terminal panel for progress and results. Write the prompt in the SAME language the user is currently speaking to VEGA in (the configured/active language), and append an explicit instruction telling Claude Code to also respond in that same language. The prompt MUST be written in polite/formal register and contain three labelled sections: 依頼内容 (request), 背景 (background), 注意点 (caveats) — never relay the user\'s raw words; infer background and caveats from conversation context.',
     parameters: {
@@ -654,7 +654,7 @@ export const secretaryTools: ToolDeclaration[] = [
       properties: {
         prompt: {
           type: 'string',
-          description: 'Instructions for Claude. Must be written in the same language the user is speaking to VEGA, and must explicitly tell Claude Code to respond in that same language.',
+          description: 'Instructions for Claude Code. Must be written in the same language the user is speaking to VEGA, and must explicitly tell Claude Code to respond in that same language.',
         },
         cwd: {
           type: 'string',

@@ -1585,7 +1585,7 @@ app.whenReady().then(async () => {
     } else {
       await initMemory(() => process.env.GEMINI_API_KEY)
       createWindow()
-      // Pre-launch Claude Code in its dedicated PTY so run_claude is paste-and-enter
+      // Pre-launch Claude Code in its dedicated PTY for the terminal panel display
       // instead of cold-starting cc and racing the 1.5s sleep.
       import('./skills/shell/claudePty').then(({ launchClaudePty }) => launchClaudePty()).catch(() => {})
     }

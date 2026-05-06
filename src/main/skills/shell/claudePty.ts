@@ -23,7 +23,7 @@ function sanitizeForBracketedPaste(s: string): string {
 function startCc(cwd?: string): void {
   // \x15 = Ctrl-U (clear current line) so any half-typed text doesn't break the cd.
   const cd = cwd ? `cd ${shellQuote(cwd)}\n` : ''
-  ptyWriteTo('claude', `\x15${cd}cc\n`)
+  ptyWriteTo('claude', `\x15${cd}claude --dangerously-skip-permissions\n`)
 }
 
 function waitForReady(): Promise<void> {
